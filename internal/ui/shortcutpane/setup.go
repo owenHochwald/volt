@@ -1,13 +1,16 @@
 package shortcutpane
 
+import "github.com/owenHochwald/volt/internal/ui/keybindings"
+
 // SetupShortcutPane sets up the shortcut pane for use
-func SetupShortcutPane() ShortcutPane {
+func SetupShortcutPane(keys keybindings.KeyMap) ShortcutPane {
 	return ShortcutPane{
 		activeTab: 0,
 		height:    30,
 		width:     40,
 		Focused:   false,
-		tabs:      GetShortcutTabs(),
+		keys:      keys,
+		tabs:      GetShortcutTabs(keys),
 	}
 
 }

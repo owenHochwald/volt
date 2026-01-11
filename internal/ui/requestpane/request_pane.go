@@ -10,6 +10,7 @@ import (
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/storage"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // FieldIndex represents the index of a focusable field in the request pane
@@ -62,7 +63,8 @@ type RequestPane struct {
 
 	RequestInProgress bool
 
-	DB *storage.SQLiteStorage
+	DB   *storage.SQLiteStorage
+	keys keybindings.KeyMap
 
 	// Load test mode fields
 	LoadTestMode        bool
