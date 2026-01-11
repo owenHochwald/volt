@@ -3,6 +3,7 @@ package responsepane
 import (
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // Update handles Bubble Tea messages and state transitions
@@ -14,28 +15,35 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
 		// Direct tab access
-		case "1":
-			m.activeTab = int(TabBody)
-			m.updateViewportForActiveTab()
-		case "2":
-			m.activeTab = int(TabHeaders)
-			m.updateViewportForActiveTab()
-		case "3":
-			m.activeTab = int(TabTiming)
-			m.updateViewportForActiveTab()
+		if keybindings.Matches(msg, m.keys.DirectTab) {
+			switch msg.String() {
+			case "1":
+				m.activeTab = int(TabBody)
+				m.updateViewportForActiveTab()
+			case "2":
+				m.activeTab = int(TabHeaders)
+				m.updateViewportForActiveTab()
+			case "3":
+				m.activeTab = int(TabTiming)
+				m.updateViewportForActiveTab()
+			}
+		}
+
 		// Tab navigation
-		case "h", tea.KeyLeft.String():
+		if keybindings.Matches(msg, m.keys.TabNavPrev) {
 			maxTabs := m.getMaxTabs()
 			m.activeTab = (m.activeTab - 1 + maxTabs) % maxTabs
 			m.updateViewportForActiveTab()
-		case "l", tea.KeyRight.String():
+		}
+		if keybindings.Matches(msg, m.keys.TabNavNext) {
 			maxTabs := m.getMaxTabs()
 			m.activeTab = (m.activeTab + 1) % maxTabs
 			m.updateViewportForActiveTab()
+		}
+
 		// Copy handling
-		case "y", "Y":
+		if keybindings.Matches(msg, m.keys.CopyResponse) {
 			if m.Response != nil && !m.isLoadTest {
 				return m, m.copyToClipboard(m.Response.Body)
 			}
