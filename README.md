@@ -2,7 +2,7 @@
 
 # Volt
 
-**A blazingly fast, terminal-native HTTP client with Vim keybindings**
+**A blazingly fast, terminal-native HTTP client and load tester with Vim keybindings**
 
 <br>
 
@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/volt)](https://goreportcard.com/report/github.com/owenHochwald/volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[Installation](#installation) • [Why Volt?](#why-volt)
+[Installation](#installation) • [Quick Start](#quick-start) • [Why Volt?](#why-volt)  •[CLI Mode](#CLI-load-testing)
 
 ![Demo](demo.gif)
 
@@ -58,64 +58,40 @@ Volt is a **keyboard-driven HTTP client** that lives in your terminal. Built as 
 
 ## Installation
 
-**Prerequisites:** Go 1.25 or higher
+Volt is distributed as a single binary with no dependencies. The fastest way to install is using Go's built-in package manager.
 
-### Option 1: Download and Build from Release
+### Quick Install
 
-1. **Download the source code** from the [releases page](https://github.com/owenHochwald/Volt/releases/latest)
-    - Download either the `.tar.gz` or `.zip` source code archive
-
-2. **Extract the archive**
-   ```bash
-   # For .tar.gz
-   tar -xzf volt-v0.1.0.tar.gz
-   cd volt-0.1.0
-
-   # For .zip
-   unzip volt-v0.1.0.zip
-   cd volt-0.1.0
-   ```
-
-3. **Build and install**
-   ```bash
-   # Build and install system-wide to /usr/local/bin
-   make install
-
-   # Or just build locally without installing
-   make build
-   ./volt
-   ```
-
-### Option 2: Clone and Build (Development)
-
-If you want to contribute or build from the latest source:
+If you have Go installed, you can install Volt with a single command:
 
 ```bash
-# Clone the repository
-git clone https://github.com/owenHochwald/volt.git
-cd volt
-
-# Build and install (makes 'volt' available system-wide)
-make install
-
-# Or just build locally
-make build
-./volt
+go install github.com/owenHochwald/volt/cmd/volt@latest # install
+volt # run and verify
 ```
 
-### Option 3
+
+You should see the Volt TUI interface launch. Press `q` to quit.
+**Updating Volt:**
+To update to the latest version, simply run the install command again.
+
+**Troubleshooting:**
+If you get a "command not found" error, ensure `$GOPATH/bin` is in your PATH:
 ```bash
-go install github.com/owenHochwald/volt/cmd/volt@latest
+# Add to your ~/.bashrc, ~/.zshrc, or equivalent
+export PATH="$PATH:$(go env GOPATH)/bin"
 ```
+---
 
 ## Quick Start
 
-Once installed, simply run:
-
+Once installed, launch Volt's interactive interface:
 ```bash
 volt
 ```
-
+**Basic usage:**
+- Type a URL and press `alt+Enter` to make a request
+- Press `?` to see all keybindings
+- Press `q` to quit
 
 ## CLI Load Testing
 
