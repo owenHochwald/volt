@@ -1,5 +1,7 @@
 package shortcutpane
 
+import "github.com/owenHochwald/volt/internal/ui/keybindings"
+
 // Shortcut represents a keyboard shortcut and its description
 type Shortcut struct {
 	Key         string
@@ -12,44 +14,24 @@ type ShortcutTab struct {
 	Shortcuts []Shortcut
 }
 
-// GetShortcutTabs returns all shortcut tabs for the help modal
-func GetShortcutTabs() []ShortcutTab {
-	return []ShortcutTab{
-		{
-			Name: "Global",
-			Shortcuts: []Shortcut{
-				{"?", "Show this help"},
-				{"Shift+Tab", "Cycle panels"},
-				{"q, Ctrl+C", "Quit"},
-			},
-		},
-		{
-			Name: "Sidebar",
-			Shortcuts: []Shortcut{
-				{"Enter/Space", "Select request"},
-				{"d", "Delete request"},
-				{"/", "Filter requests"},
-				{"j/k", "Navigate up/down"},
-			},
-		},
-		{
-			Name: "Request",
-			Shortcuts: []Shortcut{
-				{"Enter", "Send request"},
-				{"Tab", "Next field"},
-				{"h/l", "Change method"},
-				{"Ctrl+S", "Save request"},
-				{"Alt+L", "Toggle load test"},
-			},
-		},
-		{
-			Name: "Response",
-			Shortcuts: []Shortcut{
-				{"1,2,3", "Jump to tab"},
-				{"h/l", "Navigate tabs"},
-				{"y/Y", "Copy response"},
-				{"j/k", "Scroll"},
-			},
-		},
+// GetShortcutTabs generates help text from actual keybindings
+func GetShortcutTabs(keys keybindings.KeyMap) []ShortcutTab {
+	tabs := []ShortcutTab{}
+
+	for _, group := range keys.GetKeyGroups() {
+		shortcuts := []Shortcut{}
+		for _, binding := range group.Bindings {
+			help := binding.Help()
+			shortcuts = append(shortcuts, Shortcut{
+				Key:         help.Key,
+				Description: help.Desc,
+			})
+		}
+		tabs = append(tabs, ShortcutTab{
+			Name:      group.Name,
+			Shortcuts: shortcuts,
+		})
 	}
+
+	return tabs
 }
