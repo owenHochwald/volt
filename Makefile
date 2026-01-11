@@ -20,4 +20,12 @@ clean:
 	go clean
 	rm -f ${APP_EXECUTABLE}
 
+test:
+	go test -v ./...
+
+test-coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+
+
 .PHONY: build build-mac install uninstall run clean

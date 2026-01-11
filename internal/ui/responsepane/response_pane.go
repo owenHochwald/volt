@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // ResponsePane is the component responsible for displaying HTTP responses and load test statistics
@@ -15,6 +16,8 @@ type ResponsePane struct {
 
 	viewport  viewport.Model
 	activeTab int
+
+	keys keybindings.KeyMap
 }
 
 // Init initializes the response pane

@@ -7,10 +7,11 @@ import (
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/storage"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // SetupRequestPane creates and initializes a new RequestPane
-func SetupRequestPane(db *storage.SQLiteStorage) RequestPane {
+func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) RequestPane {
 	methodSelector := ui.NewMethodSelector()
 
 	// Use factories for text inputs
@@ -43,6 +44,7 @@ func SetupRequestPane(db *storage.SQLiteStorage) RequestPane {
 		Stopwatch:           stopwatch.NewWithInterval(10 * time.Millisecond),
 		Request:             http.NewDefaultRequest(),
 		DB:                  db,
+		keys:                keys,
 		LoadTestConcurrency: &ltConcurrency,
 		LoadTestTotalReqs:   &ltTotalReqs,
 		LoadTestQPS:         &ltQPS,

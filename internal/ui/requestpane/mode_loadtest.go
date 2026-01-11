@@ -3,6 +3,7 @@ package requestpane
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // LoadTestMode implements the load test mode
@@ -12,17 +13,25 @@ type LoadTestMode struct{}
 func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Alt + Enter submits the request from any focus point
-	if msg.String() == "alt+enter" {
+	// Check for special keybindings FIRST before delegating to text components
+	if keybindings.Matches(msg, m.keys.SendRequest) {
 		return ltm.handleSubmit(m, msg)
+	}
+	if keybindings.Matches(msg, m.keys.ToggleLoadTest) {
+		// Don't pass to text components, will be handled in update.go
+		return m, nil
+	}
+	if keybindings.Matches(msg, m.keys.SaveRequest) {
+		// Don't pass to text components, will be handled in update.go
+		return m, nil
 	}
 
 	switch FieldIndex(m.FocusManager.CurrentIndex()) {
 	case FieldMethodSelector:
-		switch msg.String() {
-		case tea.KeyRight.String(), "l":
+		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
 			m.MethodSelector.Next()
-		case tea.KeyLeft.String(), "h":
+		}
+		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
 			m.MethodSelector.Prev()
 		}
 	case FieldURL:
@@ -66,8 +75,7 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model,
 
 // handleSubmit handles the submit button in load test mode
 func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case tea.KeyEnter.String(), "alt+enter":
+	if msg.String() == tea.KeyEnter.String() || keybindings.Matches(msg, m.keys.SendRequest) {
 		if m.RequestInProgress {
 			return m, nil
 		}

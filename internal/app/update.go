@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 	"github.com/owenHochwald/volt/internal/ui/requestpane"
 	"github.com/owenHochwald/volt/internal/ui/responsepane"
 	"github.com/owenHochwald/volt/internal/ui/shortcutpane"
@@ -16,7 +17,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Handle '?' to toggle help modal
-		if msg.String() == "?" && !m.showHelpModal && m.focusedPanel != utils.RequestPanel {
+		if keybindings.Matches(msg, m.keys.ShowHelp) && !m.showHelpModal && m.focusedPanel != utils.RequestPanel {
 			m.showHelpModal = true
 			m.shortcutPane.SetFocused(true)
 			return m, nil
@@ -30,21 +31,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Existing key handling (only when modal is closed)
-		switch msg.Type {
-		case tea.KeyShiftTab:
+		// Global key handling (only when modal is closed)
+		if keybindings.Matches(msg, m.keys.CyclePanel) {
 			m.focusedPanel = (m.focusedPanel + 1) % 3
-		default:
+			return m, nil
 		}
-		switch msg.String() {
-		case tea.KeyCtrlC.String():
+		if keybindings.Matches(msg, m.keys.Quit) {
 			return m, tea.Quit
-		case tea.KeyEscape.String():
+		}
+		if keybindings.Matches(msg, m.keys.EscapePanel) {
 			if m.focusedPanel == utils.RequestPanel {
 				m.focusedPanel = utils.SidebarPanel
 				return m, nil
 			}
-		case tea.KeyEnter.String(), " ":
+		}
+		if keybindings.Matches(msg, m.keys.LoadRequest) {
 			if m.focusedPanel == utils.SidebarPanel {
 				if item, ok := m.sidebarPane.SelectedItem(); ok {
 					m.focusedPanel = utils.RequestPanel

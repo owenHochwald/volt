@@ -1,6 +1,9 @@
 package shortcutpane
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
+)
 
 // ShortcutPane is the component responsible for displaying shortcuts
 type ShortcutPane struct {
@@ -9,7 +12,7 @@ type ShortcutPane struct {
 	tabs          []ShortcutTab
 
 	Focused bool
-	// Future: might need to refactor viewable area to be viewports
+	keys    keybindings.KeyMap
 }
 
 func (m ShortcutPane) Init() tea.Cmd {

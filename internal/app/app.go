@@ -5,6 +5,7 @@ import (
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/storage"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 	"github.com/owenHochwald/volt/internal/ui/requestpane"
 	"github.com/owenHochwald/volt/internal/ui/responsepane"
 	"github.com/owenHochwald/volt/internal/ui/shortcutpane"
@@ -12,7 +13,8 @@ import (
 )
 
 type Model struct {
-	db *storage.SQLiteStorage
+	db   *storage.SQLiteStorage
+	keys keybindings.KeyMap
 
 	sidebarPane  *ui.SidebarPane
 	requestPane  requestpane.RequestPane
@@ -31,13 +33,15 @@ type Model struct {
 }
 
 func SetupModel(db *storage.SQLiteStorage) Model {
-	responsePane := responsepane.SetupResponsePane()
-	shortcutPane := shortcutpane.SetupShortcutPane()
+	keys := keybindings.DefaultKeyMap()
+	responsePane := responsepane.SetupResponsePane(keys)
+	shortcutPane := shortcutpane.SetupShortcutPane(keys)
 
 	m := Model{
 		db:            db,
-		sidebarPane:   ui.NewSidebar(db),
-		requestPane:   requestpane.SetupRequestPane(db),
+		keys:          keys,
+		sidebarPane:   ui.NewSidebar(db, keys),
+		requestPane:   requestpane.SetupRequestPane(db, keys),
 		responsePane:  &responsePane,
 		shortcutPane:  shortcutPane,
 		focusedPanel:  utils.SidebarPanel,

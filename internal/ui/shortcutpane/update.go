@@ -2,6 +2,7 @@ package shortcutpane
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 // CloseHelpModalMsg signals the app to close the help modal
@@ -10,8 +11,8 @@ type CloseHelpModalMsg struct{}
 func (m ShortcutPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Direct tab access - check for numbers
 		switch msg.String() {
-		// Direct tab access
 		case "1":
 			m.activeTab = int(Global)
 		case "2":
@@ -20,15 +21,18 @@ func (m ShortcutPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeTab = int(Request)
 		case "4":
 			m.activeTab = int(Response)
+		}
 
-		// Tab navigation (vim style)
-		case "h", tea.KeyLeft.String(), tea.KeyShiftTab.String():
+		// Tab navigation
+		if keybindings.Matches(msg, m.keys.PrevTab) {
 			m.activeTab = (m.activeTab - 1 + m.getMaxTabs()) % m.getMaxTabs()
-		case "l", tea.KeyRight.String(), tea.KeyTab.String():
+		}
+		if keybindings.Matches(msg, m.keys.NextTab) {
 			m.activeTab = (m.activeTab + 1) % m.getMaxTabs()
+		}
 
 		// Close modal
-		case "q", "?", tea.KeyEscape.String():
+		if keybindings.Matches(msg, m.keys.CloseHelp) {
 			return m, func() tea.Msg {
 				return CloseHelpModalMsg{}
 			}

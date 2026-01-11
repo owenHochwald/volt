@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/storage"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 )
 
 type RequestItem struct {
@@ -28,7 +29,8 @@ type SidebarPane struct {
 
 	desiredCursorIndex int
 
-	db *storage.SQLiteStorage
+	db   *storage.SQLiteStorage
+	keys keybindings.KeyMap
 }
 
 func (s *SidebarPane) SetRequests(items []list.Item) {
@@ -70,8 +72,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "d":
+		if keybindings.Matches(msg, s.keys.DeleteRequest) {
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
 				return s, nil
@@ -89,20 +90,21 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.desiredCursorIndex = 0
 			}
 			return s, DeleteRequestCmd(s.db, item.Request.ID)
-		// navigation override
-		case tea.KeyUp.String(), "k":
-			currentIndex := s.requestsList.Index()
+		}
 
+		// Navigation override - wrapped to cycle
+		if keybindings.Matches(msg, s.keys.NavUp) {
+			currentIndex := s.requestsList.Index()
 			if currentIndex == 0 {
 				s.requestsList.Select(len(s.requestsList.Items()) - 1)
 			} else {
 				s.requestsList.Select(currentIndex - 1)
 			}
 			return s, nil
-		case tea.KeyDown.String(), "j":
+		}
+		if keybindings.Matches(msg, s.keys.NavDown) {
 			currentIndex := s.requestsList.Index()
 			itemCount := len(s.requestsList.Items()) - 1
-
 			if currentIndex == itemCount {
 				s.requestsList.Select(0)
 			} else {
@@ -118,7 +120,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *SidebarPane) View() string {
-	helpText := HelpStyle.Render("d: delete • enter: send •/: filter")
+	helpText := HelpStyle.Render("Press ? for help")
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -143,7 +145,7 @@ func (s *SidebarPane) SetSize(width, height int) {
 	s.requestsList.SetSize(width, height)
 }
 
-func NewSidebar(db *storage.SQLiteStorage) *SidebarPane {
+func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {
 	loadingItems := []list.Item{
 		RequestItem{
 			title:   "Loading...",
@@ -157,6 +159,7 @@ func NewSidebar(db *storage.SQLiteStorage) *SidebarPane {
 		height:       10,
 		width:        10,
 		db:           db,
+		keys:         keys,
 		requestsList: list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"

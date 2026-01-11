@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/volt/internal/http"
 	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/volt/internal/ui/keybindings"
 	"github.com/owenHochwald/volt/internal/utils"
 )
 
@@ -23,17 +24,19 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Global shortcuts
-		switch msg.String() {
-		case "alt+l":
+		if keybindings.Matches(msg, m.keys.ToggleLoadTest) {
 			m.toggleLoadTestMode()
 			return m, nil
-		case tea.KeyCtrlS.String(), tea.KeyShiftDown.String():
+		}
+		if keybindings.Matches(msg, m.keys.SaveRequest) {
 			m.syncRequest()
 			return m, ui.SaveRequestCmd(m.DB, m.Request)
-		case tea.KeyTab.String(), tea.KeyDown.String():
+		}
+		if keybindings.Matches(msg, m.keys.NextField) {
 			m.FocusManager.Next()
 			return m, nil
-		case tea.KeyUp.String():
+		}
+		if keybindings.Matches(msg, m.keys.PrevField) {
 			m.FocusManager.Prev()
 			return m, nil
 		}
