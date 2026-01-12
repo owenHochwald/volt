@@ -2,7 +2,7 @@ package shortcutpane
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // ShortcutPane is the component responsible for displaying shortcuts

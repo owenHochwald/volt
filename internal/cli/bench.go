@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
 // RunBench executes the load test with given configuration

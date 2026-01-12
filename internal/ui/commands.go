@@ -2,8 +2,8 @@ package ui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
 )
 
 type RequestsLoadingMsg struct {

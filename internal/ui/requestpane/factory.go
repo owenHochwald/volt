@@ -5,7 +5,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/storage"
 )
 
 // TextInputConfig holds configuration for creating a textinput.Model

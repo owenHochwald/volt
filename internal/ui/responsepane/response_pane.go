@@ -3,8 +3,8 @@ package responsepane
 import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // ResponsePane is the component responsible for displaying HTTP responses and load test statistics

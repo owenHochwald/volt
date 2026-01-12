@@ -4,10 +4,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/storage"
-	"github.com/owenHochwald/volt/internal/ui"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // SetupRequestPane creates and initializes a new RequestPane

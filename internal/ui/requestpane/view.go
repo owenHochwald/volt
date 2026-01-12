@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // View renders the request pane
@@ -82,7 +82,7 @@ func (m RequestPane) View() string {
 			button,
 		)
 
-		helpText = ui.HelpStyle.Render("alt/opt+l: exit load test mode • tab/↑/↓: navigate • enter: start load test")
+		helpText = ui.HelpStyle.Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • ctrl+p: start load test")
 	} else {
 		// Normal mode
 		mainContent = lipgloss.JoinVertical(
@@ -96,7 +96,7 @@ func (m RequestPane) View() string {
 			button,
 		)
 
-		helpText = ui.HelpStyle.Render("alt/opt+l: load test mode • tab/↑/↓: navigate • ←/→ or h/l: change method • alt/opt+enter: send • enter/→: accept URL • ctrl+s: save")
+		helpText = ui.HelpStyle.Render("ctrl+l: load test mode • tab/↑/↓: navigate • ←/→ or h/l: change method • ctrl+p: send • enter/→: accept URL • ctrl+s: save")
 	}
 
 	var spacing string

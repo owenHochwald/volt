@@ -7,7 +7,7 @@
 <br>
 
 [![GitHub release](https://img.shields.io/github/release/owenHochwald/Volt.svg)](https://github.com/owenHochwald/Volt/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/volt)](https://goreportcard.com/report/github.com/owenHochwald/volt)
+[![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 [Installation](#installation) • [Quick Start](#quick-start) • [Why Volt?](#why-volt)  •[CLI Mode](#CLI-load-testing)
@@ -65,7 +65,7 @@ Volt is distributed as a single binary with no dependencies. The fastest way to 
 If you have Go installed, you can install Volt with a single command:
 
 ```bash
-go install github.com/owenHochwald/volt/cmd/volt@latest # install
+go install github.com/owenHochwald/Volt/cmd/volt@latest # install
 volt # run and verify
 ```
 

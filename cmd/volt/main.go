@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/app"
-	"github.com/owenHochwald/volt/internal/cli"
-	"github.com/owenHochwald/volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/app"
+	"github.com/owenHochwald/Volt/internal/cli"
+	"github.com/owenHochwald/Volt/internal/storage"
 )
 
 func main() {
