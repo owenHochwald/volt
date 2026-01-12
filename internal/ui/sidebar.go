@@ -6,9 +6,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/storage"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 type RequestItem struct {

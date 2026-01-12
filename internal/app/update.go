@@ -2,13 +2,13 @@ package app
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/ui"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
-	"github.com/owenHochwald/volt/internal/ui/requestpane"
-	"github.com/owenHochwald/volt/internal/ui/responsepane"
-	"github.com/owenHochwald/volt/internal/ui/shortcutpane"
-	"github.com/owenHochwald/volt/internal/utils"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/requestpane"
+	"github.com/owenHochwald/Volt/internal/ui/responsepane"
+	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

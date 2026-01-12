@@ -7,10 +7,10 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/storage"
-	"github.com/owenHochwald/volt/internal/ui"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // FieldIndex represents the index of a focusable field in the request pane

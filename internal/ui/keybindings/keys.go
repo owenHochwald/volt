@@ -17,7 +17,7 @@ type KeyMap struct {
 	NavDown       key.Binding
 
 	// Request Pane
-	SendRequest      key.Binding // Both Alt+Enter AND Cmd+Enter
+	SendRequest      key.Binding
 	SaveRequest      key.Binding
 	ToggleLoadTest   key.Binding
 	NextField        key.Binding
@@ -78,10 +78,9 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("↓/j", "navigate down"),
 		),
 
-		// Request Pane - KEY IMPROVEMENT: Both Alt and Cmd for send
 		SendRequest: key.NewBinding(
-			key.WithKeys("alt+enter"),
-			key.WithHelp("alt+enter", "send request"),
+			key.WithKeys("alt+enter", "ctrl+p"),
+			key.WithHelp("ctrl+p", "send request"),
 		),
 		SaveRequest: key.NewBinding(
 			key.WithKeys("ctrl+s"),

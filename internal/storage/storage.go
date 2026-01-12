@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
 type Storage interface {

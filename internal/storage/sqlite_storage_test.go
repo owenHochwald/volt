@@ -6,7 +6,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
 func setupTestDB(t *testing.T) *SQLiteStorage {

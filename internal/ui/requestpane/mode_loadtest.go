@@ -2,8 +2,8 @@ package requestpane
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/ui"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // LoadTestMode implements the load test mode

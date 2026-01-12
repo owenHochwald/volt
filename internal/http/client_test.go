@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-	//http2 "github.com/owenHochwald/volt/internal/http"
+	//http2 "github.com/owenHochwald/Volt/internal/http"
 )
 
 func TestClient_Send(t *testing.T) {

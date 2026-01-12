@@ -2,7 +2,7 @@ package shortcutpane
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 const (

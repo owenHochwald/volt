@@ -6,8 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/http"
-	"github.com/owenHochwald/volt/internal/utils"
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 // syncRequest synchronizes the UI state with the request model

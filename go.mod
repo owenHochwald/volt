@@ -1,4 +1,4 @@
-module github.com/owenHochwald/volt
+module github.com/owenHochwald/Volt
 
 go 1.25
 

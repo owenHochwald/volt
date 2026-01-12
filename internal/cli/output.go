@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
 // FormatOutput writes results in requested format

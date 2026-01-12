@@ -2,7 +2,7 @@ package responsepane
 
 import (
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // SetupResponsePane creates and initializes a new ResponsePane with default values

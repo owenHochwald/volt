@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/owenHochwald/volt/internal/utils"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 // View renders the response pane

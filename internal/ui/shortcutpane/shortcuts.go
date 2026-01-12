@@ -1,6 +1,6 @@
 package shortcutpane
 
-import "github.com/owenHochwald/volt/internal/ui/keybindings"
+import "github.com/owenHochwald/Volt/internal/ui/keybindings"
 
 // Shortcut represents a keyboard shortcut and its description
 type Shortcut struct {

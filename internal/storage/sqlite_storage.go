@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/owenHochwald/volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )

@@ -1,6 +1,6 @@
 package shortcutpane
 
-import "github.com/owenHochwald/volt/internal/ui/keybindings"
+import "github.com/owenHochwald/Volt/internal/ui/keybindings"
 
 // SetupShortcutPane sets up the shortcut pane for use
 func SetupShortcutPane(keys keybindings.KeyMap) ShortcutPane {

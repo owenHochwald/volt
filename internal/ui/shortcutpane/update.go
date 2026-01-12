@@ -2,7 +2,7 @@ package shortcutpane
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // CloseHelpModalMsg signals the app to close the help modal

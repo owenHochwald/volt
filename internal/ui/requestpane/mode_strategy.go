@@ -2,7 +2,7 @@ package requestpane
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/owenHochwald/volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // ModeStrategy defines the interface for different request pane modes (normal, load test, etc.)

@@ -2,8 +2,8 @@ package app
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/owenHochwald/volt/internal/ui"
-	"github.com/owenHochwald/volt/internal/utils"
+	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 func (m Model) View() string {
