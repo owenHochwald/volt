@@ -9,7 +9,7 @@ import (
 )
 
 func (m Model) View() tea.View {
-	layout := calculateLayout(m.width, m.height)
+	layout := m.currentLayout()
 	if layout.mode == layoutTooSmall {
 		return newView(m.tooSmallView(layout))
 	}
@@ -101,14 +101,24 @@ func (m Model) statusView(width int) string {
 }
 
 func (m Model) headerView(layout terminalLayout) string {
-	return m.renderPanel(
-		m.styles.Panel.Header,
-		false,
-		false,
-		layout.width,
-		layout.headerHeight,
-		m.headerPane.View(),
-	)
+	activePanel := "SIDEBAR"
+	switch m.focusedPanel {
+	case utils.RequestPanel:
+		activePanel = "REQUEST"
+	case utils.ResponsePanel:
+		activePanel = "RESPONSE"
+	}
+	mode := "NORMAL"
+	if m.requestPane.LoadTestMode || m.loadTestUpdates != nil {
+		mode = "LOAD TEST"
+	}
+	m.headerPane.SetContext(activePanel, mode)
+	return lipgloss.NewStyle().
+		Width(layout.width).
+		Height(layout.headerHeight).
+		MaxWidth(layout.width).
+		MaxHeight(layout.headerHeight).
+		Render(m.headerPane.View())
 }
 
 func (m Model) panelTabs(width int) string {
