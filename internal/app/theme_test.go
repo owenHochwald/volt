@@ -9,6 +9,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/design"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 func TestSetupModelAppliesLoadedThemeAndWarning(t *testing.T) {
@@ -72,4 +73,38 @@ func TestCustomThemeIgnoresTerminalBackground(t *testing.T) {
 
 	assert.Equal(t, custom, model.theme)
 	assert.Equal(t, "/tmp/adaptive.yaml", model.themeSource)
+}
+
+func TestSettingsCancelRestoresOriginalTheme(t *testing.T) {
+	model := newTestModel(t)
+	model.openHelp(keybindings.ContextGlobal)
+
+	model, _ = updateAppModel(model, appKeyPress('l', "l", 0))
+	model, previewCmd := updateAppModel(model, appKeyPress('j', "j", 0))
+	model, _ = updateAppModel(model, previewCmd())
+	assert.Equal(t, "adaptive", model.themeSource)
+
+	model, _ = updateAppModel(model, appKeyPress(tea.KeyEscape, "", 0))
+	assert.Equal(t, "default", model.themeSource)
+	assert.False(t, model.showHelpModal)
+}
+
+func TestSettingsSaveKeepsPreviewedTheme(t *testing.T) {
+	model := newTestModel(t)
+	model.openHelp(keybindings.ContextGlobal)
+
+	model, _ = updateAppModel(model, appKeyPress('l', "l", 0))
+	model, previewCmd := updateAppModel(model, appKeyPress('j', "j", 0))
+	model, _ = updateAppModel(model, previewCmd())
+	model, saveCmd := updateAppModel(model, appKeyPress(tea.KeyEnter, "", 0))
+	model, _ = updateAppModel(model, saveCmd())
+
+	assert.Equal(t, "adaptive", model.themeSource)
+	assert.False(t, model.showHelpModal)
+	assert.Equal(t, ui.NotificationSuccess, model.notification.Level)
+}
+
+func updateAppModel(model Model, msg tea.Msg) (Model, tea.Cmd) {
+	updated, cmd := model.Update(msg)
+	return updated.(Model), cmd
 }
