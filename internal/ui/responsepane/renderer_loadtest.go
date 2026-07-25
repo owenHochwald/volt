@@ -2,6 +2,7 @@ package responsepane
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -136,7 +137,14 @@ func (m ResponsePane) renderLoadTestErrors() string {
 	}
 
 	// Render each stable error class.
-	for class, count := range stats.Errors {
+	errorClasses := make([]string, 0, len(stats.Errors))
+	for class := range stats.Errors {
+		errorClasses = append(errorClasses, class)
+	}
+	sort.Strings(errorClasses)
+
+	for _, class := range errorClasses {
+		count := stats.Errors[class]
 		b.WriteString(responseKeyStyle.Render(class))
 		b.WriteString(": ")
 		b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d occurrences", count)))
