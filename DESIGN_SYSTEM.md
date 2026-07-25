@@ -230,9 +230,10 @@ Startup behavior:
 
 1. Render the full ASCII `VOLT` mark immediately.
 2. Do not block input or initialization while it is displayed.
-3. Dismiss it on the first meaningful keypress or after a short maximum.
-4. Use at most three compression frames and complete the transition within
-   750 ms.
+3. Hold the full mark for two seconds unless a meaningful keypress dismisses
+   it sooner.
+4. Use at most three compression frames and complete the compression itself
+   within 250 ms.
 5. Skip intermediate frames when reduced motion is enabled.
 
 The steady-state header occupies two rows:
