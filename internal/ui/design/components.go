@@ -161,3 +161,18 @@ func (s PanelStyles) ForState(focused, running bool) lipgloss.Style {
 	}
 	return s.Base
 }
+
+func (s StatusStyles) ForCode(statusCode int) lipgloss.Style {
+	switch statusCode / 100 {
+	case 2:
+		return s.Success
+	case 3:
+		return s.Redirect
+	case 4:
+		return s.ClientError
+	case 5:
+		return s.ServerError
+	default:
+		return s.Unknown
+	}
+}
