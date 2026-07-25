@@ -84,13 +84,17 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 		}
 	}
 	m.setFocusedPanel(utils.SidebarPanel)
-	m.applyLayout(calculateLayout(m.width, m.height))
+	m.applyLayout(m.currentLayout())
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.themeSource == "adaptive" {
-		return tea.Batch(m.sidebarPane.Init(), tea.RequestBackgroundColor)
+	cmds := []tea.Cmd{
+		m.sidebarPane.Init(),
+		startupAdvanceCmd(ui.HeaderFrameCompressed, m.theme.Motion),
 	}
-	return m.sidebarPane.Init()
+	if m.themeSource == "adaptive" {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
