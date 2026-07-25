@@ -78,3 +78,42 @@ func saveThemeSelection(configDir, source string) error {
 	removeTemp = false
 	return nil
 }
+
+func loadSavedThemeSelection(configDir, homeDir string) (string, string, error, bool) {
+	paths := make([]string, 0, 2)
+	if configDir != "" {
+		paths = append(paths, filepath.Join(configDir, "volt", themeSelectionFilename))
+	}
+	if homeDir != "" {
+		paths = append(paths, filepath.Join(homeDir, ".volt", themeSelectionFilename))
+	}
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", path, err, true
+		}
+
+		var config AppConfig
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			return "", path, fmt.Errorf("parse selection: %w", err), true
+		}
+		if config.Version != ThemeSchemaVersion {
+			return "", path, fmt.Errorf(
+				"unsupported config version %d; expected %d",
+				config.Version,
+				ThemeSchemaVersion,
+			), true
+		}
+		selection := strings.TrimSpace(config.Theme)
+		if selection == "" {
+			return "", path, fmt.Errorf("theme selection is required"), true
+		}
+		return selection, path, nil, true
+	}
+
+	return "", "", nil, false
+}
