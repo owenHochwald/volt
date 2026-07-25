@@ -27,3 +27,16 @@ func TestSetupModelAppliesLoadedThemeAndWarning(t *testing.T) {
 	assert.Equal(t, ui.NotificationWarning, model.notification.Level)
 	assert.Equal(t, "Theme warning", model.notification.Text)
 }
+
+func TestApplyThemePreservesApplicationState(t *testing.T) {
+	model := newTestModel(t)
+	model.requestPane.NameInput.SetValue("Keep this request")
+
+	model.applyTheme(design.MonoTheme(), "mono")
+
+	assert.Equal(t, "mono", model.theme.Name)
+	assert.Equal(t, "mono", model.themeSource)
+	assert.Equal(t, "Keep this request", model.requestPane.NameInput.Value())
+	assert.Equal(t, lipgloss.NoColor{}, model.styles.Text.Value.GetForeground())
+	assert.Equal(t, lipgloss.NoColor{}, model.requestPane.MethodSelector.GetStyle().GetForeground())
+}
