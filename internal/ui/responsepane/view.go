@@ -25,7 +25,7 @@ func (m ResponsePane) View() string {
 func (m ResponsePane) renderNormalView() string {
 	var statusBar string
 	if m.Response.Error != "" {
-		statusBar = errorStyle.Render("ERROR")
+		statusBar = m.styles.Badge.Error.Render("ERROR")
 		m.viewport.SetContent(m.Response.Error)
 	} else {
 		statusBar = m.renderHeaderBar()
@@ -58,10 +58,10 @@ func (m ResponsePane) renderLoadTestView() string {
 	} else {
 		status += "Complete"
 	}
-	statusBar := loadTestStatusStyle.Render(status)
+	statusBar := m.styles.Badge.Live.Render(status)
 	if m.LoadTestStats.FailedRequests > 0 {
 		status = fmt.Sprintf("%s • %d failed", status, m.LoadTestStats.FailedRequests)
-		statusBar = errorStyle.Render(status)
+		statusBar = m.styles.Badge.Error.Render(status)
 	}
 	b.WriteString(statusBar)
 	b.WriteString("\n")
@@ -78,7 +78,7 @@ func (m ResponsePane) renderLoadTestView() string {
 
 // renderHeaderBar renders the status bar for normal responses
 func (m ResponsePane) renderHeaderBar() string {
-	statusStyle := utils.MapStatusCodeToColor(m.Response.StatusCode)
+	statusStyle := m.styles.Status.ForCode(m.Response.StatusCode)
 	status := statusStyle.Render(m.Response.Status)
 	duration := fmt.Sprintf(" %d ms", m.Response.Duration.Milliseconds())
 	if m.Response.RoundTrip {
