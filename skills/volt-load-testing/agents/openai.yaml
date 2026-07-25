@@ -1,0 +1,4 @@
+interface:
+  display_name: "Volt Load Testing"
+  short_description: "Test APIs safely with Volt from coding agents"
+  default_prompt: "Use $volt-load-testing to evaluate this API with a staged, authorized Volt load test."
