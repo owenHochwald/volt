@@ -24,7 +24,14 @@ added later without expanding the custom-theme schema.
 
 ## Configuration discovery
 
-Volt checks two automatic file locations in this order:
+Settings persists the selected mode or custom file path in the first available
+user configuration location. Volt reads selection files in this order:
+
+1. `<user-config-dir>/volt/config.yaml`
+2. `~/.volt/config.yaml`
+
+When neither selection file exists, Volt checks two automatic custom-theme
+locations:
 
 1. `<user-config-dir>/volt/theme.yaml`
 2. `~/.volt/theme.yaml`
@@ -36,9 +43,10 @@ platform convention:
 - macOS: `~/Library/Application Support`
 - Windows: `%AppData%`
 
-The first existing file wins. `VOLT_THEME` may additionally select a built-in
-mode or provide an explicit `.yaml` file path. When no valid custom selection
-exists, Volt uses `default`.
+`VOLT_THEME` has the highest priority and may select a built-in mode or provide
+an explicit `.yaml` file path. Otherwise the first existing selection file
+wins, followed by the first automatic custom-theme file. When no valid
+selection exists, Volt uses `default`.
 
 Volt does not search the current working directory. A project must not be able
 to change Volt's appearance merely because Volt was launched inside it.
@@ -48,15 +56,28 @@ Example layouts:
 ```text
 <user-config-dir>/
 └── volt/
+    ├── config.yaml
     └── theme.yaml
 
 ~/
 └── .volt/
+    ├── config.yaml
     └── theme.yaml
 ```
 
 Only files ending in `.yaml` are supported. JSON theme files and `.yml`
 aliases are intentionally outside the public contract.
+
+The small selection file written by Settings is also YAML:
+
+```yaml
+version: 1
+theme: adaptive
+motion: system
+```
+
+`theme` may contain `default`, `adaptive`, `mono`, or a custom `.yaml` path.
+Relative paths resolve from the directory containing `config.yaml`.
 
 ## Creating a theme
 
@@ -187,7 +208,8 @@ esc      leave edit mode, then close
 ```
 
 Preview is transactional: entering preview snapshots the current theme,
-`SAVE` persists the choice, and `CANCEL` restores the snapshot.
+`SAVE` atomically persists the choice to
+`<user-config-dir>/volt/config.yaml`, and `CANCEL` restores the snapshot.
 
 ## Implementation requirements
 
@@ -205,6 +227,8 @@ Required tests:
 - Unknown fields are ignored.
 - Invalid recognized values fall back without preventing startup.
 - Both automatic paths are searched in the documented order.
+- A saved Settings selection takes precedence over automatic theme files.
+- `VOLT_THEME` takes precedence over a saved Settings selection.
 - A missing automatic file quietly selects `default`.
 - An invalid explicit path produces a startup warning.
 - Built-in modes resolve every semantic role.
