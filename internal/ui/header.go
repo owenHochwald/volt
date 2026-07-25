@@ -3,12 +3,14 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 type Header struct {
 	width   int
 	compact bool
 	version string
+	styles  design.Styles
 }
 
 func (h *Header) Init() tea.Cmd {
@@ -27,9 +29,9 @@ func (h *Header) View() string {
 	if h.compact {
 		return lipgloss.JoinHorizontal(
 			lipgloss.Left,
-			HeaderLogoStyle.Render("⚡ VOLT"),
+			h.styles.Header.Logo.Render("⚡ VOLT"),
 			"  ",
-			HeaderHelpStyle.Render(h.version+" • Terminal-native HTTP client"),
+			h.styles.Header.Metadata.Render(h.version+" • Terminal-native HTTP client"),
 		)
 	}
 
@@ -40,9 +42,9 @@ func (h *Header) View() string {
  ╚████╔╝ ╚██████╔╝███████╗██║
   ╚═══╝   ╚═════╝ ╚══════╝╚═╝   `
 
-	logo := HeaderLogoStyle.Render(asciiArt)
+	logo := h.styles.Header.Logo.Render(asciiArt)
 
-	help := HeaderHelpStyle.Render(h.version + " • Terminal-native HTTP client")
+	help := h.styles.Header.Metadata.Render(h.version + " • Terminal-native HTTP client")
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, logo, "\t", help)
 }
@@ -52,9 +54,15 @@ func (h *Header) SetSize(width int, compact bool) {
 	h.compact = compact
 }
 
-func SetupHeader(version string) *Header {
+func SetupHeader(version string, optionalStyles ...design.Styles) *Header {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	return &Header{
 		width:   80,
 		version: version,
+		styles:  styles,
 	}
 }
