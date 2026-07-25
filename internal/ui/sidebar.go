@@ -59,6 +59,10 @@ func (s *SidebarPane) SetFocused(focused bool) {
 	}
 }
 
+func (s *SidebarPane) SetStyles(styles design.Styles) {
+	s.styles = styles
+}
+
 func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 	var cmd tea.Cmd
 
