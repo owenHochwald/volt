@@ -4,12 +4,11 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 // View renders the request pane
 func (m RequestPane) View() string {
-	styles := design.NewStyles(design.DefaultTheme())
+	styles := m.styles
 
 	// Render common fields
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
