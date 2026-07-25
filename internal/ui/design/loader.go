@@ -46,6 +46,29 @@ func loadUserTheme(options themeLoadOptions) ThemeLoadResult {
 		return loadThemeFile(filepath.Clean(selection))
 	}
 
+	savedSelection, configPath, err, found := loadSavedThemeSelection(
+		options.ConfigDir,
+		options.HomeDir,
+	)
+	if found {
+		if err != nil {
+			return defaultThemeResult(themeWarning(configPath, err))
+		}
+		if theme, ok := builtInTheme(savedSelection); ok {
+			return ThemeLoadResult{Theme: theme, Source: theme.Name}
+		}
+		if !strings.EqualFold(filepath.Ext(savedSelection), ".yaml") {
+			return defaultThemeResult(themeWarning(
+				configPath,
+				fmt.Errorf("selection must name a built-in mode or .yaml file"),
+			))
+		}
+		if !filepath.IsAbs(savedSelection) {
+			savedSelection = filepath.Join(filepath.Dir(configPath), savedSelection)
+		}
+		return loadThemeFile(filepath.Clean(savedSelection))
+	}
+
 	paths := make([]string, 0, 2)
 	if options.ConfigDir != "" {
 		paths = append(paths, filepath.Join(options.ConfigDir, "volt", "theme.yaml"))
