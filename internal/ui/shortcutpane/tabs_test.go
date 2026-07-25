@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -76,5 +77,43 @@ func TestReferencePanelShowsCurrentRegistryBindings(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSettingsShowsThemesAndSemanticPreview(t *testing.T) {
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane.SetWidth(72)
+	pane.SetHeight(30)
+	pane.SetThemeOptions([]ThemeOption{
+		{
+			Name:        "Controlled Voltage",
+			Description: "Volt default",
+			Source:      "default",
+			Theme:       design.DefaultTheme(),
+		},
+		{
+			Name:        "Mono",
+			Description: "No color",
+			Source:      "mono",
+			Theme:       design.MonoTheme(),
+		},
+	}, "default")
+	pane.surface = SurfaceSettings
+
+	rendered := ansi.Strip(pane.View())
+	for _, expected := range []string{
+		"VOLT COMMAND CENTER",
+		"HELP",
+		"SETTINGS",
+		"Controlled Voltage",
+		"Mono",
+		"ACTIVE",
+		"LIVE PREVIEW",
+		"SEND",
+		"✓ 200",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Errorf("settings does not contain %q:\n%s", expected, rendered)
+		}
 	}
 }
