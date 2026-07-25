@@ -1,0 +1,7 @@
+.git
+.idea
+.vscode
+benchmarks/results
+coverage.html
+dist
+volt

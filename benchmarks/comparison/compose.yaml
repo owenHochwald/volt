@@ -1,0 +1,27 @@
+services:
+  target:
+    build:
+      context: ../..
+      dockerfile: benchmarks/comparison/Dockerfile
+      target: target
+    init: true
+
+  runner:
+    build:
+      context: ../..
+      dockerfile: benchmarks/comparison/Dockerfile
+      target: runner
+    depends_on:
+      - target
+    environment:
+      BENCH_CONCURRENCY: ${BENCH_CONCURRENCY:-10,50,100}
+      BENCH_COOLDOWN: ${BENCH_COOLDOWN:-1}
+      BENCH_DOCKER_VERSION: ${BENCH_DOCKER_VERSION:-unknown}
+      BENCH_DURATION: ${BENCH_DURATION:-10s}
+      BENCH_HOST_CPU: ${BENCH_HOST_CPU:-unknown}
+      BENCH_HOST_OS: ${BENCH_HOST_OS:-unknown}
+      BENCH_RUNS: ${BENCH_RUNS:-5}
+      BENCH_SEED: ${BENCH_SEED:-20260725}
+      BENCH_TARGET_URL: http://target:8080
+      BENCH_WARMUP_DURATION: ${BENCH_WARMUP_DURATION:-2s}
+      VOLT_COMMIT: ${VOLT_COMMIT:-unknown}
