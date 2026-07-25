@@ -1,8 +1,6 @@
 package design
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"image/color"
 	"strconv"
@@ -11,25 +9,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"gopkg.in/yaml.v3"
 )
-
-func (c *ColorValue) UnmarshalJSON(data []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return err
-	}
-
-	switch value := value.(type) {
-	case string:
-		return c.set(value)
-	case json.Number:
-		return c.set(value.String())
-	default:
-		return fmt.Errorf("color must be a string or ANSI-256 index")
-	}
-}
 
 func (c *ColorValue) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.ScalarNode {
