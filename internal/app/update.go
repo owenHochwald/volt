@@ -280,6 +280,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		switch {
 		case m.loadTestCanceled:
 			completed := 0
@@ -311,6 +312,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't start the load test.", "Check the load test settings and try again."))
 		return m, nil
 
