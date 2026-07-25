@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -52,7 +53,7 @@ func TestLoadTestStatusCallsOutFailures(t *testing.T) {
 	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(failingLoadTestStats())
 
-	rendered := pane.renderLoadTestView()
+	rendered := ansi.Strip(pane.renderLoadTestView())
 	if !strings.Contains(rendered, "2 failed") {
 		t.Fatalf("status does not call out failures:\n%s", rendered)
 	}
@@ -97,6 +98,47 @@ func TestLoadTestStatsPreserveSelectedTabDuringLiveUpdates(t *testing.T) {
 
 	if got := TabIndex(pane.activeTab); got != TabLoadTestLatency {
 		t.Fatalf("active tab = %d, want latency tab", got)
+	}
+}
+
+func TestLiveLoadTestRendersProgressMetricsAndLatencySignal(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.SetWidth(100)
+	start := time.Now().Add(-2 * time.Second)
+	pane.SetLoadTestStats(&http.LoadTestStats{
+		StartTime:         start,
+		TotalRequests:     25000,
+		CompletedRequests: 18420,
+		FailedRequests:    8,
+		TotalDuration:     18420 * 11200 * time.Microsecond,
+	})
+
+	rendered := ansi.Strip(pane.renderLoadTestView())
+	for _, expected := range []string{
+		"● LIVE",
+		"18,420 / 25,000 requests",
+		"74%",
+		"req/s",
+		"p50",
+		"errors",
+		"LATENCY CURRENT",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Errorf("live load-test view does not contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestCompletedLoadTestUsesExplicitOutcomeState(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.SetLoadTestStats(failingLoadTestStats())
+
+	rendered := pane.renderLoadTestView()
+	if !strings.Contains(rendered, "× COMPLETE") {
+		t.Fatalf("failed load-test view does not show explicit outcome:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "● LIVE") {
+		t.Fatalf("completed load-test view still shows LIVE:\n%s", rendered)
 	}
 }
 
