@@ -96,6 +96,11 @@ func (m *RequestPane) SetFocused(focused bool) {
 	m.FocusManager.Current().Blur()
 }
 
+func (m *RequestPane) SetStyles(styles design.Styles) {
+	m.styles = styles
+	m.MethodSelector.SetStyles(styles)
+}
+
 // SetHeight sets the height of the request pane
 func (m *RequestPane) SetHeight(height int) {
 	m.SetSize(m.Width, height)
