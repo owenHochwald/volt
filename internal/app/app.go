@@ -17,10 +17,11 @@ import (
 )
 
 type Model struct {
-	db     *storage.SQLiteStorage
-	keys   keybindings.KeyMap
-	theme  design.Theme
-	styles design.Styles
+	db          *storage.SQLiteStorage
+	keys        keybindings.KeyMap
+	theme       design.Theme
+	styles      design.Styles
+	themeSource string
 
 	sidebarPane  *ui.SidebarPane
 	requestPane  requestpane.RequestPane
@@ -33,19 +34,29 @@ type Model struct {
 	focusedPanel utils.Panel
 
 	width, height int
+	startupFrame  int
 
 	loadTestUpdates  <-chan *http.LoadTestStats
 	loadTestCancel   context.CancelFunc
 	loadTestCanceled bool
 	showHelpModal    bool
 	notification     ui.Notification
+	themeSession     design.ThemeLoadResult
+	themeSessionOpen bool
 	quitArmed        bool
 	quitSequence     uint64
 }
 
-func SetupModel(db *storage.SQLiteStorage) Model {
+func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoadResult) Model {
 	keys := keybindings.DefaultKeyMap()
-	theme := design.DefaultTheme()
+	appearance := design.ThemeLoadResult{
+		Theme:  design.DefaultTheme(),
+		Source: "default",
+	}
+	if len(optionalAppearance) > 0 {
+		appearance = optionalAppearance[0]
+	}
+	theme := appearance.Theme
 	styles := design.NewStyles(theme)
 	responsePane := responsepane.SetupResponsePane(keys, styles)
 	shortcutPane := shortcutpane.SetupShortcutPane(keys, styles)
@@ -55,6 +66,7 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		keys:          keys,
 		theme:         theme,
 		styles:        styles,
+		themeSource:   appearance.Source,
 		sidebarPane:   ui.NewSidebar(db, keys, styles),
 		requestPane:   requestpane.SetupRequestPane(db, keys, styles),
 		responsePane:  &responsePane,
@@ -65,11 +77,24 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		width:         80,
 		height:        24,
 	}
+	if appearance.Warning != "" {
+		m.notification = ui.Notification{
+			Level: ui.NotificationWarning,
+			Text:  appearance.Warning,
+		}
+	}
 	m.setFocusedPanel(utils.SidebarPanel)
-	m.applyLayout(calculateLayout(m.width, m.height))
+	m.applyLayout(m.currentLayout())
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.sidebarPane.Init()
+	cmds := []tea.Cmd{
+		m.sidebarPane.Init(),
+		startupAdvanceCmd(ui.HeaderFrameCompressed, m.theme.Motion),
+	}
+	if m.themeSource == "adaptive" {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }

@@ -50,29 +50,58 @@ func (m ResponsePane) renderLoadTestView() string {
 	}
 
 	var b strings.Builder
+	stats := m.LoadTestStats
+	progress := loadTestProgress(stats)
 
-	// Status line
-	status := "Load Test "
-	if m.LoadTestStats.EndTime.IsZero() {
-		status += "In Progress..."
+	if stats.EndTime.IsZero() {
+		b.WriteString(m.styles.Badge.Live.Render("● LIVE"))
 	} else {
-		status += "Complete"
+		if stats.FailedRequests > 0 {
+			b.WriteString(m.styles.Badge.Error.Render("× COMPLETE"))
+		} else {
+			b.WriteString(m.styles.Badge.Success.Render("✓ COMPLETE"))
+		}
 	}
-	statusBar := m.styles.Badge.Live.Render(status)
-	if m.LoadTestStats.FailedRequests > 0 {
-		status = fmt.Sprintf("%s • %d failed", status, m.LoadTestStats.FailedRequests)
-		statusBar = m.styles.Badge.Error.Render(status)
+	b.WriteString("  ")
+	b.WriteString(m.styles.Metric.Value.Render(fmt.Sprintf(
+		"%s / %s",
+		formatRequestCount(stats.CompletedRequests),
+		formatRequestCount(stats.TotalRequests),
+	)))
+	b.WriteString(m.styles.Metric.Unit.Render(" requests"))
+	b.WriteString("  ")
+	b.WriteString(m.styles.Metric.Value.Render(fmt.Sprintf("%.0f%%", progress*100)))
+	if stats.FailedRequests > 0 {
+		b.WriteString("  ")
+		b.WriteString(m.styles.Notice.Error.Render(fmt.Sprintf("%d failed", stats.FailedRequests)))
 	}
-	b.WriteString(statusBar)
+	b.WriteString("\n")
+	b.WriteString(m.renderLoadTestProgress(progress))
 	b.WriteString("\n")
 
-	// Tab header
-	tabHeader := m.renderLoadTestTabs()
-	b.WriteString(tabHeader)
+	b.WriteString(m.renderLoadTestTabs())
 
-	// Tab content
 	b.WriteString(m.viewport.View())
 
+	return b.String()
+}
+
+func (m ResponsePane) renderLoadTestProgress(progress float64) string {
+	width := min(max(m.width-2, 12), 60)
+	filled := int(progress * float64(width))
+	filled = min(max(filled, 0), width)
+
+	var b strings.Builder
+	if filled > 0 {
+		b.WriteString(m.styles.Chart.Primary.Render(strings.Repeat("━", filled)))
+	}
+	if filled < width {
+		if filled > 0 {
+			b.WriteString(m.styles.Chart.Primary.Render("╺"))
+			filled++
+		}
+		b.WriteString(m.styles.Text.Muted.Render(strings.Repeat("━", width-filled)))
+	}
 	return b.String()
 }
 

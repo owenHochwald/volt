@@ -12,6 +12,8 @@ type Styles struct {
 	Notice NoticeStyles
 	Method MethodStyles
 	Status StatusStyles
+	Metric MetricStyles
+	Chart  ChartStyles
 }
 
 type PanelStyles struct {
@@ -51,6 +53,14 @@ type MethodStyles struct {
 
 type StatusStyles struct {
 	Success, Redirect, ClientError, ServerError, Unknown lipgloss.Style
+}
+
+type MetricStyles struct {
+	Label, Value, Unit lipgloss.Style
+}
+
+type ChartStyles struct {
+	Primary, Secondary, Good, Bad lipgloss.Style
 }
 
 func NewStyles(theme Theme) Styles {
@@ -148,6 +158,17 @@ func NewStyles(theme Theme) Styles {
 			ClientError: lipgloss.NewStyle().Foreground(theme.Colors.Warning),
 			ServerError: lipgloss.NewStyle().Foreground(theme.Colors.Error),
 			Unknown:     lipgloss.NewStyle().Foreground(theme.Colors.Brand),
+		},
+		Metric: MetricStyles{
+			Label: lipgloss.NewStyle().Foreground(theme.Colors.TextMuted).Bold(true),
+			Value: lipgloss.NewStyle().Foreground(theme.Colors.Text).Bold(true),
+			Unit:  lipgloss.NewStyle().Foreground(theme.Colors.TextMuted),
+		},
+		Chart: ChartStyles{
+			Primary:   lipgloss.NewStyle().Foreground(theme.Colors.ChartPrimary),
+			Secondary: lipgloss.NewStyle().Foreground(theme.Colors.ChartSecondary),
+			Good:      lipgloss.NewStyle().Foreground(theme.Colors.ChartGood),
+			Bad:       lipgloss.NewStyle().Foreground(theme.Colors.ChartBad),
 		},
 	}
 }

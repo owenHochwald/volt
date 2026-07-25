@@ -85,7 +85,7 @@ func clamp(value, minimum, maximum int) int {
 }
 
 func (m *Model) applyLayout(layout terminalLayout) {
-	m.headerPane.SetSize(layout.width, layout.mode != layoutWide)
+	m.headerPane.SetSize(layout.width)
 	m.shortcutPane.SetWidth(layout.modalWidth)
 	m.shortcutPane.SetHeight(layout.modalHeight)
 

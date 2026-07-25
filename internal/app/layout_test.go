@@ -1,10 +1,13 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -91,6 +94,51 @@ func TestFocusedLayoutFitsLoadTestAndHelpViews(t *testing.T) {
 	}
 	assertViewFits(t, model.View().Content, 72, 22)
 	assertViewFills(t, model.View().Content, 72, 22)
+}
+
+func TestWideLoadTestConfigurationKeepsEveryControlVisible(t *testing.T) {
+	model := newTestModel(t)
+	model.width = 160
+	model.height = 35
+	model.setStartupFrame(ui.HeaderFrameCompact)
+	model.setFocusedPanel(utils.RequestPanel)
+	model.applyLayout(model.currentLayout())
+
+	updated, _ := model.Update(appKeyPress('l', "", tea.ModCtrl))
+	model = updated.(Model)
+	rendered := ansi.Strip(model.View().Content)
+
+	for _, text := range []string{
+		"Concurrency:",
+		"Total Requests:",
+		"QPS (limit):",
+		"Timeout:",
+		"RUN LOAD TEST",
+	} {
+		if !strings.Contains(rendered, text) {
+			t.Errorf("wide load-test layout does not contain %q", text)
+		}
+	}
+	assertViewFills(t, model.View().Content, 160, 35)
+}
+
+func TestWideActiveLoadTestPrioritizesResults(t *testing.T) {
+	model := newTestModel(t)
+	model.width = 160
+	model.height = 35
+	model.setStartupFrame(ui.HeaderFrameCompact)
+	model.requestPane.LoadTestMode = true
+
+	configuring := model.currentLayout()
+	if configuring.requestHeight <= configuring.responseHeight {
+		t.Fatalf("configuration split = %d/%d, want request editor larger", configuring.requestHeight, configuring.responseHeight)
+	}
+
+	model.requestPane.RequestInProgress = true
+	running := model.currentLayout()
+	if running.responseHeight <= running.requestHeight {
+		t.Fatalf("running split = %d/%d, want result centerpiece larger", running.requestHeight, running.responseHeight)
+	}
 }
 
 func TestResizePreservesFocusedPanelAndEditorContent(t *testing.T) {

@@ -40,3 +40,26 @@ func TestHeaderUsesInjectedSemanticStyles(t *testing.T) {
 	assert.Equal(t, theme.Colors.Brand, header.styles.Header.Logo.GetForeground())
 	assert.Equal(t, theme.Colors.TextMuted, header.styles.Header.Metadata.GetForeground())
 }
+
+func TestHeaderCompressesIntoTwoRowCommandCenter(t *testing.T) {
+	header := SetupHeader("v9.8.7")
+	header.SetSize(80, true)
+	header.SetContext("request", "load test")
+
+	view := header.View()
+	for _, expected := range []string{"⚡ VOLT", "/  REQUEST", "LOAD TEST", "v9.8.7"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("compact header does not contain %q: %q", expected, view)
+		}
+	}
+	assert.Equal(t, 2, lipgloss.Height(view))
+	assert.True(t, lipgloss.Width(view) <= 80)
+}
+
+func TestFullHeaderKeepsStartupSignature(t *testing.T) {
+	header := SetupHeader("dev")
+	header.SetSize(120, false)
+
+	assert.Equal(t, 7, lipgloss.Height(header.View()))
+	assert.True(t, strings.Contains(header.View(), "██╗"))
+}

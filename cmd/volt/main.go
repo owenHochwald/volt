@@ -9,6 +9,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/app"
 	"github.com/owenHochwald/Volt/internal/cli"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 func main() {
@@ -55,7 +56,7 @@ func main() {
 	}
 	defer store.Close()
 
-	p := tea.NewProgram(app.SetupModel(store))
+	p := tea.NewProgram(app.SetupModel(store, design.LoadUserTheme()))
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)

@@ -31,6 +31,21 @@ const (
 	ansiWarning        = "221"
 	ansiError          = "204"
 	ansiMethodPatch    = "141"
+	lightCanvas        = "#F7F8FC"
+	lightSurface       = "#EEF1F7"
+	lightSurfaceRaised = "#E2E7F0"
+	lightBorder        = "#AAB4C3"
+	lightText          = "#151923"
+	lightTextMuted     = "#5E6878"
+	lightBrand         = "#6534D9"
+	lightBrandStrong   = "#DCCFFF"
+	lightCharge        = "#647500"
+	lightSignal        = "#007C83"
+	lightInfo          = "#1268C4"
+	lightSuccess       = "#187A3B"
+	lightWarning       = "#9A6100"
+	lightError         = "#C9324F"
+	lightMethodPatch   = "#7540B8"
 )
 
 // PaletteValue retains the authored true color and intentional ANSI-256
@@ -81,5 +96,35 @@ func ControlledVoltagePalette() Palette {
 		ChartSecondary: PaletteValue{TrueColor: colorSignal, ANSI256: ansiSignal},
 		ChartGood:      PaletteValue{TrueColor: colorSuccess, ANSI256: ansiSuccess},
 		ChartBad:       PaletteValue{TrueColor: colorError, ANSI256: ansiError},
+	}
+}
+
+// LightVoltagePalette preserves Controlled Voltage's semantic distinctions on
+// a light terminal background without turning the interface pastel or soft.
+func LightVoltagePalette() Palette {
+	return Palette{
+		Canvas:         PaletteValue{TrueColor: lightCanvas, ANSI256: "255"},
+		Surface:        PaletteValue{TrueColor: lightSurface, ANSI256: "255"},
+		SurfaceRaised:  PaletteValue{TrueColor: lightSurfaceRaised, ANSI256: "254"},
+		Border:         PaletteValue{TrueColor: lightBorder, ANSI256: "248"},
+		Text:           PaletteValue{TrueColor: lightText, ANSI256: "234"},
+		TextMuted:      PaletteValue{TrueColor: lightTextMuted, ANSI256: "242"},
+		Brand:          PaletteValue{TrueColor: lightBrand, ANSI256: "92"},
+		BrandStrong:    PaletteValue{TrueColor: lightBrandStrong, ANSI256: "189"},
+		Charge:         PaletteValue{TrueColor: lightCharge, ANSI256: "64"},
+		Signal:         PaletteValue{TrueColor: lightSignal, ANSI256: "30"},
+		Info:           PaletteValue{TrueColor: lightInfo, ANSI256: "25"},
+		Success:        PaletteValue{TrueColor: lightSuccess, ANSI256: "28"},
+		Warning:        PaletteValue{TrueColor: lightWarning, ANSI256: "94"},
+		Error:          PaletteValue{TrueColor: lightError, ANSI256: "160"},
+		MethodGET:      PaletteValue{TrueColor: lightSuccess, ANSI256: "28"},
+		MethodPOST:     PaletteValue{TrueColor: lightWarning, ANSI256: "94"},
+		MethodPUT:      PaletteValue{TrueColor: lightInfo, ANSI256: "25"},
+		MethodPATCH:    PaletteValue{TrueColor: lightMethodPatch, ANSI256: "91"},
+		MethodDELETE:   PaletteValue{TrueColor: lightError, ANSI256: "160"},
+		ChartPrimary:   PaletteValue{TrueColor: lightBrand, ANSI256: "92"},
+		ChartSecondary: PaletteValue{TrueColor: lightSignal, ANSI256: "30"},
+		ChartGood:      PaletteValue{TrueColor: lightSuccess, ANSI256: "28"},
+		ChartBad:       PaletteValue{TrueColor: lightError, ANSI256: "160"},
 	}
 }

@@ -76,6 +76,7 @@ func (m *RequestPane) toggleLoadTestMode() {
 
 	// Create new focus manager, preserving index (clamped to valid range)
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, currentIndex)
+	m.SetSize(m.Width, m.Height)
 }
 
 // reinitRequestPane reinits the request pane with a new request

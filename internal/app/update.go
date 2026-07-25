@@ -10,6 +10,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
@@ -49,7 +50,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.themeSource == "adaptive" {
+			m.applyTheme(design.AdaptiveTheme(msg.IsDark()), "adaptive")
+		}
+		return m, nil
+
+	case startupAdvanceMsg:
+		m.setStartupFrame(msg.frame)
+		if m.startupFrame < ui.HeaderFrameCompact {
+			return m, startupAdvanceCmd(m.startupFrame+1, m.theme.Motion)
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
+		m.setStartupFrame(ui.HeaderFrameCompact)
 		if keybindings.Matches(msg, m.keys.ForceQuit) {
 			if m.loadTestCancel != nil {
 				m.loadTestCancel()
@@ -58,6 +73,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if keybindings.Matches(msg, m.keys.Quit) {
+			if m.showHelpModal {
+				m.closeHelp()
+				return m, nil
+			}
 			if m.quitArmed {
 				if m.loadTestCancel != nil {
 					m.loadTestCancel()
@@ -65,9 +84,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-			if m.showHelpModal {
-				m.closeHelp()
-			} else if m.focusedPanel != utils.SidebarPanel {
+			if m.focusedPanel != utils.SidebarPanel {
 				m.setFocusedPanel(utils.SidebarPanel)
 			}
 			return m, m.armQuit()
@@ -117,6 +134,48 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case shortcutpane.CloseHelpModalMsg:
 		m.closeHelp()
+		return m, nil
+
+	case shortcutpane.PreviewThemeMsg:
+		m.applyTheme(msg.Theme, msg.Source)
+		if msg.Source == "adaptive" {
+			return m, tea.RequestBackgroundColor
+		}
+		return m, nil
+
+	case shortcutpane.SaveThemeMsg:
+		m.saveThemeSession(msg.Theme, msg.Source)
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme changed to " + msg.Theme.Name,
+		}
+		saveCmd := saveThemeSelectionCmd(msg.Source, msg.Theme.Name)
+		if msg.Source == "adaptive" {
+			return m, tea.Batch(saveCmd, tea.RequestBackgroundColor)
+		}
+		return m, saveCmd
+
+	case shortcutpane.CancelThemePreviewMsg:
+		m.closeHelp()
+		m.notification = ui.Notification{
+			Level: ui.NotificationInfo,
+			Text:  "Theme preview canceled",
+		}
+		return m, nil
+
+	case themeSelectionSavedMsg:
+		if msg.err != nil {
+			m.notification = ui.Notification{
+				Level: ui.NotificationWarning,
+				Text:  "Theme is active but couldn't be saved",
+				Hint:  msg.err.Error(),
+			}
+			return m, nil
+		}
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme saved: " + msg.themeName,
+		}
 		return m, nil
 
 	case quitSequenceExpiredMsg:
@@ -221,6 +280,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		switch {
 		case m.loadTestCanceled:
 			completed := 0
@@ -252,12 +312,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't start the load test.", "Check the load test settings and try again."))
 		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.applyLayout(calculateLayout(m.width, m.height))
+		m.applyLayout(m.currentLayout())
 	}
 
 	// Existing panel update routing (only when help modal is closed)
@@ -266,7 +327,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd
 		} else if m.focusedPanel == utils.RequestPanel {
+			wasLoadTestMode := m.requestPane.LoadTestMode
+			wasRequestInProgress := m.requestPane.RequestInProgress
 			m.requestPane, cmd = m.requestPane.Update(msg)
+			if wasLoadTestMode != m.requestPane.LoadTestMode ||
+				wasRequestInProgress != m.requestPane.RequestInProgress {
+				m.applyLayout(m.currentLayout())
+			}
 			return m, cmd
 		} else if m.focusedPanel == utils.ResponsePanel {
 			m.responsePane, cmd = m.responsePane.Update(msg)

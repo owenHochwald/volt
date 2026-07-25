@@ -43,6 +43,47 @@ func ANSITheme() Theme {
 	return themeFromPalette("default", ControlledVoltagePalette(), true)
 }
 
+func AdaptiveTheme(darkBackground bool) Theme {
+	palette := LightVoltagePalette()
+	if darkBackground {
+		palette = ControlledVoltagePalette()
+	}
+	return themeFromPalette("adaptive", palette, false)
+}
+
+func MonoTheme() Theme {
+	noColor := lipgloss.NoColor{}
+	return Theme{
+		Name:   "mono",
+		Motion: MotionSystem,
+		Colors: Colors{
+			Canvas:         noColor,
+			Surface:        noColor,
+			SurfaceRaised:  noColor,
+			Border:         noColor,
+			Text:           noColor,
+			TextMuted:      noColor,
+			Brand:          noColor,
+			BrandStrong:    noColor,
+			Charge:         noColor,
+			Signal:         noColor,
+			Info:           noColor,
+			Success:        noColor,
+			Warning:        noColor,
+			Error:          noColor,
+			MethodGET:      noColor,
+			MethodPOST:     noColor,
+			MethodPUT:      noColor,
+			MethodPATCH:    noColor,
+			MethodDELETE:   noColor,
+			ChartPrimary:   noColor,
+			ChartSecondary: noColor,
+			ChartGood:      noColor,
+			ChartBad:       noColor,
+		},
+	}
+}
+
 func themeFromPalette(name string, palette Palette, ansi bool) Theme {
 	resolve := func(value PaletteValue) color.Color {
 		if ansi {

@@ -79,6 +79,10 @@ func (m *MethodSelector) SetCurrentIndex(method string) {
 	}
 }
 
+func (m *MethodSelector) SetStyles(styles design.Styles) {
+	m.styles = styles
+}
+
 func NewMethodSelector(optionalStyles ...design.Styles) *MethodSelector {
 	styles := design.NewStyles(design.DefaultTheme())
 

@@ -26,6 +26,10 @@ func (m RequestPane) View() string {
 	// Render button based on state
 	var button string
 	var stopwatchCount string
+	actionLabel := "→ SEND"
+	if m.LoadTestMode {
+		actionLabel = "→ RUN LOAD TEST"
+	}
 	if m.RequestInProgress {
 		if m.LoadTestMode {
 			button = styles.Action.Busy.Render("ϟ Running Load Test...")
@@ -37,9 +41,9 @@ func (m RequestPane) View() string {
 			stopwatchCount = styles.Text.Muted.Render(fmt.Sprintf("%.3fs", seconds))
 		}
 	} else if m.SubmitButton.IsFocused() {
-		button = styles.Action.Focused.Render("→ SEND")
+		button = styles.Action.Focused.Render(actionLabel)
 	} else {
-		button = styles.Action.Primary.Render("→ SEND")
+		button = styles.Action.Primary.Render(actionLabel)
 	}
 
 	// Render mode-specific content
