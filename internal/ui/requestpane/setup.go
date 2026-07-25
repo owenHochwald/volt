@@ -7,12 +7,17 @@ import (
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // SetupRequestPane creates and initializes a new RequestPane
-func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) RequestPane {
-	methodSelector := ui.NewMethodSelector()
+func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) RequestPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+	methodSelector := ui.NewMethodSelector(styles)
 
 	// Use factories for text inputs
 	urlInput := NewURLInput(db)
@@ -45,6 +50,7 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 		Request:             http.NewDefaultRequest(),
 		DB:                  db,
 		keys:                keys,
+		styles:              styles,
 		LoadTestConcurrency: &ltConcurrency,
 		LoadTestTotalReqs:   &ltTotalReqs,
 		LoadTestQPS:         &ltQPS,
