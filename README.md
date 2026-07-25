@@ -2,7 +2,7 @@
 
 # Volt
 
-**A blazingly fast, terminal-native HTTP client and load tester with Vim keybindings**
+**Terminal-native API development and performance testing for humans, AI agents, and CI**
 
 <br>
 
@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[Installation](#installation) • [Quick Start](#quick-start) • [Keybindings](docs/keybindings.md) • [Customization](CUSTOMIZATION.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
+[Installation](#installation) • [Quick Start](#quick-start) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
 
 ![Demo](demo.gif)
 
@@ -20,13 +20,31 @@
 
 ## Overview
 
-Volt is a **keyboard-driven HTTP client** that lives in your terminal. Built as a project with Go and the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework, and high-performance HTTP client design.
+Volt is a terminal-native API development and performance-testing system. Its
+interactive TUI makes requests easy to explore, while its composable CLI gives
+developers, coding agents, and CI jobs the same high-performance load engine for
+repeatable verification.
 
-**Perfect for developers who:**
+Volt is growing beyond a standalone TUI load tester into a workflow that can
+help teams develop an endpoint, verify it functionally, measure it under
+representative traffic, compare changes, and preserve evidence for review and
+production-readiness decisions.
+
+| Workflow | Best for | Interface |
+|---|---|---|
+| Interactive exploration | Creating requests and inspecting responses | `volt` TUI |
+| Repeatable load tests | Local development and performance investigations | `volt bench` |
+| Coding-agent verification | Measuring an API during implementation or review | Volt companion skill + CLI |
+| CI evidence | Saving machine-readable results and detecting regressions | JSON output |
+
+**Perfect for teams who:**
+
 - Live in the terminal and hate context switching
 - Want Postman's features without the Electron bloat
 - Love Vim keybindings and keyboard-driven workflows
-- Need a fast, scriptable HTTP client with a beautiful UI
+- Need a fast, scriptable HTTP client with a focused UI
+- Want coding agents to evaluate the APIs they build
+- Want reproducible performance evidence in CI
 
 
 > **Note**: This is an active learning project. Performance optimizations are ongoing, and contributions/feedback are welcome :)
@@ -119,9 +137,38 @@ volt
 See the [keybindings guide](docs/keybindings.md) for every contextual shortcut
 and macOS Option-key setup.
 
+## AI Agents and CI
+
+Volt's CLI is the tool-use interface for Codex, Claude Code, and other coding
+agents. An agent can construct an authenticated request, begin with a bounded
+smoke test, save JSON results, and report throughput, latency, status codes, and
+failures alongside the code change it made.
+
+Start with [Using Volt with AI coding agents](AI.md). The portable
+[`volt-load-testing` skill](skills/volt-load-testing/SKILL.md) teaches agents
+when and how to use Volt, including authorization checks, staged load, secret
+handling, and before/after comparisons.
+
+The current JSON output can also be saved as a CI artifact:
+
+```bash
+volt bench \
+  -url http://127.0.0.1:8080/health \
+  -c 10 \
+  -d 30s \
+  -rate 100 \
+  -json \
+  -o volt-results.json
+```
+
+Today, CI consumers must inspect the JSON result because HTTP request failures
+do not automatically make the Volt process exit nonzero. Stable assertions,
+exit codes, secret-safe inputs, scenario files, comparison reports, and
+CI-native output are planned as future milestones.
+
 ## CLI Load Testing
 
-Volt also includes a powerful little HTTP load testing tool for direct access, accessible via the `bench` subcommand.
+Use the `bench` subcommand for non-interactive local, agent, and CI workflows.
 
 ```bash
 volt bench [flags]
