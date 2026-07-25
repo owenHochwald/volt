@@ -141,16 +141,32 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Level: ui.NotificationSuccess,
 			Text:  "Theme changed to " + msg.Theme.Name,
 		}
+		saveCmd := saveThemeSelectionCmd(msg.Source, msg.Theme.Name)
 		if msg.Source == "adaptive" {
-			return m, tea.RequestBackgroundColor
+			return m, tea.Batch(saveCmd, tea.RequestBackgroundColor)
 		}
-		return m, nil
+		return m, saveCmd
 
 	case shortcutpane.CancelThemePreviewMsg:
 		m.closeHelp()
 		m.notification = ui.Notification{
 			Level: ui.NotificationInfo,
 			Text:  "Theme preview canceled",
+		}
+		return m, nil
+
+	case themeSelectionSavedMsg:
+		if msg.err != nil {
+			m.notification = ui.Notification{
+				Level: ui.NotificationWarning,
+				Text:  "Theme is active but couldn't be saved",
+				Hint:  msg.err.Error(),
+			}
+			return m, nil
+		}
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme saved: " + msg.themeName,
 		}
 		return m, nil
 
