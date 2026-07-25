@@ -2,71 +2,36 @@ package ui
 
 import (
 	"charm.land/lipgloss/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 var (
-	focusColor   = lipgloss.Color("205")
-	unfocusColor = lipgloss.Color("240")
+	defaultStyles = design.NewStyles(design.DefaultTheme())
 
-	darkPurple = lipgloss.Color("#4C1D95")
-	deepViolet = lipgloss.Color("#5B21B6")
-	dimGray    = lipgloss.Color("240")
+	InactiveTab = defaultStyles.Tabs.Inactive
+	ActiveTab   = defaultStyles.Tabs.Active
 
-	InactiveTab = lipgloss.NewStyle().
-			Padding(0, 1).
-			Foreground(lipgloss.Color("240")) // dimGray
-
-	ActiveTab = lipgloss.NewStyle().
-			Padding(0, 2).
-			Background(lipgloss.Color("98")). // darkPurple
-			Foreground(lipgloss.Color("255")).
-			Bold(true)
-
-	FocusedButton = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true)
-
-	UnfocusedButton = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240"))
+	FocusedButton   = defaultStyles.Action.Focused
+	UnfocusedButton = defaultStyles.Action.Primary
 
 	HelpStyle = lipgloss.NewStyle().
 			Margin(1, 2)
 
-	HeaderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			Height(2)
+	HeaderStyle   = defaultStyles.Panel.Header
+	SidebarStyle  = defaultStyles.Panel.Sidebar
+	RequestStyle  = defaultStyles.Panel.Base
+	ResponseStyle = defaultStyles.Panel.Base
 
-	// Header ASCII art styles
-	HeaderLogoStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(darkPurple)
+	LabelStyle = defaultStyles.Text.Label
 
-	HeaderHelpStyle = lipgloss.NewStyle().
-			Foreground(dimGray)
-
-	SidebarStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			Width(20)
-
-	RequestStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder())
-
-	ResponseStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder())
-
-	LabelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
-
-	LoadTestBorderStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("226")) // Yellow
+	LoadTestBorderStyle = defaultStyles.Panel.Running
 )
 
 func ApplyFocus(style lipgloss.Style, focus bool) lipgloss.Style {
 	if focus {
 		return style.
-			BorderForeground(focusColor).
+			BorderForeground(defaultStyles.Panel.Focused.GetBorderLeftForeground()).
 			Bold(true)
 	}
-	return style.BorderForeground(unfocusColor)
+	return style.BorderForeground(defaultStyles.Panel.Base.GetBorderLeftForeground())
 }
