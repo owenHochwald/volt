@@ -5,7 +5,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -37,28 +36,27 @@ func newView(content string) tea.View {
 }
 
 func (m Model) wideView(layout terminalLayout, header string) string {
-	sidebar := renderPanel(
-		ui.SidebarStyle,
+	sidebar := m.renderPanel(
+		m.styles.Panel.Sidebar,
 		m.focusedPanel == utils.SidebarPanel,
+		false,
 		layout.sidebarWidth,
 		layout.contentHeight,
 		m.sidebarPane.View(),
 	)
 
-	requestStyle := ui.RequestStyle
-	if m.requestPane.LoadTestMode {
-		requestStyle = ui.LoadTestBorderStyle
-	}
-	request := renderPanel(
-		requestStyle,
+	request := m.renderPanel(
+		m.styles.Panel.Base,
 		m.focusedPanel == utils.RequestPanel && !m.requestPane.LoadTestMode,
+		m.requestPane.RequestInProgress,
 		layout.mainWidth,
 		layout.requestHeight,
 		m.requestPane.View(),
 	)
-	response := renderPanel(
-		ui.ResponseStyle,
+	response := m.renderPanel(
+		m.styles.Panel.Base,
 		m.focusedPanel == utils.ResponsePanel,
+		false,
 		layout.mainWidth,
 		layout.responseHeight,
 		m.responsePane.View(),
@@ -74,22 +72,25 @@ func (m Model) focusedView(layout terminalLayout, header string) string {
 	var panel string
 	switch m.focusedPanel {
 	case utils.RequestPanel:
-		style := ui.RequestStyle
-		if m.requestPane.LoadTestMode {
-			style = ui.LoadTestBorderStyle
-		}
-		panel = renderPanel(style, true, layout.width, layout.contentHeight, m.requestPane.View())
+		panel = m.renderPanel(
+			m.styles.Panel.Base,
+			true,
+			m.requestPane.RequestInProgress,
+			layout.width,
+			layout.contentHeight,
+			m.requestPane.View(),
+		)
 	case utils.ResponsePanel:
-		panel = renderPanel(ui.ResponseStyle, true, layout.width, layout.contentHeight, m.responsePane.View())
+		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, m.responsePane.View())
 	default:
-		panel = renderPanel(ui.SidebarStyle, true, layout.width, layout.contentHeight, m.sidebarPane.View())
+		panel = m.renderPanel(m.styles.Panel.Sidebar, true, false, layout.width, layout.contentHeight, m.sidebarPane.View())
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, panel, m.statusView(layout.width))
 }
 
 func (m Model) statusView(width int) string {
 	if m.notification.Text != "" {
-		return m.notification.View(width)
+		return m.notification.View(width, m.styles)
 	}
 	help := m.keys.CompactHelp(m.focusedContext(), 5)
 	return lipgloss.NewStyle().
@@ -101,8 +102,9 @@ func (m Model) statusView(width int) string {
 }
 
 func (m Model) headerView(layout terminalLayout) string {
-	return renderPanel(
-		ui.HeaderStyle,
+	return m.renderPanel(
+		m.styles.Panel.Header,
+		false,
 		false,
 		layout.width,
 		layout.headerHeight,
@@ -115,19 +117,17 @@ func (m Model) panelTabs(width int) string {
 	rendered := make([]string, 0, len(names))
 	for i, name := range names {
 		if utils.Panel(i) == m.focusedPanel {
-			rendered = append(rendered, ui.ActiveTab.Render(name))
+			rendered = append(rendered, m.styles.Tabs.Active.Render(name))
 		} else {
-			rendered = append(rendered, ui.InactiveTab.Render(name))
+			rendered = append(rendered, m.styles.Tabs.Inactive.Render(name))
 		}
 	}
 	content := lipgloss.JoinHorizontal(lipgloss.Left, rendered...)
 	return lipgloss.NewStyle().Width(width).MaxWidth(width).MaxHeight(1).Render(content)
 }
 
-func renderPanel(style lipgloss.Style, focused bool, width, height int, content string) string {
-	if focused {
-		style = ui.ApplyFocus(style, true)
-	}
+func (m Model) renderPanel(style lipgloss.Style, focused, running bool, width, height int, content string) string {
+	style = m.styles.Panel.Apply(style, focused, running)
 	contentWidth, contentHeight := contentSize(style, width, height)
 	content = lipgloss.NewStyle().
 		Width(contentWidth).
