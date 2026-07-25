@@ -1,19 +1,21 @@
 package ui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type Header struct {
-	width int
+	width   int
+	compact bool
+	version string
 }
 
 func (h *Header) Init() tea.Cmd {
 	return nil
 }
 
-func (h *Header) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (h *Header) Update(msg tea.Msg) (*Header, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		h.width = msg.Width
@@ -22,6 +24,15 @@ func (h *Header) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (h *Header) View() string {
+	if h.compact {
+		return lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			HeaderLogoStyle.Render("⚡ VOLT"),
+			"  ",
+			HeaderHelpStyle.Render(h.version+" • Terminal-native HTTP client"),
+		)
+	}
+
 	asciiArt := `██╗   ██╗ ██████╗ ██╗  ████████╗
 ██║   ██║██╔═══██╗██║  ╚══██╔══╝
 ██║   ██║██║   ██║██║     ██║
@@ -31,13 +42,19 @@ func (h *Header) View() string {
 
 	logo := HeaderLogoStyle.Render(asciiArt)
 
-	help := HeaderHelpStyle.Render("⚡ v0.1 • [ ? ] Help • [ ctrl+c ] Quit")
+	help := HeaderHelpStyle.Render(h.version + " • Terminal-native HTTP client")
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, logo, "\t", help)
 }
 
-func SetupHeader() *Header {
+func (h *Header) SetSize(width int, compact bool) {
+	h.width = max(width, 0)
+	h.compact = compact
+}
+
+func SetupHeader(version string) *Header {
 	return &Header{
-		width: 80,
+		width:   80,
+		version: version,
 	}
 }

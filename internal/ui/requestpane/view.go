@@ -3,7 +3,7 @@ package requestpane
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
@@ -45,8 +45,6 @@ func (m RequestPane) View() string {
 
 	// Render mode-specific content
 	var mainContent string
-	var helpText string
-
 	if m.LoadTestMode {
 		// Load test mode - add configuration fields
 		ltConcurrencyLabel := ui.LabelStyle.Render("Concurrency:    ")
@@ -81,8 +79,6 @@ func (m RequestPane) View() string {
 			"",
 			button,
 		)
-
-		helpText = ui.HelpStyle.Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • ctrl+p: start load test")
 	} else {
 		// Normal mode
 		mainContent = lipgloss.JoinVertical(
@@ -95,25 +91,16 @@ func (m RequestPane) View() string {
 			"",
 			button,
 		)
-
-		helpText = ui.HelpStyle.Render("ctrl+l: load test mode • tab/↑/↓: navigate • ←/→ or h/l: change method • ctrl+p: send • enter/→: accept URL • ctrl+s: save")
 	}
 
-	var spacing string
-	if m.LoadTestMode {
-		spacing = lipgloss.NewStyle().Height(m.Height - 18).Render("")
-
-	} else {
-		spacing = lipgloss.NewStyle().Height(m.Height - 10).Render("")
-
-	}
+	usedHeight := lipgloss.Height(mainContent) + lipgloss.Height(stopwatchCount)
+	spacing := lipgloss.NewStyle().Height(max(m.Height-usedHeight, 0)).Render("")
 
 	finalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		mainContent,
 		spacing,
 		stopwatchCount,
-		helpText,
 	)
 
 	return finalContent

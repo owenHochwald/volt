@@ -1,14 +1,14 @@
 package requestpane
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // ModeStrategy defines the interface for different request pane modes (normal, load test, etc.)
 type ModeStrategy interface {
 	// HandleInput handles keyboard input for this mode
-	HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd)
+	HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*RequestPane, tea.Cmd)
 
 	// GetFocusManager returns the focus manager for this mode
 	GetFocusManager(m *RequestPane) *ui.FocusManager

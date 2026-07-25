@@ -1,7 +1,7 @@
 package shortcutpane
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
@@ -18,8 +18,13 @@ type TabIndex int
 // renderTabs renders the tab bar with shortcut categories
 func (m ShortcutPane) renderTabs() string {
 	var tabNames []string
-	for _, tab := range m.tabs {
-		tabNames = append(tabNames, lipgloss.NewStyle().Render(tab.Name))
+	keys := m.keys.DirectHelpTab.Keys()
+	for i, tab := range m.tabs {
+		keyLabel := ""
+		if i < len(keys) {
+			keyLabel = "[" + keys[i] + "] "
+		}
+		tabNames = append(tabNames, lipgloss.NewStyle().Render(keyLabel+tab.Name))
 	}
 	return m.renderTabBar(tabNames)
 }

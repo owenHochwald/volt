@@ -1,10 +1,9 @@
 package requestpane
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	"github.com/owenHochwald/Volt/internal/storage"
 )
 
@@ -23,8 +22,9 @@ func NewConfiguredTextInput(config TextInputConfig) textinput.Model {
 	ti := textinput.New()
 	ti.Placeholder = config.Placeholder
 	ti.CharLimit = config.CharLimit
-	ti.Width = config.Width
+	ti.SetWidth(config.Width)
 	ti.ShowSuggestions = config.ShowSuggestions
+	ti.SetVirtualCursor(true)
 
 	if config.Value != "" {
 		ti.SetValue(config.Value)
@@ -74,8 +74,8 @@ func NewURLInput(db *storage.SQLiteStorage) textinput.Model {
 	// Really weird hack to make suggestions work
 	km := ti.KeyMap
 	km.AcceptSuggestion = key.NewBinding(key.WithKeys(
-		tea.KeyEnter.String(),
-		tea.KeyRight.String(),
+		"enter",
+		"right",
 	))
 	ti.KeyMap = km
 
@@ -104,12 +104,14 @@ func NewLoadTestInput(placeholder string, charLimit, width int) textinput.Model 
 func NewHeadersTextArea() textarea.Model {
 	ta := textarea.New()
 	ta.Placeholder = "Content-Type = multipart/form-data,\nAuthorization= Bearer ...,"
+	ta.SetVirtualCursor(true)
 	return ta
 }
 
 // NewBodyTextArea creates a pre-configured body textarea
 func NewBodyTextArea() textarea.Model {
 	ta := textarea.New()
-	ta.Placeholder = "key = value,\nname = volt,\nversion=1.0"
+	ta.Placeholder = "{\n  \"name\": \"volt\"\n}"
+	ta.SetVirtualCursor(true)
 	return ta
 }

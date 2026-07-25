@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[Installation](#installation) • [Quick Start](#quick-start) • [Why Volt?](#why-volt)  •[CLI Mode](#CLI-load-testing)
+[Installation](#installation) • [Quick Start](#quick-start) • [Keybindings](docs/keybindings.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
 
 ![Demo](demo.gif)
 
@@ -85,7 +85,7 @@ volt # run and verify
 ```
 
 
-You should see the Volt TUI interface launch. Press `q` to quit.
+You should see the Volt TUI interface launch. Press `Esc` twice to quit.
 **Updating Volt:**
 To update to the latest version, simply run the install command again.
 
@@ -104,9 +104,12 @@ Once installed, launch Volt's interactive interface:
 volt
 ```
 **Basic usage:**
-- Type a URL and press `alt+Enter` to make a request
+- Type a URL and press `Alt+Enter` (`Option+Enter` on macOS) to make a request
 - Press `?` to see all keybindings
-- Press `q` to quit
+- Press `Esc` twice to quit, or `Ctrl+C` to quit immediately
+
+See the [keybindings guide](docs/keybindings.md) for every contextual shortcut
+and macOS Option-key setup.
 
 ## CLI Load Testing
 

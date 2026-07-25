@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 const (
@@ -77,10 +78,8 @@ func (r *Request) Validate() error {
 		return fmt.Errorf("invalid method: %s", r.Method)
 	}
 
-	if r.URL != "" {
-		if r.URL[0:4] != "http" {
-			return fmt.Errorf("invalid url: %s", r.URL)
-		}
+	if !strings.HasPrefix(r.URL, "http://") && !strings.HasPrefix(r.URL, "https://") {
+		return fmt.Errorf("invalid url: %s", r.URL)
 	}
 
 	if r.Headers != nil && len(r.Headers) > 100 {

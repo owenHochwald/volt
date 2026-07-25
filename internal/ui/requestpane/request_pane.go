@@ -3,10 +3,10 @@ package requestpane
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -55,6 +55,7 @@ type RequestPane struct {
 	Request *http.Request
 
 	Height int
+	Width  int
 
 	ParseErrors []string
 
@@ -83,11 +84,56 @@ func (m RequestPane) Init() tea.Cmd {
 // SetFocused sets the panel focus state
 func (m *RequestPane) SetFocused(focused bool) {
 	m.PanelFocused = focused
+	if m.FocusManager == nil {
+		return
+	}
+	if focused {
+		m.FocusManager.Current().Focus()
+		return
+	}
+	m.FocusManager.Current().Blur()
 }
 
 // SetHeight sets the height of the request pane
 func (m *RequestPane) SetHeight(height int) {
-	m.Height = height
+	m.SetSize(m.Width, height)
+}
+
+// SetSize updates all editor dimensions from the available panel content.
+func (m *RequestPane) SetSize(width, height int) {
+	m.Width = max(width, 1)
+	m.Height = max(height, 1)
+
+	m.URLInput.SetWidth(max(m.Width-12, 10))
+	m.NameInput.SetWidth(max(m.Width-8, 10))
+	m.Headers.SetWidth(max(m.Width-10, 10))
+	m.Body.SetWidth(max(m.Width-10, 10))
+
+	editorHeight := clampDimension((m.Height-10)/2, 2, 5)
+	if m.LoadTestMode {
+		editorHeight = clampDimension((m.Height-16)/2, 1, 3)
+	}
+	m.Headers.SetHeight(editorHeight)
+	m.Body.SetHeight(editorHeight)
+}
+
+// IsEditing reports whether the focused control accepts printable text.
+func (m RequestPane) IsEditing() bool {
+	if m.FocusManager == nil {
+		return false
+	}
+	index := FieldIndex(m.FocusManager.CurrentIndex())
+	if index == FieldMethodSelector {
+		return false
+	}
+	if m.LoadTestMode {
+		return index != FieldLTSubmit
+	}
+	return index != FieldSubmitButton
+}
+
+func clampDimension(value, minimum, maximum int) int {
+	return min(max(value, minimum), maximum)
 }
 
 // GetCurrentMethod returns the currently selected HTTP method
@@ -98,7 +144,7 @@ func (m *RequestPane) GetCurrentMethod() string {
 // ResultMsgCleanup resets the stopwatch and request state after a response
 func (m *RequestPane) ResultMsgCleanup() {
 	m.Stopwatch.Stop()
-	m.Stopwatch = stopwatch.NewWithInterval(10 * time.Millisecond)
+	m.Stopwatch = stopwatch.New(stopwatch.WithInterval(10 * time.Millisecond))
 	m.RequestInProgress = false
 }
 

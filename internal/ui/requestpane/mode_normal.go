@@ -1,7 +1,7 @@
 package requestpane
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -10,9 +10,9 @@ import (
 type NormalMode struct{}
 
 // HandleInput handles keyboard input in normal mode
-func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*RequestPane, tea.Cmd) {
 	// Check for special keybindings FIRST before delegating to text components
-	if keybindings.Matches(msg, m.keys.SendRequest) || msg.String() == tea.KeyEnter.String() {
+	if keybindings.Matches(msg, m.keys.SendRequest) {
 		return nm.handleSubmit(m, msg)
 	}
 	if keybindings.Matches(msg, m.keys.ToggleLoadTest) {
@@ -55,13 +55,17 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, te
 }
 
 // handleSubmit handles the submit button in normal mode
-func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == tea.KeyEnter.String() || keybindings.Matches(msg, m.keys.SendRequest) {
+func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*RequestPane, tea.Cmd) {
+	if keybindings.Matches(msg, m.keys.SendRequest) || keybindings.Matches(msg, m.keys.ActivateControl) {
 		if m.RequestInProgress {
 			return m, nil
 		}
 
 		m.syncRequest()
+		if err := m.validateRequest(); err != nil {
+			m.RequestInProgress = false
+			return m, ui.NotifyCmd(ui.NotificationError, err.Error())
+		}
 		m.RequestInProgress = true
 
 		m.Stopwatch.Reset()

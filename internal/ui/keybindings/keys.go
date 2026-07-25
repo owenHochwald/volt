@@ -1,23 +1,32 @@
 package keybindings
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
-// KeyMap holds all application keybindings
+// KeyMap exposes typed bindings while the Registry remains their source of
+// truth.
 type KeyMap struct {
+	Registry Registry
+
 	// Global
-	Quit        key.Binding
-	ShowHelp    key.Binding
-	CyclePanel  key.Binding
-	EscapePanel key.Binding
+	ForceQuit     key.Binding
+	Quit          key.Binding
+	GlobalHelp    key.Binding
+	ContextHelp   key.Binding
+	PreviousPanel key.Binding
+	NextPanel     key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
 	DeleteRequest key.Binding
+	NavCount      key.Binding
 	NavUp         key.Binding
 	NavDown       key.Binding
+	NavFirst      key.Binding
+	NavLast       key.Binding
 
-	// Request Pane
+	// Request pane
 	SendRequest      key.Binding
+	ActivateControl  key.Binding
 	SaveRequest      key.Binding
 	ToggleLoadTest   key.Binding
 	NextField        key.Binding
@@ -25,126 +34,62 @@ type KeyMap struct {
 	ChangeMethodNext key.Binding
 	ChangeMethodPrev key.Binding
 
-	// Response Pane
-	CopyResponse key.Binding
-	TabNavNext   key.Binding
-	TabNavPrev   key.Binding
-	DirectTab    key.Binding // 1,2,3
-	ScrollUp     key.Binding
-	ScrollDown   key.Binding
+	// Response pane
+	CopyResponse   key.Binding
+	CancelLoadTest key.Binding
+	TabNavNext     key.Binding
+	TabNavPrev     key.Binding
+	DirectTab      key.Binding
+	ScrollUp       key.Binding
+	ScrollDown     key.Binding
+	PageUp         key.Binding
+	PageDown       key.Binding
 
-	// Help Modal
-	CloseHelp key.Binding
-	NextTab   key.Binding
-	PrevTab   key.Binding
+	// Help modal
+	CloseHelp     key.Binding
+	NextTab       key.Binding
+	PrevTab       key.Binding
+	DirectHelpTab key.Binding
 }
 
-// DefaultKeyMap returns the default keybinding configuration
+// DefaultKeyMap generates every binding from the action registry.
 func DefaultKeyMap() KeyMap {
+	registry := DefaultRegistry()
 	return KeyMap{
-		// Global
-		Quit: key.NewBinding(
-			key.WithKeys("ctrl+c"),
-			key.WithHelp("ctrl+c", "quit"),
-		),
-		ShowHelp: key.NewBinding(
-			key.WithKeys("?"),
-			key.WithHelp("?", "show help"),
-		),
-		CyclePanel: key.NewBinding(
-			key.WithKeys("shift+tab"),
-			key.WithHelp("shift+tab", "cycle panels"),
-		),
-		EscapePanel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "return to sidebar"),
-		),
-
-		// Sidebar
-		LoadRequest: key.NewBinding(
-			key.WithKeys("enter", " "),
-			key.WithHelp("enter/space", "load request"),
-		),
-		DeleteRequest: key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "delete request"),
-		),
-		NavUp: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "navigate up"),
-		),
-		NavDown: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "navigate down"),
-		),
-
-		SendRequest: key.NewBinding(
-			key.WithKeys("alt+enter", "ctrl+p"),
-			key.WithHelp("ctrl+p", "send request"),
-		),
-		SaveRequest: key.NewBinding(
-			key.WithKeys("ctrl+s"),
-			key.WithHelp("ctrl+s", "save request"),
-		),
-		ToggleLoadTest: key.NewBinding(
-			key.WithKeys("ctrl+l"),
-			key.WithHelp("ctrl+l", "toggle load test"),
-		),
-		NextField: key.NewBinding(
-			key.WithKeys("tab", "down"),
-			key.WithHelp("tab/↓", "next field"),
-		),
-		PrevField: key.NewBinding(
-			key.WithKeys("shift+tab", "up"),
-			key.WithHelp("shift+tab/↑", "previous field"),
-		),
-		ChangeMethodNext: key.NewBinding(
-			key.WithKeys("l", "right"),
-			key.WithHelp("l/→", "next method"),
-		),
-		ChangeMethodPrev: key.NewBinding(
-			key.WithKeys("h", "left"),
-			key.WithHelp("h/←", "previous method"),
-		),
-
-		// Response Pane
-		CopyResponse: key.NewBinding(
-			key.WithKeys("y", "Y"),
-			key.WithHelp("y/Y", "copy response"),
-		),
-		TabNavNext: key.NewBinding(
-			key.WithKeys("l", "right"),
-			key.WithHelp("l/→", "next tab"),
-		),
-		TabNavPrev: key.NewBinding(
-			key.WithKeys("h", "left"),
-			key.WithHelp("h/←", "previous tab"),
-		),
-		DirectTab: key.NewBinding(
-			key.WithKeys("1", "2", "3"),
-			key.WithHelp("1-3", "jump to tab"),
-		),
-		ScrollUp: key.NewBinding(
-			key.WithKeys("k", "up"),
-			key.WithHelp("k/↑", "scroll up"),
-		),
-		ScrollDown: key.NewBinding(
-			key.WithKeys("j", "down"),
-			key.WithHelp("j/↓", "scroll down"),
-		),
-
-		// Help Modal
-		CloseHelp: key.NewBinding(
-			key.WithKeys("q", "?", "esc"),
-			key.WithHelp("q/?/esc", "close help"),
-		),
-		NextTab: key.NewBinding(
-			key.WithKeys("l", "right", "tab"),
-			key.WithHelp("l/→/tab", "next tab"),
-		),
-		PrevTab: key.NewBinding(
-			key.WithKeys("h", "left", "shift+tab"),
-			key.WithHelp("h/←/shift+tab", "previous tab"),
-		),
+		Registry:         registry,
+		ForceQuit:        registry.MustBinding(ActionForceQuit),
+		Quit:             registry.MustBinding(ActionQuit),
+		GlobalHelp:       registry.MustBinding(ActionGlobalHelp),
+		ContextHelp:      registry.MustBinding(ActionContextHelp),
+		PreviousPanel:    registry.MustBinding(ActionPreviousPanel),
+		NextPanel:        registry.MustBinding(ActionNextPanel),
+		LoadRequest:      registry.MustBinding(ActionLoadRequest),
+		DeleteRequest:    registry.MustBinding(ActionDeleteRequest),
+		NavCount:         registry.MustBinding(ActionNavigationCount),
+		NavUp:            registry.MustBinding(ActionNavigateUp),
+		NavDown:          registry.MustBinding(ActionNavigateDown),
+		NavFirst:         registry.MustBinding(ActionNavigateFirst),
+		NavLast:          registry.MustBinding(ActionNavigateLast),
+		SendRequest:      registry.MustBinding(ActionSubmit),
+		ActivateControl:  registry.MustBinding(ActionActivateControl),
+		SaveRequest:      registry.MustBinding(ActionSaveRequest),
+		ToggleLoadTest:   registry.MustBinding(ActionToggleLoadTest),
+		NextField:        registry.MustBinding(ActionNextField),
+		PrevField:        registry.MustBinding(ActionPreviousField),
+		ChangeMethodNext: registry.MustBinding(ActionNextMethod),
+		ChangeMethodPrev: registry.MustBinding(ActionPreviousMethod),
+		CopyResponse:     registry.MustBinding(ActionCopyResponse),
+		CancelLoadTest:   registry.MustBinding(ActionCancelLoadTest),
+		TabNavNext:       registry.MustBinding(ActionNextTab),
+		TabNavPrev:       registry.MustBinding(ActionPreviousTab),
+		DirectTab:        registry.MustBinding(ActionDirectTab),
+		ScrollUp:         registry.MustBinding(ActionScrollUp),
+		ScrollDown:       registry.MustBinding(ActionScrollDown),
+		PageUp:           registry.MustBinding(ActionPageUp),
+		PageDown:         registry.MustBinding(ActionPageDown),
+		CloseHelp:        registry.MustBinding(ActionCloseHelp),
+		NextTab:          registry.MustBinding(ActionNextHelpTab),
+		PrevTab:          registry.MustBinding(ActionPreviousHelpTab),
+		DirectHelpTab:    registry.MustBinding(ActionDirectHelpTab),
 	}
 }

@@ -3,9 +3,8 @@ package ui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -28,6 +27,8 @@ type SidebarPane struct {
 	selectedRequest *RequestItem
 
 	desiredCursorIndex int
+	navigationCount    int
+	hasNavigationCount bool
 
 	db   *storage.SQLiteStorage
 	keys keybindings.KeyMap
@@ -36,13 +37,22 @@ type SidebarPane struct {
 func (s *SidebarPane) SetRequests(items []list.Item) {
 	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.height)
 	s.requestsList.SetShowHelp(false)
+	s.requestsList.DisableQuitKeybindings()
+	s.clearNavigationCount()
 }
 
 func (s *SidebarPane) Init() tea.Cmd {
 	return LoadRequestsCmd(s.db)
 }
 
-func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *SidebarPane) SetFocused(focused bool) {
+	s.panelFocused = focused
+	if !focused {
+		s.clearNavigationCount()
+	}
+}
+
+func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -71,8 +81,14 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.desiredCursorIndex = -1
 		}
 		return s, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
+		if keybindings.Matches(msg, s.keys.NavCount) {
+			s.appendNavigationDigit(msg.Code)
+			return s, nil
+		}
+
 		if keybindings.Matches(msg, s.keys.DeleteRequest) {
+			s.clearNavigationCount()
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
 				return s, nil
@@ -94,24 +110,26 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Navigation override - wrapped to cycle
 		if keybindings.Matches(msg, s.keys.NavUp) {
-			currentIndex := s.requestsList.Index()
-			if currentIndex == 0 {
-				s.requestsList.Select(len(s.requestsList.Items()) - 1)
-			} else {
-				s.requestsList.Select(currentIndex - 1)
-			}
+			s.moveSelection(-s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavDown) {
-			currentIndex := s.requestsList.Index()
-			itemCount := len(s.requestsList.Items()) - 1
-			if currentIndex == itemCount {
-				s.requestsList.Select(0)
-			} else {
-				s.requestsList.Select(currentIndex + 1)
+			s.moveSelection(s.consumeNavigationCount())
+			return s, nil
+		}
+		if keybindings.Matches(msg, s.keys.NavFirst) {
+			s.clearNavigationCount()
+			s.requestsList.Select(0)
+			return s, nil
+		}
+		if keybindings.Matches(msg, s.keys.NavLast) {
+			s.clearNavigationCount()
+			if itemCount := len(s.requestsList.Items()); itemCount > 0 {
+				s.requestsList.Select(itemCount - 1)
 			}
 			return s, nil
 		}
+		s.clearNavigationCount()
 	}
 
 	s.requestsList, cmd = s.requestsList.Update(msg)
@@ -119,15 +137,49 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
-func (s *SidebarPane) View() string {
-	helpText := HelpStyle.Render("Press ? for help")
+func (s *SidebarPane) appendNavigationDigit(code rune) {
+	digit := int(code - '0')
+	if digit < 0 || digit > 9 {
+		s.clearNavigationCount()
+		return
+	}
+	s.hasNavigationCount = true
+	itemCount := len(s.requestsList.Items())
+	if itemCount == 0 {
+		s.navigationCount = 0
+		return
+	}
+	s.navigationCount = (s.navigationCount*10 + digit) % itemCount
+}
 
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		s.requestsList.View(),
-		lipgloss.NewStyle().Height(s.height-1).Render(""),
-		helpText,
-	)
+func (s *SidebarPane) consumeNavigationCount() int {
+	if !s.hasNavigationCount {
+		return 1
+	}
+	count := s.navigationCount
+	s.clearNavigationCount()
+	return count
+}
+
+func (s *SidebarPane) clearNavigationCount() {
+	s.navigationCount = 0
+	s.hasNavigationCount = false
+}
+
+func (s *SidebarPane) moveSelection(delta int) {
+	itemCount := len(s.requestsList.Items())
+	if itemCount == 0 {
+		return
+	}
+	next := (s.requestsList.Index() + delta) % itemCount
+	if next < 0 {
+		next += itemCount
+	}
+	s.requestsList.Select(next)
+}
+
+func (s *SidebarPane) View() string {
+	return s.requestsList.View()
 }
 
 func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
@@ -140,9 +192,9 @@ func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 }
 
 func (s *SidebarPane) SetSize(width, height int) {
-	s.width = width
-	s.height = height
-	s.requestsList.SetSize(width, height)
+	s.width = max(width, 1)
+	s.height = max(height, 1)
+	s.requestsList.SetSize(s.width, s.height)
 }
 
 func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {
@@ -164,6 +216,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
 	sidebar.requestsList.SetShowHelp(false)
+	sidebar.requestsList.DisableQuitKeybindings()
 
 	return sidebar
 }

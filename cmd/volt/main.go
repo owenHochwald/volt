@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/app"
 	"github.com/owenHochwald/Volt/internal/cli"
 	"github.com/owenHochwald/Volt/internal/storage"
@@ -55,7 +55,7 @@ func main() {
 	}
 	defer store.Close()
 
-	p := tea.NewProgram(app.SetupModel(store), tea.WithAltScreen())
+	p := tea.NewProgram(app.SetupModel(store))
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)

@@ -28,6 +28,8 @@ func TestRequest_Validate(t *testing.T) {
 		{"valid with body", fields{Method: GET, URL: "http://localhost", Body: "test"}, false},
 		{"invalid method", fields{Method: "GETT", URL: "http://localhost"}, true},
 		{"invalid url", fields{Method: GET, URL: "htt://localhost:8080"}, true},
+		{"one-character url", fields{Method: GET, URL: "h"}, true},
+		{"three-character url", fields{Method: GET, URL: "htt"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

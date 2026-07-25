@@ -3,7 +3,7 @@ package shortcutpane
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 func (m ShortcutPane) View() string {
@@ -27,7 +27,7 @@ func (m ShortcutPane) View() string {
 	// Footer hint
 	footer := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
-		Render("Press ? or Escape to close")
+		Render(m.keys.CloseHelp.Help().Key + " " + m.keys.CloseHelp.Help().Desc)
 
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -51,6 +51,11 @@ func (m ShortcutPane) renderShortcutList() string {
 
 	tab := m.tabs[m.activeTab]
 	var lines []string
+	keyColumnWidth := 15
+	for _, shortcut := range tab.Shortcuts {
+		keyColumnWidth = max(keyColumnWidth, lipgloss.Width(shortcut.Key))
+	}
+	keyColumnWidth = min(keyColumnWidth, max(m.width/2, 15))
 
 	// Tab name header
 	header := lipgloss.NewStyle().
@@ -65,7 +70,7 @@ func (m ShortcutPane) renderShortcutList() string {
 			Foreground(lipgloss.Color("205")).
 			Bold(true)
 
-		key := keyStyle.Render(lipgloss.NewStyle().Width(15).Render(shortcut.Key))
+		key := keyStyle.Render(lipgloss.NewStyle().Width(keyColumnWidth).Render(shortcut.Key))
 		desc := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255")).
 			Render(shortcut.Description)

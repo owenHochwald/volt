@@ -1,11 +1,11 @@
 package requestpane
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -21,20 +21,19 @@ func (m *RequestPane) syncRequest() {
 	m.Request.Name = m.NameInput.Value()
 
 	headerMap, headerErrors := utils.ParseKeyValuePairs(m.Headers.Value())
-	bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
-
-	jsonData, err := json.Marshal(bodyMap)
-	if err != nil {
-		m.ParseErrors = append(m.ParseErrors, "JSON marshal error: "+err.Error())
-		m.Request.Headers = headerMap
-		m.Request.Body = "{}" // Set to valid empty JSON
-		m.ParseErrors = append(m.ParseErrors, headerErrors...)
-		return
-	}
-
 	m.Request.Headers = headerMap
-	m.Request.Body = string(jsonData)
-	m.ParseErrors = append(headerErrors, bodyErrors...)
+	m.Request.Body = m.Body.Value()
+	m.ParseErrors = headerErrors
+}
+
+func (m *RequestPane) validateRequest() error {
+	if len(m.ParseErrors) > 0 {
+		return fmt.Errorf("invalid headers: %s", strings.Join(m.ParseErrors, "; "))
+	}
+	if err := m.Request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+	return nil
 }
 
 // buildJobConfig builds a load test job configuration from current input
@@ -84,8 +83,11 @@ func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 
 	m.ParseErrors = append(m.ParseErrors, parseErrors...)
 
-	if err := m.Request.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+	if len(parseErrors) > 0 {
+		return nil, fmt.Errorf("invalid load test configuration: %s", strings.Join(parseErrors, "; "))
+	}
+	if err := m.validateRequest(); err != nil {
+		return nil, err
 	}
 
 	return &http.JobConfig{
