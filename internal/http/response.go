@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 type ResultMsg struct {
@@ -11,6 +13,9 @@ type ResultMsg struct {
 }
 
 func (r *ResultMsg) String() string {
+	if r == nil || r.Response == nil {
+		return "empty response"
+	}
 	if r.Response.Error != "" {
 		// TODO: add styles
 		return r.Response.Error
@@ -23,11 +28,12 @@ func (r *Response) ParseContentType() string {
 }
 
 type Response struct {
-	StatusCode int           `json:"status_code"`
-	Status     string        `json:"status,omitempty"`
-	Headers    http.Header   `json:"headers,omitempty"`
-	Body       string        `json:"body,omitempty"`
-	Duration   time.Duration `json:"duration,omitempty"`
-	Error      string        `json:"error,omitempty"`
-	RoundTrip  bool          `json:"round_trip,omitempty"`
+	StatusCode int             `json:"status_code"`
+	Status     string          `json:"status,omitempty"`
+	Headers    http.Header     `json:"headers,omitempty"`
+	Body       string          `json:"body,omitempty"`
+	Duration   time.Duration   `json:"duration,omitempty"`
+	Error      string          `json:"error,omitempty"`
+	RoundTrip  bool            `json:"round_trip,omitempty"`
+	Failure    *apperror.Error `json:"-"`
 }

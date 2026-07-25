@@ -6,13 +6,13 @@ package http
 
 import (
 	"context"
-	"errors"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/influxdata/tdigest"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/valyala/fasthttp"
 )
 
@@ -115,18 +115,20 @@ func (s *LoadTestStats) MeanDuration() time.Duration {
 // requestBatch is pooled and passed by pointer so the hot path does not
 // allocate for every request or copy latency arrays through the channel.
 type requestBatch struct {
-	count         int
-	failures      int
-	timeoutErrs   int
-	transportErrs int
-	canceledErrs  int
-	bytesSent     int64
-	bytesRecv     int64
-	total         time.Duration
-	min           time.Duration
-	max           time.Duration
-	latencies     [statsBatchSize]time.Duration
-	statuses      [statsBatchSize]uint16
+	count                 int
+	failures              int
+	timeoutErrs           int
+	dnsErrs               int
+	connectionRefusedErrs int
+	transportErrs         int
+	canceledErrs          int
+	bytesSent             int64
+	bytesRecv             int64
+	total                 time.Duration
+	min                   time.Duration
+	max                   time.Duration
+	latencies             [statsBatchSize]time.Duration
+	statuses              [statsBatchSize]uint16
 }
 
 func (b *requestBatch) reset() {
@@ -384,10 +386,17 @@ func (r *runState) runWorker(ctx context.Context, wg *sync.WaitGroup) {
 			batch.failures++
 			if ctx.Err() != nil {
 				batch.canceledErrs++
-			} else if isTimeoutError(err) {
-				batch.timeoutErrs++
 			} else {
-				batch.transportErrs++
+				switch apperror.FromNetwork(err).Code {
+				case apperror.Timeout:
+					batch.timeoutErrs++
+				case apperror.DNS:
+					batch.dnsErrs++
+				case apperror.ConnectionRefused:
+					batch.connectionRefusedErrs++
+				default:
+					batch.transportErrs++
+				}
 			}
 		} else if status >= 400 {
 			batch.failures++
@@ -404,15 +413,6 @@ func (r *runState) runWorker(ctx context.Context, wg *sync.WaitGroup) {
 	} else {
 		r.releaseBatch(batch)
 	}
-}
-
-func isTimeoutError(err error) bool {
-	if errors.Is(err, fasthttp.ErrTimeout) {
-		return true
-	}
-	type timeout interface{ Timeout() bool }
-	var timeoutErr timeout
-	return errors.As(err, &timeoutErr) && timeoutErr.Timeout()
 }
 
 func (r *runState) acquireBatch() *requestBatch {
@@ -501,10 +501,16 @@ func (r *runState) mergeBatch(batch *requestBatch) {
 	}
 
 	if batch.timeoutErrs > 0 {
-		r.stats.Errors["timeout"] += int64(batch.timeoutErrs)
+		r.stats.Errors[string(apperror.Timeout)] += int64(batch.timeoutErrs)
+	}
+	if batch.dnsErrs > 0 {
+		r.stats.Errors[string(apperror.DNS)] += int64(batch.dnsErrs)
+	}
+	if batch.connectionRefusedErrs > 0 {
+		r.stats.Errors[string(apperror.ConnectionRefused)] += int64(batch.connectionRefusedErrs)
 	}
 	if batch.transportErrs > 0 {
-		r.stats.Errors["transport"] += int64(batch.transportErrs)
+		r.stats.Errors[string(apperror.Transport)] += int64(batch.transportErrs)
 	}
 	if batch.canceledErrs > 0 {
 		r.stats.Errors["canceled"] += int64(batch.canceledErrs)

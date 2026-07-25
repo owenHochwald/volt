@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 const (
@@ -56,7 +58,8 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 
 	res, err := c.makeCustomRequest(req)
 	if err != nil {
-		result <- &Response{Error: err.Error()}
+		failure := apperror.FromNetwork(err)
+		result <- &Response{Error: failure.Message, Failure: failure}
 		return
 	}
 
@@ -69,7 +72,8 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		result <- &Response{Error: err.Error()}
+		failure := apperror.FromNetwork(err)
+		result <- &Response{Error: failure.Message, Failure: failure}
 		return
 	}
 

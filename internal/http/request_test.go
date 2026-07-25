@@ -2,6 +2,8 @@ package http
 
 import (
 	"testing"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 func TestRequest_Validate(t *testing.T) {
@@ -45,5 +47,26 @@ func TestRequest_Validate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestRequestValidateRejectsMalformedJSON(t *testing.T) {
+	request := &Request{
+		Method:  POST,
+		URL:     "https://example.com",
+		Headers: map[string]string{"content-type": "application/json; charset=utf-8"},
+		Body:    `{"unfinished":`,
+	}
+
+	err := request.Validate()
+	failure, ok := err.(*apperror.Error)
+	if !ok {
+		t.Fatalf("error = %T, want *apperror.Error", err)
+	}
+	if failure.Category != apperror.Validation || failure.Code != apperror.InvalidJSON {
+		t.Fatalf("error = (%s, %s), want (%s, %s)", failure.Category, failure.Code, apperror.Validation, apperror.InvalidJSON)
+	}
+	if failure.Hint != "Fix the JSON syntax, then try again." {
+		t.Fatalf("hint = %q", failure.Hint)
 	}
 }

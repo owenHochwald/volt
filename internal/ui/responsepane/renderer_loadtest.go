@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 // renderLoadTestOverview renders the overview tab for load test results
@@ -141,7 +143,7 @@ func (m ResponsePane) renderLoadTestErrors() string {
 		}
 		sort.Strings(classes)
 		for _, class := range classes {
-			b.WriteString(responseKeyStyle.Render(class))
+			b.WriteString(responseKeyStyle.Render(apperror.ErrorClassLabel(class)))
 			b.WriteString(": ")
 			b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d occurrences", stats.Errors[class])))
 			b.WriteString("\n\n")

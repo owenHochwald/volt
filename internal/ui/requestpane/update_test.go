@@ -189,6 +189,9 @@ func TestInvalidHeadersBlockSubmissionAndSurfaceError(t *testing.T) {
 	if !strings.Contains(strings.ToLower(msg.Notification.Text), "header") {
 		t.Fatalf("notification = %q, want header error", msg.Notification.Text)
 	}
+	if !strings.Contains(strings.ToLower(msg.Notification.Hint), "one header-name") {
+		t.Fatalf("notification hint = %q, want header recovery guidance", msg.Notification.Hint)
+	}
 }
 
 func TestInvalidLoadTestConfigBlocksStartAndSurfacesError(t *testing.T) {
@@ -212,6 +215,28 @@ func TestInvalidLoadTestConfigBlocksStartAndSurfacesError(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(msg.Notification.Text), "concurrency") {
 		t.Fatalf("notification = %q, want concurrency error", msg.Notification.Text)
+	}
+	if !strings.Contains(msg.Notification.Hint, "?") {
+		t.Fatalf("notification hint = %q, want keybinding guidance", msg.Notification.Hint)
+	}
+}
+
+func TestInvalidURLOffersLikelyCorrection(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	pane.URLInput.SetValue("example.com/health")
+
+	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tea.ModAlt))
+
+	if updated.RequestInProgress {
+		t.Fatal("invalid URL started a request")
+	}
+	msg, ok := cmd().(ui.NotificationMsg)
+	if !ok {
+		t.Fatalf("message type = %T, want ui.NotificationMsg", cmd())
+	}
+	if !strings.Contains(msg.Notification.Hint, "https://example.com/health") {
+		t.Fatalf("notification hint = %q, want URL correction", msg.Notification.Hint)
 	}
 }
 

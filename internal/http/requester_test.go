@@ -248,7 +248,7 @@ func TestHTTPFailuresAndStatusCodesAreClassified(t *testing.T) {
 }
 
 func TestTransportAndTimeoutErrorsAreClassified(t *testing.T) {
-	t.Run("transport", func(t *testing.T) {
+	t.Run("connection refused", func(t *testing.T) {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
 		url := "http://" + listener.Addr().String()
@@ -262,7 +262,7 @@ func TestTransportAndTimeoutErrorsAreClassified(t *testing.T) {
 		})
 		assert.Equal(t, 1, stats.CompletedRequests)
 		assert.Equal(t, 1, stats.FailedRequests)
-		assert.Equal(t, int64(1), stats.Errors["transport"])
+		assert.Equal(t, int64(1), stats.Errors["connection_refused"])
 	})
 
 	t.Run("timeout", func(t *testing.T) {

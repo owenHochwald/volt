@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -28,10 +29,14 @@ func (m *RequestPane) syncRequest() {
 
 func (m *RequestPane) validateRequest() error {
 	if len(m.ParseErrors) > 0 {
-		return fmt.Errorf("invalid headers: %s", strings.Join(m.ParseErrors, "; "))
+		return apperror.ValidationError(
+			apperror.InvalidHeaders,
+			"The request headers are not valid.",
+			"Use one Header-Name: value pair per line, then try again.",
+		)
 	}
 	if err := m.Request.Validate(); err != nil {
-		return fmt.Errorf("invalid request: %w", err)
+		return err
 	}
 	return nil
 }
@@ -84,7 +89,11 @@ func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 	m.ParseErrors = append(m.ParseErrors, parseErrors...)
 
 	if len(parseErrors) > 0 {
-		return nil, fmt.Errorf("invalid load test configuration: %s", strings.Join(parseErrors, "; "))
+		return nil, apperror.ValidationError(
+			apperror.InvalidConfig,
+			"Load test configuration is not valid: "+strings.Join(parseErrors, "; "),
+			"Fix the settings and try again. Press ? to see keybindings.",
+		)
 	}
 	if err := m.validateRequest(); err != nil {
 		return nil, err
