@@ -36,8 +36,9 @@ type SidebarPane struct {
 	pendingCommand     string
 	commandTrail       string
 
-	db   *storage.SQLiteStorage
-	keys keybindings.KeyMap
+	db     *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	styles design.Styles
 }
 
 func (s *SidebarPane) SetRequests(items []list.Item) {
@@ -211,7 +212,6 @@ func (s *SidebarPane) moveSelection(delta int) {
 }
 
 func (s *SidebarPane) View() string {
-	styles := design.NewStyles(design.DefaultTheme())
 	trail := s.commandTrail
 	if s.pendingCommand != "" {
 		if trail != "" {
@@ -221,13 +221,13 @@ func (s *SidebarPane) View() string {
 		trail = trailingRunes(trail, sidebarCommandWindow)
 	}
 
-	commandLine := styles.Text.Muted.Render("›")
+	commandLine := s.styles.Text.Muted.Render("›")
 	if trail != "" {
 		commandLine = lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			commandLine,
 			" ",
-			styles.Action.Primary.Render(trail),
+			s.styles.Action.Primary.Render(trail),
 		)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, s.requestsList.View(), commandLine)
@@ -252,7 +252,12 @@ func (s *SidebarPane) listHeight() int {
 	return max(s.height-1, 1)
 }
 
-func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {
+func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) *SidebarPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	loadingItems := []list.Item{
 		RequestItem{
 			title:   "Loading...",
@@ -267,6 +272,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 		width:        10,
 		db:           db,
 		keys:         keys,
+		styles:       styles,
 		requestsList: list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
