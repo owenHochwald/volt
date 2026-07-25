@@ -6,11 +6,30 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
+type Surface uint8
+
+const (
+	SurfaceHelp Surface = iota
+	SurfaceSettings
+)
+
+type ThemeOption struct {
+	Name        string
+	Description string
+	Source      string
+	Theme       design.Theme
+}
+
 // ShortcutPane is the component responsible for displaying shortcuts
 type ShortcutPane struct {
 	activeTab     int
 	height, width int
 	tabs          []ShortcutTab
+	surface       Surface
+	themeOptions  []ThemeOption
+	themeIndex    int
+	savedTheme    int
+	previewing    bool
 
 	Focused bool
 	keys    keybindings.KeyMap
