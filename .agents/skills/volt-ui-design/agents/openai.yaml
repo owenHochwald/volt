@@ -1,0 +1,4 @@
+interface:
+  display_name: "Volt UI Design"
+  short_description: "Design and review Volt terminal interfaces"
+  default_prompt: "Use $volt-ui-design to design or review a Volt TUI component."

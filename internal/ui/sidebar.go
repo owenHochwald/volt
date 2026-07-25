@@ -5,10 +5,14 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
+
+const sidebarCommandWindow = 10
 
 type RequestItem struct {
 	title, desc string
@@ -29,13 +33,16 @@ type SidebarPane struct {
 	desiredCursorIndex int
 	navigationCount    int
 	hasNavigationCount bool
+	pendingCommand     string
+	commandTrail       string
 
-	db   *storage.SQLiteStorage
-	keys keybindings.KeyMap
+	db     *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	styles design.Styles
 }
 
 func (s *SidebarPane) SetRequests(items []list.Item) {
-	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.height)
+	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.listHeight())
 	s.requestsList.SetShowHelp(false)
 	s.requestsList.DisableQuitKeybindings()
 	s.clearNavigationCount()
@@ -83,11 +90,13 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 		return s, nil
 	case tea.KeyPressMsg:
 		if keybindings.Matches(msg, s.keys.NavCount) {
+			s.pendingCommand += string(msg.Code)
 			s.appendNavigationDigit(msg.Code)
 			return s, nil
 		}
 
 		if keybindings.Matches(msg, s.keys.DeleteRequest) {
+			s.recordCommand("d")
 			s.clearNavigationCount()
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
@@ -110,19 +119,23 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 
 		// Navigation override - wrapped to cycle
 		if keybindings.Matches(msg, s.keys.NavUp) {
+			s.recordCommand(s.pendingCommand + "k")
 			s.moveSelection(-s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavDown) {
+			s.recordCommand(s.pendingCommand + "j")
 			s.moveSelection(s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavFirst) {
+			s.recordCommand("g")
 			s.clearNavigationCount()
 			s.requestsList.Select(0)
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavLast) {
+			s.recordCommand("G")
 			s.clearNavigationCount()
 			if itemCount := len(s.requestsList.Items()); itemCount > 0 {
 				s.requestsList.Select(itemCount - 1)
@@ -164,6 +177,26 @@ func (s *SidebarPane) consumeNavigationCount() int {
 func (s *SidebarPane) clearNavigationCount() {
 	s.navigationCount = 0
 	s.hasNavigationCount = false
+	s.pendingCommand = ""
+}
+
+func (s *SidebarPane) recordCommand(command string) {
+	if command == "" {
+		return
+	}
+	if s.commandTrail != "" {
+		s.commandTrail += " "
+	}
+	s.commandTrail += command
+	s.commandTrail = trailingRunes(s.commandTrail, sidebarCommandWindow)
+}
+
+func trailingRunes(value string, limit int) string {
+	runes := []rune(value)
+	if limit <= 0 || len(runes) <= limit {
+		return value
+	}
+	return string(runes[len(runes)-limit:])
 }
 
 func (s *SidebarPane) moveSelection(delta int) {
@@ -179,7 +212,25 @@ func (s *SidebarPane) moveSelection(delta int) {
 }
 
 func (s *SidebarPane) View() string {
-	return s.requestsList.View()
+	trail := s.commandTrail
+	if s.pendingCommand != "" {
+		if trail != "" {
+			trail += " "
+		}
+		trail += s.pendingCommand
+		trail = trailingRunes(trail, sidebarCommandWindow)
+	}
+
+	commandLine := s.styles.Text.Muted.Render("›")
+	if trail != "" {
+		commandLine = lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			commandLine,
+			" ",
+			s.styles.Action.Primary.Render(trail),
+		)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, s.requestsList.View(), commandLine)
 }
 
 func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
@@ -194,10 +245,19 @@ func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 func (s *SidebarPane) SetSize(width, height int) {
 	s.width = max(width, 1)
 	s.height = max(height, 1)
-	s.requestsList.SetSize(s.width, s.height)
+	s.requestsList.SetSize(s.width, s.listHeight())
 }
 
-func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {
+func (s *SidebarPane) listHeight() int {
+	return max(s.height-1, 1)
+}
+
+func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) *SidebarPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	loadingItems := []list.Item{
 		RequestItem{
 			title:   "Loading...",
@@ -212,6 +272,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 		width:        10,
 		db:           db,
 		keys:         keys,
+		styles:       styles,
 		requestsList: list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"

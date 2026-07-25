@@ -4,22 +4,23 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // View renders the request pane
 func (m RequestPane) View() string {
+	styles := m.styles
+
 	// Render common fields
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
-	nameLabel := ui.LabelStyle.Render("Name ")
+	nameLabel := styles.Text.Label.Render("Name ")
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Left, nameLabel, m.NameInput.View())
 
-	headersLabel := ui.LabelStyle.Render("Headers ")
+	headersLabel := styles.Text.Label.Render("Headers ")
 	headersLine := lipgloss.JoinHorizontal(lipgloss.Left, headersLabel, m.Headers.View())
 
-	bodyLabel := ui.LabelStyle.Render("Body    ")
+	bodyLabel := styles.Text.Label.Render("Body    ")
 	bodyLine := lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 
 	// Render button based on state
@@ -27,39 +28,37 @@ func (m RequestPane) View() string {
 	var stopwatchCount string
 	if m.RequestInProgress {
 		if m.LoadTestMode {
-			button = ui.FocusedButton.Render("Running Load Test...")
+			button = styles.Action.Busy.Render("ϟ Running Load Test...")
 		} else {
-			button = ui.FocusedButton.Render("Sending...")
+			button = styles.Action.Busy.Render("ϟ Sending...")
 			elapsed := m.Stopwatch.Elapsed()
 			milliseconds := elapsed.Milliseconds()
 			seconds := float64(milliseconds) / 1000.0
-			stopwatchCount = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("241")).
-				Render(fmt.Sprintf("%.3fs", seconds))
+			stopwatchCount = styles.Text.Muted.Render(fmt.Sprintf("%.3fs", seconds))
 		}
 	} else if m.SubmitButton.IsFocused() {
-		button = ui.FocusedButton.Render("→ Send")
+		button = styles.Action.Focused.Render("→ SEND")
 	} else {
-		button = ui.UnfocusedButton.Render("→ Send")
+		button = styles.Action.Primary.Render("→ SEND")
 	}
 
 	// Render mode-specific content
 	var mainContent string
 	if m.LoadTestMode {
 		// Load test mode - add configuration fields
-		ltConcurrencyLabel := ui.LabelStyle.Render("Concurrency:    ")
+		ltConcurrencyLabel := styles.Text.Label.Render("Concurrency:    ")
 		ltConcurrencyLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltConcurrencyLabel, m.LoadTestConcurrency.View())
 
-		ltTotalLabel := ui.LabelStyle.Render("Total Requests: ")
+		ltTotalLabel := styles.Text.Label.Render("Total Requests: ")
 		ltTotalLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltTotalLabel, m.LoadTestTotalReqs.View())
 
-		ltQPSLabel := ui.LabelStyle.Render("QPS (limit):    ")
+		ltQPSLabel := styles.Text.Label.Render("QPS (limit):    ")
 		ltQPSLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltQPSLabel, m.LoadTestQPS.View())
 
-		ltTimeoutLabel := ui.LabelStyle.Render("Timeout:        ")
+		ltTimeoutLabel := styles.Text.Label.Render("Timeout:        ")
 		ltTimeoutLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltTimeoutLabel, m.LoadTestTimeout.View())
 
@@ -71,7 +70,7 @@ func (m RequestPane) View() string {
 			headersLine,
 			bodyLine,
 			"\n\n",
-			lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("Load Test Configuration:"),
+			styles.Text.Logo.Render("LOAD TEST CONFIGURATION"),
 			ltConcurrencyLine,
 			ltTotalLine,
 			ltQPSLine,
