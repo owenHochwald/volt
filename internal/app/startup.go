@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	startupHoldDuration  = 400 * time.Millisecond
+	startupHoldDuration  = 2 * time.Second
 	startupFrameDuration = 120 * time.Millisecond
 )
 
