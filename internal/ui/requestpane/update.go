@@ -2,6 +2,7 @@ package requestpane
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -31,7 +32,7 @@ func (m RequestPane) Update(msg tea.Msg) (RequestPane, tea.Cmd) {
 		if keybindings.Matches(msg, m.keys.SaveRequest) {
 			m.syncRequest()
 			if err := m.validateRequest(); err != nil {
-				return m, ui.NotifyCmd(ui.NotificationError, err.Error())
+				return m, ui.NotifyErrorCmd(apperror.FromApplication(err))
 			}
 			return m, ui.SaveRequestCmd(m.DB, m.Request)
 		}

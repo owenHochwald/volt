@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -23,7 +25,27 @@ type quitSequenceExpiredMsg struct {
 	sequence uint64
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update prevents an unexpected UI panic from terminating Volt. The recovery
+// message intentionally omits implementation details and stack traces.
+func (m Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	return recoverUpdate(m, func() (tea.Model, tea.Cmd) {
+		return m.update(msg)
+	})
+}
+
+func recoverUpdate(m Model, update func() (tea.Model, tea.Cmd)) (model tea.Model, cmd tea.Cmd) {
+	model = m
+	defer func() {
+		if recover() != nil {
+			m.notification = ui.ErrorNotification(apperror.ApplicationError())
+			model = m
+			cmd = nil
+		}
+	}()
+	return update()
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -105,15 +127,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
-		m.responsePane.SetResponse(msg.Response)
 		m.setFocusedPanel(utils.ResponsePanel)
+		if msg.Response == nil {
+			failure := apperror.OperationError("Volt didn't receive a response.", "Try the request again.")
+			msg.Response = &http.Response{Error: failure.Message, Failure: failure}
+		}
+		if msg.Response.Error != "" {
+			failure := msg.Response.Failure
+			if failure == nil {
+				failure = apperror.FromNetwork(errors.New(msg.Response.Error))
+			}
+			msg.Response.Error = failure.Message
+			msg.Response.Failure = failure
+			m.responsePane.SetResponse(msg.Response)
+			m.notification = ui.ErrorNotification(failure)
+			return m, nil
+		}
+
+		m.responsePane.SetResponse(msg.Response)
 		switch {
-		case msg.Response == nil:
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request failed: empty response"}
-		case msg.Response.Error != "":
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request failed: " + msg.Response.Error}
 		case msg.Response.StatusCode >= 400:
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request completed with " + msg.Response.Status}
+			m.notification = ui.ErrorNotification(apperror.HTTPStatus(msg.Response.StatusCode))
 		default:
 			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request completed with " + msg.Response.Status}
 		}
@@ -121,7 +155,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.RequestSavedMsg:
 		if msg.Err != nil {
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Save failed: " + msg.Err.Error()}
+			m.notification = ui.ErrorNotification(apperror.FromStorage(msg.Err))
 			return m, nil
 		}
 		m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request saved"}
@@ -129,7 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.RequestDeletedMsg:
 		if msg.Err != nil {
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Delete failed: " + msg.Err.Error()}
+			m.notification = ui.ErrorNotification(apperror.FromStorage(msg.Err))
 			return m, nil
 		}
 		m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request deleted"}
@@ -137,7 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.RequestsLoadingMsg:
 		if msg.Err != nil {
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Loading requests failed: " + msg.Err.Error()}
+			m.notification = ui.ErrorNotification(apperror.FromStorage(msg.Err))
 			return m, nil
 		}
 		m.sidebarPane, cmd = m.sidebarPane.Update(msg)
@@ -149,7 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case responsepane.ResponseCopiedMsg:
 		if msg.Err != nil {
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Copy failed: " + msg.Err.Error()}
+			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the response.", "Try again after checking clipboard access."))
 		} else {
 			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Response copied"}
 		}
@@ -198,12 +232,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Text:  fmt.Sprintf("Load test canceled after %d requests", completed),
 			}
 		case msg.Stats == nil:
-			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Load test ended without final statistics"}
+			m.notification = ui.ErrorNotification(apperror.OperationError("Load test ended without final results.", "Try the load test again."))
 		case msg.Stats.FailedRequests > 0:
-			m.notification = ui.Notification{
-				Level: ui.NotificationError,
-				Text:  fmt.Sprintf("Load test complete: %d failed requests", msg.Stats.FailedRequests),
-			}
+			m.notification = ui.ErrorNotification(apperror.LoadTestFailure(msg.Stats.FailedRequests, msg.Stats.Errors))
 		default:
 			m.notification = ui.Notification{
 				Level: ui.NotificationSuccess,
@@ -221,11 +252,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
-		errorText := "unknown error"
-		if msg.Error != nil {
-			errorText = msg.Error.Error()
-		}
-		m.notification = ui.Notification{Level: ui.NotificationError, Text: "Load test failed: " + errorText}
+		m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't start the load test.", "Check the load test settings and try again."))
 		return m, nil
 
 	case tea.WindowSizeMsg:

@@ -1,9 +1,12 @@
 package http
 
 import (
-	"fmt"
+	"encoding/json"
+	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 const (
@@ -65,29 +68,42 @@ func NewRequestWithParams(method, url string) *Request {
 
 func (r *Request) Validate() error {
 	if r.Name != "" && len(r.Name) > 40 {
-		return fmt.Errorf("name too long: %s", r.Name)
+		return apperror.ValidationError(apperror.InvalidConfig, "The request name is too long.", "Use a name with 40 characters or fewer.")
 	}
 	if r.Method == "" {
-		return fmt.Errorf("method is required")
+		return apperror.ValidationError(apperror.InvalidConfig, "Choose an HTTP method.", "Press ? to see the available request controls.")
 	}
 	if r.URL == "" {
-		return fmt.Errorf("url is required")
+		return apperror.InvalidURL(r.URL)
 	}
 
 	if !slices.Contains(validMethods, r.Method) {
-		return fmt.Errorf("invalid method: %s", r.Method)
+		return apperror.ValidationError(apperror.InvalidConfig, "The HTTP method is not supported.", "Choose GET, POST, PUT, PATCH, or DELETE.")
 	}
 
-	if !strings.HasPrefix(r.URL, "http://") && !strings.HasPrefix(r.URL, "https://") {
-		return fmt.Errorf("invalid url: %s", r.URL)
+	parsedURL, err := url.Parse(r.URL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		return apperror.InvalidURL(r.URL)
 	}
 
 	if r.Headers != nil && len(r.Headers) > 100 {
-		return fmt.Errorf("too many headers: %d", len(r.Headers))
+		return apperror.ValidationError(apperror.InvalidHeaders, "There are too many request headers.", "Use 100 headers or fewer.")
 	}
 	if r.Body != "" && len(r.Body) > 10000 {
-		return fmt.Errorf("body too long: %d", len(r.Body))
+		return apperror.ValidationError(apperror.InvalidConfig, "The request body is too long.", "Use a body with 10,000 characters or fewer.")
+	}
+	if r.Body != "" && isJSONRequest(r.Headers) && !json.Valid([]byte(r.Body)) {
+		return apperror.ValidationError(apperror.InvalidJSON, "The JSON request body is not valid.", "Fix the JSON syntax, then try again.")
 	}
 
 	return nil
+}
+
+func isJSONRequest(headers map[string]string) bool {
+	for key, value := range headers {
+		if strings.EqualFold(key, "Content-Type") && strings.Contains(strings.ToLower(value), "application/json") {
+			return true
+		}
+	}
+	return false
 }

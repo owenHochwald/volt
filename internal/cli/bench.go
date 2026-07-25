@@ -24,6 +24,9 @@ func RunBench(config *BenchConfig) error {
 		Headers: config.Headers,
 		Body:    config.Body,
 	}
+	if err := req.Validate(); err != nil {
+		return err
+	}
 
 	jobConfig := &http.JobConfig{
 		Request:          req,

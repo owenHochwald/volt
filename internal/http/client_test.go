@@ -5,7 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-	//http2 "github.com/owenHochwald/Volt/internal/http"
+
+	"github.com/owenHochwald/Volt/internal/apperror"
 )
 
 func TestClient_Send(t *testing.T) {
@@ -86,6 +87,12 @@ func TestClient_Send(t *testing.T) {
 			if tt.wantErr {
 				if result.Error == "" {
 					t.Fatalf("expected error, got nil")
+				}
+				if result.Failure == nil || result.Failure.Category != apperror.Network || result.Failure.Code != apperror.Timeout {
+					t.Fatalf("failure = %#v, want a timeout network error", result.Failure)
+				}
+				if result.Failure.Hint == "" {
+					t.Fatal("timeout failure did not include a recovery hint")
 				}
 				return
 			}
