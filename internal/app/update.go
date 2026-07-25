@@ -65,6 +65,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if keybindings.Matches(msg, m.keys.Quit) {
+			if m.showHelpModal {
+				m.closeHelp()
+				return m, nil
+			}
 			if m.quitArmed {
 				if m.loadTestCancel != nil {
 					m.loadTestCancel()
@@ -72,9 +76,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-			if m.showHelpModal {
-				m.closeHelp()
-			} else if m.focusedPanel != utils.SidebarPanel {
+			if m.focusedPanel != utils.SidebarPanel {
 				m.setFocusedPanel(utils.SidebarPanel)
 			}
 			return m, m.armQuit()
@@ -124,6 +126,32 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case shortcutpane.CloseHelpModalMsg:
 		m.closeHelp()
+		return m, nil
+
+	case shortcutpane.PreviewThemeMsg:
+		m.applyTheme(msg.Theme, msg.Source)
+		if msg.Source == "adaptive" {
+			return m, tea.RequestBackgroundColor
+		}
+		return m, nil
+
+	case shortcutpane.SaveThemeMsg:
+		m.saveThemeSession(msg.Theme, msg.Source)
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme changed to " + msg.Theme.Name,
+		}
+		if msg.Source == "adaptive" {
+			return m, tea.RequestBackgroundColor
+		}
+		return m, nil
+
+	case shortcutpane.CancelThemePreviewMsg:
+		m.closeHelp()
+		m.notification = ui.Notification{
+			Level: ui.NotificationInfo,
+			Text:  "Theme preview canceled",
+		}
 		return m, nil
 
 	case quitSequenceExpiredMsg:
