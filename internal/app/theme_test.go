@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/assert/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -41,4 +42,34 @@ func TestApplyThemePreservesApplicationState(t *testing.T) {
 	noColor := color.Color(lipgloss.NoColor{})
 	assert.Equal(t, noColor, model.styles.Text.Value.GetForeground())
 	assert.Equal(t, noColor, model.requestPane.MethodSelector.GetStyle().GetForeground())
+}
+
+func TestAdaptiveThemeRespondsToTerminalBackground(t *testing.T) {
+	base := newTestModel(t)
+	model := SetupModel(base.db, design.ThemeLoadResult{
+		Theme:  design.AdaptiveTheme(true),
+		Source: "adaptive",
+	})
+
+	updated, _ := model.Update(tea.BackgroundColorMsg{Color: color.White})
+	model = updated.(Model)
+
+	assert.Equal(t, design.AdaptiveTheme(false), model.theme)
+	assert.Equal(t, "adaptive", model.themeSource)
+}
+
+func TestCustomThemeIgnoresTerminalBackground(t *testing.T) {
+	base := newTestModel(t)
+	custom := design.DefaultTheme()
+	custom.Name = "adaptive"
+	model := SetupModel(base.db, design.ThemeLoadResult{
+		Theme:  custom,
+		Source: "/tmp/adaptive.yaml",
+	})
+
+	updated, _ := model.Update(tea.BackgroundColorMsg{Color: color.White})
+	model = updated.(Model)
+
+	assert.Equal(t, custom, model.theme)
+	assert.Equal(t, "/tmp/adaptive.yaml", model.themeSource)
 }
