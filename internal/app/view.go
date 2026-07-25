@@ -145,8 +145,10 @@ func (m Model) renderPanel(style lipgloss.Style, focused, running bool, width, h
 		MaxHeight(contentHeight).
 		Render(content)
 	return style.
-		Width(contentWidth).
-		Height(contentHeight).
+		Width(width).
+		Height(height).
+		MaxWidth(width).
+		MaxHeight(height).
 		Render(content)
 }
 
