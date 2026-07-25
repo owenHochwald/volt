@@ -8,6 +8,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
@@ -16,8 +17,10 @@ import (
 )
 
 type Model struct {
-	db   *storage.SQLiteStorage
-	keys keybindings.KeyMap
+	db     *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	theme  design.Theme
+	styles design.Styles
 
 	sidebarPane  *ui.SidebarPane
 	requestPane  requestpane.RequestPane
@@ -42,18 +45,22 @@ type Model struct {
 
 func SetupModel(db *storage.SQLiteStorage) Model {
 	keys := keybindings.DefaultKeyMap()
-	responsePane := responsepane.SetupResponsePane(keys)
-	shortcutPane := shortcutpane.SetupShortcutPane(keys)
+	theme := design.DefaultTheme()
+	styles := design.NewStyles(theme)
+	responsePane := responsepane.SetupResponsePane(keys, styles)
+	shortcutPane := shortcutpane.SetupShortcutPane(keys, styles)
 
 	m := Model{
 		db:            db,
 		keys:          keys,
-		sidebarPane:   ui.NewSidebar(db, keys),
-		requestPane:   requestpane.SetupRequestPane(db, keys),
+		theme:         theme,
+		styles:        styles,
+		sidebarPane:   ui.NewSidebar(db, keys, styles),
+		requestPane:   requestpane.SetupRequestPane(db, keys, styles),
 		responsePane:  &responsePane,
 		shortcutPane:  shortcutPane,
 		focusedPanel:  utils.SidebarPanel,
-		headerPane:    ui.SetupHeader(buildinfo.Version()),
+		headerPane:    ui.SetupHeader(buildinfo.Version(), styles),
 		showHelpModal: false,
 		width:         80,
 		height:        24,
