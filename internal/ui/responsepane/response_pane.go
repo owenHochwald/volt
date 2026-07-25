@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -17,7 +18,8 @@ type ResponsePane struct {
 	viewport  viewport.Model
 	activeTab int
 
-	keys keybindings.KeyMap
+	keys   keybindings.KeyMap
+	styles design.Styles
 }
 
 // Init initializes the response pane
