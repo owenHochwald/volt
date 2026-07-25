@@ -93,8 +93,7 @@ func (m Model) statusView(width int) string {
 		return m.notification.View(width, m.styles)
 	}
 	help := m.keys.CompactHelp(m.focusedContext(), 5)
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+	return m.styles.Text.Muted.
 		Width(width).
 		MaxWidth(width).
 		MaxHeight(1).
@@ -176,7 +175,7 @@ func (m Model) overlayHelpModal() string {
 		helpModal,
 		lipgloss.WithWhitespaceChars("░"),
 		lipgloss.WithWhitespaceStyle(
-			lipgloss.NewStyle().Foreground(lipgloss.Color("236")),
+			lipgloss.NewStyle().Foreground(m.theme.Colors.SurfaceRaised),
 		),
 	)
 }
