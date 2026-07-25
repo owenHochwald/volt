@@ -325,7 +325,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd
 		} else if m.focusedPanel == utils.RequestPanel {
+			wasLoadTestMode := m.requestPane.LoadTestMode
+			wasRequestInProgress := m.requestPane.RequestInProgress
 			m.requestPane, cmd = m.requestPane.Update(msg)
+			if wasLoadTestMode != m.requestPane.LoadTestMode ||
+				wasRequestInProgress != m.requestPane.RequestInProgress {
+				m.applyLayout(m.currentLayout())
+			}
 			return m, cmd
 		} else if m.focusedPanel == utils.ResponsePanel {
 			m.responsePane, cmd = m.responsePane.Update(msg)
