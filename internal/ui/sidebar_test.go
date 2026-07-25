@@ -2,10 +2,12 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -42,6 +44,49 @@ func TestSidebarVimCountNavigation(t *testing.T) {
 				t.Fatalf("selected index = %d, want %d after %q", got, tt.want, tt.keys)
 			}
 		})
+	}
+}
+
+func TestSidebarCommandTrailUsesReservedBottomRow(t *testing.T) {
+	sidebar := NewSidebar(nil, keybindings.DefaultKeyMap())
+	sidebar.SetRequests(sidebarTestItems(12))
+	sidebar.SetSize(30, 20)
+
+	for _, input := range "jjj10jk5k" {
+		_, _ = sidebar.Update(sidebarKeyPress(input))
+	}
+
+	view := sidebar.View()
+	if got := lipgloss.Height(view); got != 20 {
+		t.Fatalf(
+			"sidebar height = %d, want 20 (list = %d, trail = %q)",
+			got,
+			lipgloss.Height(sidebar.requestsList.View()),
+			sidebar.commandTrail,
+		)
+	}
+	if !strings.Contains(view, "j 10j k 5k") {
+		t.Fatalf("sidebar command trail missing rolling commands: %q", view)
+	}
+}
+
+func TestSidebarCommandTrailShowsPendingCountAndKeepsTenCharacters(t *testing.T) {
+	sidebar := NewSidebar(nil, keybindings.DefaultKeyMap())
+	sidebar.SetRequests(sidebarTestItems(12))
+	sidebar.SetSize(30, 20)
+
+	for _, input := range "jjj10j" {
+		_, _ = sidebar.Update(sidebarKeyPress(input))
+	}
+	_, _ = sidebar.Update(sidebarKeyPress('5'))
+
+	if view := sidebar.View(); !strings.Contains(view, "j j 10j 5") {
+		t.Fatalf("pending count is not visible in command trail: %q", view)
+	}
+
+	_, _ = sidebar.Update(sidebarKeyPress('k'))
+	if got := sidebar.commandTrail; got != "j j 10j 5k" {
+		t.Fatalf("command trail = %q, want newest 10 characters", got)
 	}
 }
 
