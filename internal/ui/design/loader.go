@@ -98,6 +98,10 @@ func builtInTheme(name string) (Theme, bool) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "default", "volt":
 		return DefaultTheme(), true
+	case "adaptive":
+		return AdaptiveTheme(true), true
+	case "mono":
+		return MonoTheme(), true
 	default:
 		return Theme{}, false
 	}
