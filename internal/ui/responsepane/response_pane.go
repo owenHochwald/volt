@@ -34,6 +34,9 @@ func (m *ResponsePane) SetFocused(focused bool) {
 
 func (m *ResponsePane) SetStyles(styles design.Styles) {
 	m.styles = styles
+	if m.isLoadTest {
+		m.updateViewportForActiveTab()
+	}
 }
 
 // SetResponse updates the response pane with a new HTTP response
