@@ -41,9 +41,9 @@ func (m ResponsePane) renderHeaders() string {
 	for _, key := range keys {
 		values := m.Response.Headers[key]
 		for _, value := range values {
-			b.WriteString(responseKeyStyle.Render(key))
+			b.WriteString(m.styles.Text.ResponseKey.Render(key))
 			b.WriteString(": ")
-			b.WriteString(responseValueStyle.Render(value))
+			b.WriteString(m.styles.Text.Value.Render(value))
 			b.WriteString("\n")
 		}
 	}
@@ -62,29 +62,29 @@ func (m ResponsePane) renderTiming() string {
 	b.WriteString(strings.Repeat("─", 60) + "\n\n")
 
 	// Total duration
-	b.WriteString(responseLabelStyle.Render("Total Duration"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Total Duration"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(m.Response.Duration.String()))
+	b.WriteString(m.styles.Text.Value.Render(m.Response.Duration.String()))
 	b.WriteString("\n\n")
 
 	// Format in milliseconds for readability
 	ms := m.Response.Duration.Milliseconds()
-	b.WriteString(responseLabelStyle.Render("Milliseconds"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Milliseconds"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d ms", ms)))
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d ms", ms)))
 	b.WriteString("\n\n")
 
 	// Connection type
-	b.WriteString(responseLabelStyle.Render("Connection Type"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Connection Type"))
 	b.WriteString(": ")
 	if m.Response.RoundTrip {
-		b.WriteString(responseValueStyle.Render("Round Trip (new connection)"))
+		b.WriteString(m.styles.Text.Value.Render("Round Trip (new connection)"))
 	} else {
-		b.WriteString(responseValueStyle.Render("Direct (keep-alive)"))
+		b.WriteString(m.styles.Text.Value.Render("Direct (keep-alive)"))
 	}
 	b.WriteString("\n\n")
 
-	b.WriteString(faintStyle.Render(
+	b.WriteString(m.styles.Text.Faint.Render(
 		"Note: Detailed timing breakdown (DNS, TLS, TTFB) coming in a future release!",
 	))
 
