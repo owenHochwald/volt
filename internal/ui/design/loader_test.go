@@ -94,6 +94,42 @@ func TestThemeLoaderRejectsUnsupportedExplicitFormat(t *testing.T) {
 	assert.True(t, strings.Contains(result.Warning, ".yaml"))
 }
 
+func TestThemeLoaderUsesSavedSelectionBeforeAutomaticTheme(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveThemeSelection(configDir, "mono"))
+	writeThemeFile(t, filepath.Join(configDir, "volt", "theme.yaml"), "#111111")
+
+	result := loadUserTheme(themeLoadOptions{ConfigDir: configDir})
+
+	assert.Equal(t, "mono", result.Source)
+	assert.Equal(t, MonoTheme(), result.Theme)
+}
+
+func TestThemeLoaderResolvesSavedRelativeYAMLPath(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveThemeSelection(configDir, "machine.yaml"))
+	path := filepath.Join(configDir, "volt", "machine.yaml")
+	writeThemeFile(t, path, "#333333")
+
+	result := loadUserTheme(themeLoadOptions{ConfigDir: configDir})
+
+	assert.Equal(t, path, result.Source)
+	assert.Equal(t, lipgloss.Color("#333333"), result.Theme.Colors.Brand)
+}
+
+func TestEnvironmentSelectionOverridesSavedSettings(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveThemeSelection(configDir, "mono"))
+
+	result := loadUserTheme(themeLoadOptions{
+		Selection: "adaptive",
+		ConfigDir: configDir,
+	})
+
+	assert.Equal(t, "adaptive", result.Source)
+	assert.Equal(t, AdaptiveTheme(true), result.Theme)
+}
+
 func writeThemeFile(t *testing.T, path, brand string) {
 	t.Helper()
 	assert.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
