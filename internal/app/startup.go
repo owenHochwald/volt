@@ -29,6 +29,7 @@ func (m Model) currentLayout() terminalLayout {
 	}
 
 	resizeContentForHeader(&layout)
+	m.resizeContentForLoadTest(&layout)
 	return layout
 }
 
@@ -44,6 +45,20 @@ func resizeContentForHeader(layout *terminalLayout) {
 	}
 	layout.requestHeight = layout.contentHeight
 	layout.responseHeight = layout.contentHeight
+}
+
+func (m Model) resizeContentForLoadTest(layout *terminalLayout) {
+	if layout.mode != layoutWide || !m.requestPane.LoadTestMode {
+		return
+	}
+
+	if m.requestPane.RequestInProgress || m.loadTestUpdates != nil {
+		layout.requestHeight = clamp(layout.contentHeight*35/100, 8, layout.contentHeight-8)
+	} else {
+		layout.requestHeight = clamp(layout.contentHeight*60/100, 20, 24)
+		layout.requestHeight = min(layout.requestHeight, max(layout.contentHeight-7, 1))
+	}
+	layout.responseHeight = max(layout.contentHeight-layout.requestHeight, 1)
 }
 
 func startupAdvanceCmd(frame int, motion design.MotionMode) tea.Cmd {
