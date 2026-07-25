@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -36,11 +37,29 @@ func (m Model) focusedContext() keybindings.Context {
 
 func (m *Model) openHelp(context keybindings.Context) {
 	m.showHelpModal = true
+	m.themeSession = design.ThemeLoadResult{
+		Theme:  m.theme,
+		Source: m.themeSource,
+	}
+	m.themeSessionOpen = true
+	m.shortcutPane.SetThemeOptions(m.settingsThemeOptions(), m.themeSource)
+	m.shortcutPane.BeginSession()
 	m.shortcutPane.SetContext(context)
 	m.shortcutPane.SetFocused(true)
 }
 
 func (m *Model) closeHelp() {
+	if m.themeSessionOpen {
+		m.applyTheme(m.themeSession.Theme, m.themeSession.Source)
+		m.themeSessionOpen = false
+	}
+	m.showHelpModal = false
+	m.shortcutPane.SetFocused(false)
+}
+
+func (m *Model) saveThemeSession(theme design.Theme, source string) {
+	m.applyTheme(theme, source)
+	m.themeSessionOpen = false
 	m.showHelpModal = false
 	m.shortcutPane.SetFocused(false)
 }
