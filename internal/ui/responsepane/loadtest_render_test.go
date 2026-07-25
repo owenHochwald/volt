@@ -58,6 +58,48 @@ func TestLoadTestStatusCallsOutFailures(t *testing.T) {
 	}
 }
 
+func TestLoadTestStatsBuildBoundedIntervalLatencySeries(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	start := time.Now()
+
+	for i := 1; i <= maxLatencySamples+5; i++ {
+		pane.SetLoadTestStats(&http.LoadTestStats{
+			StartTime:         start,
+			TotalRequests:     1000,
+			CompletedRequests: i * 10,
+			TotalDuration:     time.Duration(i*i) * 100 * time.Millisecond,
+		})
+	}
+
+	if got := len(pane.latencySamples); got != maxLatencySamples {
+		t.Fatalf("latency samples = %d, want %d", got, maxLatencySamples)
+	}
+	if got := pane.latencySamples[len(pane.latencySamples)-1]; got != 730*time.Millisecond {
+		t.Fatalf("latest interval latency = %s, want 730ms", got)
+	}
+}
+
+func TestLoadTestStatsPreserveSelectedTabDuringLiveUpdates(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	start := time.Now()
+	pane.SetLoadTestStats(&http.LoadTestStats{
+		StartTime:     start,
+		TotalRequests: 100,
+	})
+	pane.activeTab = int(TabLoadTestLatency)
+
+	pane.SetLoadTestStats(&http.LoadTestStats{
+		StartTime:         start,
+		TotalRequests:     100,
+		CompletedRequests: 50,
+		TotalDuration:     500 * time.Millisecond,
+	})
+
+	if got := TabIndex(pane.activeTab); got != TabLoadTestLatency {
+		t.Fatalf("active tab = %d, want latency tab", got)
+	}
+}
+
 func failingLoadTestStats() *http.LoadTestStats {
 	start := time.Now().Add(-time.Second)
 	return &http.LoadTestStats{
