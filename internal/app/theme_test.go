@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"image/color"
 	"testing"
 
@@ -102,6 +103,40 @@ func TestSettingsSaveKeepsPreviewedTheme(t *testing.T) {
 	assert.Equal(t, "adaptive", model.themeSource)
 	assert.False(t, model.showHelpModal)
 	assert.Equal(t, ui.NotificationSuccess, model.notification.Level)
+}
+
+func TestThemePersistenceResultIsVisible(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		level ui.NotificationLevel
+		text  string
+	}{
+		{
+			name:  "saved",
+			level: ui.NotificationSuccess,
+			text:  "Theme saved: Mono",
+		},
+		{
+			name:  "save failed",
+			err:   errors.New("permission denied"),
+			level: ui.NotificationWarning,
+			text:  "Theme is active but couldn't be saved",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := newTestModel(t)
+			model, _ = updateAppModel(model, themeSelectionSavedMsg{
+				themeName: "Mono",
+				err:       test.err,
+			})
+
+			assert.Equal(t, test.level, model.notification.Level)
+			assert.Equal(t, test.text, model.notification.Text)
+		})
+	}
 }
 
 func updateAppModel(model Model, msg tea.Msg) (Model, tea.Cmd) {
