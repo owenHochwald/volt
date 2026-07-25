@@ -49,9 +49,9 @@ func (m ResponsePane) renderTabBar(tabs []string) string {
 
 	for i, tab := range tabs {
 		if i == m.activeTab {
-			renderedTabs = append(renderedTabs, activeTab.Render(tab))
+			renderedTabs = append(renderedTabs, m.styles.Tabs.Active.Render(tab))
 		} else {
-			renderedTabs = append(renderedTabs, inactiveTab.Render(tab))
+			renderedTabs = append(renderedTabs, m.styles.Tabs.Inactive.Render(tab))
 		}
 	}
 	renderedTabs = append(renderedTabs, "\n")
