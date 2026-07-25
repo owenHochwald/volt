@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[Installation](#installation) • [Quick Start](#quick-start) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
+[What's New](#whats-new-in-v020) • [Installation](#installation) • [Quick Start](#quick-start) • [Interactive Load Testing](#interactive-load-testing) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [CLI Mode](#cli-load-testing)
 
 ![Demo](demo.gif)
 
@@ -30,6 +30,16 @@ help teams develop an endpoint, verify it functionally, measure it under
 representative traffic, compare changes, and preserve evidence for review and
 production-readiness decisions.
 
+## What's new in v0.2.0
+
+Volt is back and better than ever. The terminal interface now has a cohesive
+Controlled Voltage design, live YAML theme previews and persistent Settings, a
+two-second ASCII startup signature that compresses into a compact command
+center, and a redesigned load-testing workspace with live progress, metrics,
+and a rolling latency sparkline.
+
+Read the complete [v0.2.0 release notes](RELEASE_NOTES.md).
+
 | Workflow | Best for | Interface |
 |---|---|---|
 | Interactive exploration | Creating requests and inspecting responses | `volt` TUI |
@@ -43,18 +53,20 @@ production-readiness decisions.
 - Want Postman's features without the Electron bloat
 - Love Vim keybindings and keyboard-driven workflows
 - Need a fast, scriptable HTTP client with a focused UI
+- Want a terminal interface with customizable semantic YAML themes
+- Want live progress, latency, throughput, and failure signals during load tests
 - Want coding agents to evaluate the APIs they build
 - Want reproducible performance evidence in CI
 
 
 > **Note**: This is an active learning project. Performance optimizations are ongoing, and contributions/feedback are welcome :)
 
-Volt's theme and color customization system is specified in
-[Themes and Customization](CUSTOMIZATION.md). Custom themes are small YAML
-files placed at `<user-config-dir>/volt/theme.yaml` or `~/.volt/theme.yaml`;
-start by overriding only the semantic colors you want to change. Visual and
-interaction decisions are maintained in the
-[Volt Design System](DESIGN_SYSTEM.md).
+Volt includes `default`, terminal-aware `adaptive`, and no-color `mono` themes.
+Open `?`, switch to `SETTINGS` with `h/l`, and use `j/k` to preview a theme
+across the entire interface. Saving persists the choice for the next launch.
+Custom themes are small semantic YAML files; see
+[Themes and Customization](CUSTOMIZATION.md) for paths, examples, and safe
+fallback behavior.
 
 ## Why Volt?
 
@@ -131,11 +143,31 @@ volt
 ```
 **Basic usage:**
 - Type a URL and press `Alt+Enter` (`Option+Enter` on macOS) to make a request
-- Press `?` to see all keybindings
+- Press `Ctrl+L` in the request panel to configure a load test
+- Press `?`, then use `h/l` to move between Help and Settings
+- Use `Ctrl+E` and `Ctrl+W` to move between panels
+- Press `F1` anywhere to see every keybinding
 - Press `Esc` twice to quit, or `Ctrl+C` to quit immediately
 
 See the [keybindings guide](docs/keybindings.md) for every contextual shortcut
 and macOS Option-key setup.
+
+## Interactive Load Testing
+
+Volt uses the same load engine in its TUI and CLI. In the request panel, press
+`Ctrl+L`, configure concurrency, total requests, an optional QPS limit, and a
+timeout, then focus `RUN LOAD TEST` or press `Alt+Enter`.
+
+While the test runs, Volt prioritizes the results workspace and shows:
+
+- Exact completed and total request counts with bounded progress
+- Current throughput, p50 latency, and error rate
+- A rolling interval-latency sparkline
+- Explicit live, successful, and failed states
+
+Use `h/l` or `1`–`3` in the response panel to inspect Overview, Latency, and
+Errors without interrupting live updates. Press `Ctrl+X` to cancel an active
+test.
 
 ## AI Agents and CI
 
