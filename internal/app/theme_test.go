@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image/color"
 	"testing"
 
 	"charm.land/lipgloss/v2"
@@ -37,6 +38,7 @@ func TestApplyThemePreservesApplicationState(t *testing.T) {
 	assert.Equal(t, "mono", model.theme.Name)
 	assert.Equal(t, "mono", model.themeSource)
 	assert.Equal(t, "Keep this request", model.requestPane.NameInput.Value())
-	assert.Equal(t, lipgloss.NoColor{}, model.styles.Text.Value.GetForeground())
-	assert.Equal(t, lipgloss.NoColor{}, model.requestPane.MethodSelector.GetStyle().GetForeground())
+	noColor := color.Color(lipgloss.NoColor{})
+	assert.Equal(t, noColor, model.styles.Text.Value.GetForeground())
+	assert.Equal(t, noColor, model.requestPane.MethodSelector.GetStyle().GetForeground())
 }
