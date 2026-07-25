@@ -40,6 +40,8 @@ type Model struct {
 	loadTestCanceled bool
 	showHelpModal    bool
 	notification     ui.Notification
+	themeSession     design.ThemeLoadResult
+	themeSessionOpen bool
 	quitArmed        bool
 	quitSequence     uint64
 }
