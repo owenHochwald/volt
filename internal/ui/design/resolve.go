@@ -13,7 +13,6 @@ import (
 func ParseThemeConfig(data []byte) (ThemeConfig, error) {
 	var config ThemeConfig
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
 	if err := decoder.Decode(&config); err != nil {
 		return ThemeConfig{}, fmt.Errorf("parse theme: %w", err)
 	}
@@ -90,9 +89,6 @@ func ResolveThemeConfig(config ThemeConfig) (Theme, error) {
 		applied = true
 	}
 
-	if len(config.Components) > 0 {
-		return Theme{}, fmt.Errorf("component overrides are not supported by schema version 1 yet")
-	}
 	if !applied {
 		return Theme{}, fmt.Errorf("theme must override at least one color")
 	}
