@@ -1,7 +1,6 @@
 package design
 
 import (
-	"encoding/json"
 	"image/color"
 	"testing"
 
@@ -19,16 +18,16 @@ func TestColorValueAcceptsDocumentedFormats(t *testing.T) {
 		color      color.Color
 	}{
 		{
-			name:       "JSON true color",
+			name:       "YAML true color",
 			input:      `"#a1b2c3"`,
-			unmarshal:  json.Unmarshal,
+			unmarshal:  yaml.Unmarshal,
 			normalized: "#A1B2C3",
 			color:      lipgloss.Color("#A1B2C3"),
 		},
 		{
-			name:       "JSON ANSI number",
+			name:       "YAML ANSI number",
 			input:      `135`,
-			unmarshal:  json.Unmarshal,
+			unmarshal:  yaml.Unmarshal,
 			normalized: "135",
 			color:      lipgloss.Color("135"),
 		},
@@ -49,7 +48,7 @@ func TestColorValueAcceptsDocumentedFormats(t *testing.T) {
 		{
 			name:       "terminal default",
 			input:      `"default"`,
-			unmarshal:  json.Unmarshal,
+			unmarshal:  yaml.Unmarshal,
 			normalized: "default",
 			color:      lipgloss.NoColor{},
 		},
@@ -80,7 +79,7 @@ func TestColorValueRejectsInvalidValues(t *testing.T) {
 	} {
 		t.Run(input, func(t *testing.T) {
 			var value ColorValue
-			assert.Error(t, json.Unmarshal([]byte(input), &value))
+			assert.Error(t, yaml.Unmarshal([]byte(input), &value))
 		})
 	}
 }
