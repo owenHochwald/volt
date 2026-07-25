@@ -10,6 +10,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -64,8 +65,9 @@ type RequestPane struct {
 
 	RequestInProgress bool
 
-	DB   *storage.SQLiteStorage
-	keys keybindings.KeyMap
+	DB     *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	styles design.Styles
 
 	// Load test mode fields
 	LoadTestMode        bool
