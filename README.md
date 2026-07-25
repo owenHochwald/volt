@@ -157,7 +157,7 @@ volt bench \
 Today, CI consumers must inspect the JSON result because HTTP request failures
 do not automatically make the Volt process exit nonzero. Stable assertions,
 exit codes, secret-safe inputs, scenario files, comparison reports, and
-CI-native output are planned in [`TASKS.md`](TASKS.md).
+CI-native output are planned as future milestones.
 
 ## CLI Load Testing
 
