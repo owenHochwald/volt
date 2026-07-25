@@ -1,9 +1,15 @@
 package app
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
 )
+
+type themeSelectionSavedMsg struct {
+	themeName string
+	err       error
+}
 
 func (m *Model) applyTheme(theme design.Theme, source string) {
 	styles := design.NewStyles(theme)
@@ -64,5 +70,14 @@ func isBuiltInTheme(source string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func saveThemeSelectionCmd(source, themeName string) tea.Cmd {
+	return func() tea.Msg {
+		return themeSelectionSavedMsg{
+			themeName: themeName,
+			err:       design.SaveThemeSelection(source),
+		}
 	}
 }
