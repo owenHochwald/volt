@@ -1,13 +1,44 @@
 package storage
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/pressly/goose/v3"
 )
+
+type recordingGooseLogger struct {
+	output *bytes.Buffer
+}
+
+func (l recordingGooseLogger) Printf(format string, values ...interface{}) {
+	_, _ = fmt.Fprintf(l.output, format, values...)
+}
+
+func (l recordingGooseLogger) Fatalf(format string, values ...interface{}) {
+	_, _ = fmt.Fprintf(l.output, format, values...)
+}
+
+func TestNewSQLiteStorageSilencesMigrationLogs(t *testing.T) {
+	var output bytes.Buffer
+	goose.SetLogger(recordingGooseLogger{output: &output})
+	t.Cleanup(func() { goose.SetLogger(goose.NopLogger()) })
+
+	store, err := NewSQLiteStorage(t.TempDir() + "/volt.db")
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	if output.Len() != 0 {
+		t.Fatalf("migration logging was not silenced: %q", output.String())
+	}
+}
 
 func setupTestDB(t *testing.T) *SQLiteStorage {
 	t.Helper()
