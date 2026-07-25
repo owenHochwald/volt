@@ -1,41 +1,22 @@
 package responsepane
 
 import (
-	"charm.land/lipgloss/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
-// Tab styles
 var (
-	inactiveTab = lipgloss.NewStyle().
-			Padding(0, 1).
-			Foreground(lipgloss.Color("240")) // dimGray
+	responseStyles = design.NewStyles(design.DefaultTheme())
 
-	activeTab = lipgloss.NewStyle().
-			Padding(0, 2).
-			Background(lipgloss.Color("98")). // darkPurple
-			Foreground(lipgloss.Color("255")).
-			Bold(true)
-)
+	inactiveTab = responseStyles.Tabs.Inactive
+	activeTab   = responseStyles.Tabs.Active
 
-// Content styles
-var (
-	responseKeyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true) // focusColor/Pink for keys
-	responseValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))            // Light gray for values
-	responseLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("93")).Bold(true)  // deepViolet for labels
-)
+	responseKeyStyle   = responseStyles.Text.ResponseKey
+	responseValueStyle = responseStyles.Text.Value
+	responseLabelStyle = responseStyles.Text.ResponseLabel
 
-// Status styles
-var (
-	errorStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("196")).
-			Foreground(lipgloss.Color("255")).
-			Padding(0, 1).
-			Bold(true)
+	errorStyle = responseStyles.Badge.Error
 
-	loadTestStatusStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
-				Padding(0, 1)
+	loadTestStatusStyle = responseStyles.Badge.Live
 
-	faintStyle = lipgloss.NewStyle().Faint(true)
+	faintStyle = responseStyles.Text.Faint
 )
