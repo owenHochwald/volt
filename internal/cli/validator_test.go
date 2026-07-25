@@ -112,6 +112,29 @@ func TestBenchConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "negative duration",
+			config: &BenchConfig{
+				URL:         "http://example.com",
+				Method:      "GET",
+				Concurrency: 10,
+				Duration:    -time.Second,
+				Timeout:     30 * time.Second,
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative total requests",
+			config: &BenchConfig{
+				URL:           "http://example.com",
+				Method:        "GET",
+				Concurrency:   10,
+				Duration:      10 * time.Second,
+				TotalRequests: -1,
+				Timeout:       30 * time.Second,
+			},
+			wantErr: true,
+		},
+		{
 			name: "zero timeout",
 			config: &BenchConfig{
 				URL:         "http://example.com",

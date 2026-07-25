@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -76,7 +77,7 @@ func BenchmarkEngine_SingleRequest(b *testing.B) {
 					Timeout:       5 * time.Second,
 				}
 
-				config.Run(updates)
+				config.Run(context.Background(), updates)
 				<-done
 			}
 		})
@@ -120,7 +121,7 @@ func BenchmarkEngine_Throughput(b *testing.B) {
 				Timeout:       5 * time.Second,
 			}
 
-			config.Run(updates)
+			config.Run(context.Background(), updates)
 			<-done
 
 			b.StopTimer()
@@ -161,7 +162,7 @@ func BenchmarkEngine_Latency(b *testing.B) {
 		Timeout:       10 * time.Second,
 	}
 
-	config.Run(updates)
+	config.Run(context.Background(), updates)
 	<-done
 
 	b.StopTimer()

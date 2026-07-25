@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -24,50 +25,34 @@ func RunBench(config *BenchConfig) error {
 		Body:    config.Body,
 	}
 
-	// Calculate total requests if duration-based
-	totalRequests := config.TotalRequests
-	if totalRequests == 0 {
-		estimatedReqsPerWorkerPerSec := 1000
-		totalRequests = config.Concurrency * int(config.Duration.Seconds()) * estimatedReqsPerWorkerPerSec
-
-		if totalRequests < 1 {
-			totalRequests = 1
-		}
-	}
-
 	jobConfig := &http.JobConfig{
-		Request:       req,
-		Concurrency:   config.Concurrency,
-		TotalRequests: totalRequests,
-		Timeout:       config.Timeout,
-		QPS:           float64(config.RateLimit),
-		StreamUpdates: false,
+		Request:          req,
+		Concurrency:      config.Concurrency,
+		TotalRequests:    config.TotalRequests,
+		Duration:         config.Duration,
+		Timeout:          config.Timeout,
+		QPS:              float64(config.RateLimit),
+		DisableKeepAlive: !config.KeepAlive,
+		StreamUpdates:    false,
 	}
 
 	updates := make(chan *http.LoadTestStats, 1000)
 
-	// Handle Ctrl+C gracefully
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-
-	go jobConfig.Run(updates)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go jobConfig.Run(ctx, updates)
 
 	var finalStats *http.LoadTestStats
-	for {
-		select {
-		case stats, ok := <-updates:
-			if !ok {
-				// Channel closed, test complete
-				return FormatOutput(finalStats, config)
-			}
+	for stats := range updates {
+		if stats != nil {
 			finalStats = stats
-
-		case <-sigCh:
-			fmt.Fprintln(os.Stderr, "\nTest interrupted by user")
-			if finalStats != nil {
-				return FormatOutput(finalStats, config)
-			}
-			return nil
 		}
 	}
+	if ctx.Err() != nil {
+		fmt.Fprintln(os.Stderr, "\nTest interrupted by user")
+	}
+	if finalStats == nil {
+		return nil
+	}
+	return FormatOutput(finalStats, config)
 }

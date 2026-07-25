@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -91,7 +92,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// start load test in background
 		go func() {
-			msg.Config.Run(updates)
+			msg.Config.Run(context.Background(), updates)
 		}()
 
 		m.responsePane.ClearLoadTestStats()
