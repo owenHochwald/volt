@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
@@ -94,4 +95,62 @@ func isBuiltInThemeSource(source string) bool {
 	default:
 		return false
 	}
+}
+
+func (m ShortcutPane) renderSettings() string {
+	lines := []string{m.styles.Text.Logo.Render("APPEARANCE"), ""}
+	for index, option := range m.themeOptions {
+		marker := m.styles.Text.Muted.Render("│")
+		nameStyle := m.styles.Text.Value
+		if index == m.themeIndex {
+			marker = m.styles.Text.Logo.Render("┃")
+			nameStyle = m.styles.Text.Logo
+		}
+
+		kind := "custom YAML"
+		if isBuiltInThemeSource(option.Source) {
+			kind = "built-in"
+		}
+		state := ""
+		if index == m.savedTheme {
+			state = m.styles.Notice.Success.Render("  ACTIVE")
+		}
+		line := lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			marker,
+			" ",
+			nameStyle.Render(option.Name),
+			m.styles.Text.Muted.Render("  "+kind),
+			state,
+		)
+		lines = append(lines, line)
+		if index == m.themeIndex && option.Description != "" {
+			lines = append(lines, m.styles.Text.Muted.Render("  "+option.Description))
+		}
+	}
+
+	if option, ok := m.activeThemeOption(); ok {
+		lines = append(
+			lines,
+			"",
+			m.styles.Text.Label.Render("LIVE PREVIEW"),
+			lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				m.styles.Text.Logo.Render("┃ FOCUS"),
+				"  ",
+				m.styles.Action.Focused.Render("SEND"),
+				"  ",
+				m.styles.Notice.Success.Render("✓ 200"),
+				"  ",
+				m.styles.Notice.Warning.Render("! WARN"),
+				"  ",
+				m.styles.Notice.Error.Render("× ERROR"),
+				"  ",
+				m.styles.Method.GET.Render("GET"),
+			),
+			m.styles.Text.Muted.Render("source: "+option.Source),
+		)
+	}
+
+	return strings.Join(lines, "\n")
 }
