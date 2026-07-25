@@ -162,6 +162,13 @@ func (s PanelStyles) ForState(focused, running bool) lipgloss.Style {
 	return s.Base
 }
 
+func (s PanelStyles) Apply(base lipgloss.Style, focused, running bool) lipgloss.Style {
+	state := s.ForState(focused, running)
+	return base.
+		BorderForeground(state.GetBorderLeftForeground()).
+		Bold(state.GetBold())
+}
+
 func (s StatusStyles) ForCode(statusCode int) lipgloss.Style {
 	switch statusCode / 100 {
 	case 2:
