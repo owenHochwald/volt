@@ -4,30 +4,25 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 func (m ShortcutPane) View() string {
-	// Modal container style
+	styles := design.NewStyles(design.DefaultTheme())
 	modalStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("205")).
+		BorderForeground(styles.Panel.Focused.GetBorderLeftForeground()).
 		Padding(1, 2).
 		Width(m.width).
 		Height(m.height).
 		Bold(true)
 
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Render("Keyboard Shortcuts")
+	title := styles.Text.Logo.Render("Keyboard Shortcuts")
 
 	tabBar := m.renderTabs()
 	content := m.renderShortcutList()
 
-	// Footer hint
-	footer := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Render(m.keys.CloseHelp.Help().Key + " " + m.keys.CloseHelp.Help().Desc)
+	footer := styles.Text.Muted.Render(m.keys.CloseHelp.Help().Key + " " + m.keys.CloseHelp.Help().Desc)
 
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -57,23 +52,14 @@ func (m ShortcutPane) renderShortcutList() string {
 	}
 	keyColumnWidth = min(keyColumnWidth, max(m.width/2, 15))
 
-	// Tab name header
-	header := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Render(tab.Name + ":")
+	styles := design.NewStyles(design.DefaultTheme())
+	header := styles.Text.Logo.Render(tab.Name + ":")
 	lines = append(lines, header, "")
 
 	// Shortcut list
 	for _, shortcut := range tab.Shortcuts {
-		keyStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true)
-
-		key := keyStyle.Render(lipgloss.NewStyle().Width(keyColumnWidth).Render(shortcut.Key))
-		desc := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Render(shortcut.Description)
+		key := styles.Text.Logo.Render(lipgloss.NewStyle().Width(keyColumnWidth).Render(shortcut.Key))
+		desc := styles.Text.Value.Render(shortcut.Description)
 
 		line := lipgloss.JoinHorizontal(lipgloss.Left, "  ", key, desc)
 		lines = append(lines, line)
