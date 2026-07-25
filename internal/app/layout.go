@@ -2,7 +2,6 @@ package app
 
 import (
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 const (
@@ -95,9 +94,9 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	}
 
 	if layout.mode == layoutWide {
-		sidebarWidth, sidebarHeight := contentSize(ui.SidebarStyle, layout.sidebarWidth, layout.contentHeight)
-		requestWidth, requestHeight := contentSize(ui.RequestStyle, layout.mainWidth, layout.requestHeight)
-		responseWidth, responseHeight := contentSize(ui.ResponseStyle, layout.mainWidth, layout.responseHeight)
+		sidebarWidth, sidebarHeight := contentSize(m.styles.Panel.Sidebar, layout.sidebarWidth, layout.contentHeight)
+		requestWidth, requestHeight := contentSize(m.styles.Panel.Base, layout.mainWidth, layout.requestHeight)
+		responseWidth, responseHeight := contentSize(m.styles.Panel.Base, layout.mainWidth, layout.responseHeight)
 		m.sidebarPane.SetSize(sidebarWidth, sidebarHeight)
 		m.requestPane.SetSize(requestWidth, requestHeight)
 		m.responsePane.SetWidth(responseWidth)
@@ -105,9 +104,9 @@ func (m *Model) applyLayout(layout terminalLayout) {
 		return
 	}
 
-	sidebarWidth, sidebarHeight := contentSize(ui.SidebarStyle, layout.width, layout.contentHeight)
-	requestWidth, requestHeight := contentSize(ui.RequestStyle, layout.width, layout.contentHeight)
-	responseWidth, responseHeight := contentSize(ui.ResponseStyle, layout.width, layout.contentHeight)
+	sidebarWidth, sidebarHeight := contentSize(m.styles.Panel.Sidebar, layout.width, layout.contentHeight)
+	requestWidth, requestHeight := contentSize(m.styles.Panel.Base, layout.width, layout.contentHeight)
+	responseWidth, responseHeight := contentSize(m.styles.Panel.Base, layout.width, layout.contentHeight)
 	m.sidebarPane.SetSize(sidebarWidth, sidebarHeight)
 	m.requestPane.SetSize(requestWidth, requestHeight)
 	m.responsePane.SetWidth(responseWidth)
