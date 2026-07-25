@@ -34,6 +34,7 @@ type Model struct {
 	focusedPanel utils.Panel
 
 	width, height int
+	startupFrame  int
 
 	loadTestUpdates  <-chan *http.LoadTestStats
 	loadTestCancel   context.CancelFunc
