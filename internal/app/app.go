@@ -17,10 +17,11 @@ import (
 )
 
 type Model struct {
-	db     *storage.SQLiteStorage
-	keys   keybindings.KeyMap
-	theme  design.Theme
-	styles design.Styles
+	db          *storage.SQLiteStorage
+	keys        keybindings.KeyMap
+	theme       design.Theme
+	styles      design.Styles
+	themeSource string
 
 	sidebarPane  *ui.SidebarPane
 	requestPane  requestpane.RequestPane
@@ -43,9 +44,16 @@ type Model struct {
 	quitSequence     uint64
 }
 
-func SetupModel(db *storage.SQLiteStorage) Model {
+func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoadResult) Model {
 	keys := keybindings.DefaultKeyMap()
-	theme := design.DefaultTheme()
+	appearance := design.ThemeLoadResult{
+		Theme:  design.DefaultTheme(),
+		Source: "default",
+	}
+	if len(optionalAppearance) > 0 {
+		appearance = optionalAppearance[0]
+	}
+	theme := appearance.Theme
 	styles := design.NewStyles(theme)
 	responsePane := responsepane.SetupResponsePane(keys, styles)
 	shortcutPane := shortcutpane.SetupShortcutPane(keys, styles)
@@ -55,6 +63,7 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		keys:          keys,
 		theme:         theme,
 		styles:        styles,
+		themeSource:   appearance.Source,
 		sidebarPane:   ui.NewSidebar(db, keys, styles),
 		requestPane:   requestpane.SetupRequestPane(db, keys, styles),
 		responsePane:  &responsePane,
@@ -64,6 +73,12 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		showHelpModal: false,
 		width:         80,
 		height:        24,
+	}
+	if appearance.Warning != "" {
+		m.notification = ui.Notification{
+			Level: ui.NotificationWarning,
+			Text:  appearance.Warning,
+		}
 	}
 	m.setFocusedPanel(utils.SidebarPanel)
 	m.applyLayout(calculateLayout(m.width, m.height))
