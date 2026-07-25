@@ -56,7 +56,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case startupAdvanceMsg:
+		m.setStartupFrame(msg.frame)
+		if m.startupFrame < ui.HeaderFrameCompact {
+			return m, startupAdvanceCmd(m.startupFrame+1, m.theme.Motion)
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
+		m.setStartupFrame(ui.HeaderFrameCompact)
 		if keybindings.Matches(msg, m.keys.ForceQuit) {
 			if m.loadTestCancel != nil {
 				m.loadTestCancel()
@@ -308,7 +316,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.applyLayout(calculateLayout(m.width, m.height))
+		m.applyLayout(m.currentLayout())
 	}
 
 	// Existing panel update routing (only when help modal is closed)
