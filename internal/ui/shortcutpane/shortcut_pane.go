@@ -2,6 +2,7 @@ package shortcutpane
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -13,6 +14,7 @@ type ShortcutPane struct {
 
 	Focused bool
 	keys    keybindings.KeyMap
+	styles  design.Styles
 }
 
 func (m ShortcutPane) Init() tea.Cmd {
