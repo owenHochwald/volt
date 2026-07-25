@@ -6,25 +6,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/http"
-)
-
-var (
-	methodStyleBase = lipgloss.NewStyle().
-			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.NormalBorder())
-
-	getMethodStyle    = methodStyleBase.Foreground(lipgloss.Color("42"))  // Green
-	postMethodStyle   = methodStyleBase.Foreground(lipgloss.Color("214")) // Orange
-	putMethodStyle    = methodStyleBase.Foreground(lipgloss.Color("117")) // Blue
-	patchMethodStyle  = methodStyleBase.Foreground(lipgloss.Color("141")) // Purple
-	deleteMethodStyle = methodStyleBase.Foreground(lipgloss.Color("196")) // Red
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 type MethodSelector struct {
 	methods       []string
 	currentMethod int
 	focused       bool
+	styles        design.Styles
 }
 
 func (m *MethodSelector) Focus() tea.Cmd {
@@ -55,27 +44,25 @@ func (m *MethodSelector) Prev() {
 
 func (m *MethodSelector) GetStyle() lipgloss.Style {
 	currMethod := m.Current()
-	var methodStyle lipgloss.Style
+	methodStyle := m.styles.Method.GET
 
 	switch currMethod {
 	case http.GET:
-		methodStyle = getMethodStyle
+		methodStyle = m.styles.Method.GET
 	case http.POST:
-		methodStyle = postMethodStyle
+		methodStyle = m.styles.Method.POST
 	case http.PUT:
-		methodStyle = putMethodStyle
+		methodStyle = m.styles.Method.PUT
 	case http.PATCH:
-		methodStyle = patchMethodStyle
+		methodStyle = m.styles.Method.PATCH
 	case http.DELETE:
-		methodStyle = deleteMethodStyle
-	default:
-		methodStyle = methodStyleBase
+		methodStyle = m.styles.Method.DELETE
 	}
 
 	if m.focused {
-		methodStyle = methodStyle.BorderForeground(focusColor)
+		methodStyle = methodStyle.BorderForeground(m.styles.Panel.Focused.GetBorderLeftForeground())
 	} else {
-		methodStyle = methodStyle.BorderForeground(unfocusColor)
+		methodStyle = methodStyle.BorderForeground(m.styles.Panel.Base.GetBorderLeftForeground())
 	}
 
 	return methodStyle
@@ -92,8 +79,12 @@ func (m *MethodSelector) SetCurrentIndex(method string) {
 	}
 }
 
-func NewMethodSelector() *MethodSelector {
+func NewMethodSelector(optionalStyles ...design.Styles) *MethodSelector {
+	styles := design.NewStyles(design.DefaultTheme())
 
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
 	methods := []string{
 		http.GET,
 		http.POST,
@@ -106,5 +97,6 @@ func NewMethodSelector() *MethodSelector {
 		methods:       methods,
 		currentMethod: 0,
 		focused:       false,
+		styles:        styles,
 	}
 }
