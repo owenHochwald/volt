@@ -32,6 +32,10 @@ func (m *ResponsePane) SetFocused(focused bool) {
 	// Response pane doesn't currently use focus state, but implements interface for consistency
 }
 
+func (m *ResponsePane) SetStyles(styles design.Styles) {
+	m.styles = styles
+}
+
 // SetResponse updates the response pane with a new HTTP response
 func (m *ResponsePane) SetResponse(response *http.Response) {
 	m.Response = response
