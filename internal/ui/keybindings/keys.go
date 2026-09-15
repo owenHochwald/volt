@@ -9,6 +9,8 @@ type KeyMap struct {
 	ShowHelp    key.Binding
 	CyclePanel  key.Binding
 	EscapePanel key.Binding
+	OpenGroups  key.Binding
+	OpenImport  key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
@@ -37,6 +39,13 @@ type KeyMap struct {
 	CloseHelp key.Binding
 	NextTab   key.Binding
 	PrevTab   key.Binding
+
+	// Groups & Servers Modal / Import Modal
+	CloseGroups key.Binding
+	CloseImport key.Binding
+	CreateItem  key.Binding
+	RenameItem  key.Binding
+	DeleteItem  key.Binding
 }
 
 // DefaultKeyMap returns the default keybinding configuration
@@ -58,6 +67,14 @@ func DefaultKeyMap() KeyMap {
 		EscapePanel: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "return to sidebar"),
+		),
+		OpenGroups: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "groups & servers"),
+		),
+		OpenImport: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "import OpenAPI spec"),
 		),
 
 		// Sidebar
@@ -145,6 +162,28 @@ func DefaultKeyMap() KeyMap {
 		PrevTab: key.NewBinding(
 			key.WithKeys("h", "left", "shift+tab"),
 			key.WithHelp("h/←/shift+tab", "previous tab"),
+		),
+
+		// Groups & Servers Modal / Import Modal
+		CloseGroups: key.NewBinding(
+			key.WithKeys("q", "esc"),
+			key.WithHelp("q/esc", "close"),
+		),
+		CloseImport: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "close"),
+		),
+		CreateItem: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new"),
+		),
+		RenameItem: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "rename"),
+		),
+		DeleteItem: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete"),
 		),
 	}
 }

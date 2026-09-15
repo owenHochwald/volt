@@ -54,11 +54,25 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 
 		}
+		// Best-effort: a group name is a display nicety, so a lookup
+		// failure just falls back to showing no group label.
+		groupNames := map[int64]string{}
+		if groups, err := s.db.ListGroups(); err == nil {
+			for _, g := range groups {
+				groupNames[g.ID] = g.Name
+			}
+		}
 		items := make([]list.Item, 0, len(msg.Requests))
 		for _, req := range msg.Requests {
+			desc := req.URL[max(len(req.URL)-10, 0):]
+			if req.GroupID != nil {
+				if name, ok := groupNames[*req.GroupID]; ok {
+					desc = fmt.Sprintf("[%s] %s", name, desc)
+				}
+			}
 			items = append(items, RequestItem{
 				title:   req.Name,
-				desc:    req.URL[max(len(req.URL)-10, 0):],
+				desc:    desc,
 				Request: &req,
 			})
 		}

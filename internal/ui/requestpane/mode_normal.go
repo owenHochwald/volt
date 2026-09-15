@@ -67,7 +67,7 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 		m.Stopwatch.Reset()
 		stopwatchCmd := m.Stopwatch.Start()
 
-		return m, tea.Batch(stopwatchCmd, sendRequestCmd(m.Client, m.Request))
+		return m, tea.Batch(stopwatchCmd, sendRequestCmd(m.Client, m.resolvedRequest()))
 	}
 	return m, nil
 }

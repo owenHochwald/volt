@@ -4,6 +4,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/groupspane"
+	"github.com/owenHochwald/Volt/internal/ui/importpane"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
@@ -16,8 +18,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
+
 		// Handle '?' to toggle help modal
-		if keybindings.Matches(msg, m.keys.ShowHelp) && !m.showHelpModal && m.focusedPanel != utils.RequestPanel {
+		if keybindings.Matches(msg, m.keys.ShowHelp) && noModalOpen && m.focusedPanel != utils.RequestPanel {
 			m.showHelpModal = true
 			m.shortcutPane.SetFocused(true)
 			return m, nil
@@ -28,6 +32,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var shortcutModel tea.Model
 			shortcutModel, cmd = m.shortcutPane.Update(msg)
 			m.shortcutPane = shortcutModel.(shortcutpane.ShortcutPane)
+			return m, cmd
+		}
+
+		// Handle 'g' to toggle the groups & servers manager
+		if keybindings.Matches(msg, m.keys.OpenGroups) && noModalOpen && m.focusedPanel != utils.RequestPanel {
+			m.showGroupsModal = true
+			m.groupsPane.Open()
+			return m, nil
+		}
+
+		// If the groups modal is open, route ALL messages to it
+		if m.showGroupsModal {
+			var groupsModel tea.Model
+			groupsModel, cmd = m.groupsPane.Update(msg)
+			m.groupsPane = groupsModel.(groupspane.GroupsPane)
+			return m, cmd
+		}
+
+		// Handle 'i' to toggle the OpenAPI import dialog
+		if keybindings.Matches(msg, m.keys.OpenImport) && noModalOpen && m.focusedPanel != utils.RequestPanel {
+			m.showImportModal = true
+			m.importPane.Open()
+			return m, nil
+		}
+
+		// If the import modal is open, route ALL messages to it
+		if m.showImportModal {
+			var importModel tea.Model
+			importModel, cmd = m.importPane.Update(msg)
+			m.importPane = importModel.(importpane.ImportPane)
 			return m, cmd
 		}
 
@@ -57,6 +91,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showHelpModal = false
 		m.shortcutPane.SetFocused(false)
 		return m, nil
+
+	case groupspane.CloseGroupsModalMsg:
+		m.showGroupsModal = false
+		m.groupsPane.SetFocused(false)
+		// Group renames/assignments made in the modal only take effect in
+		// the sidebar's "[group] ..." labels once requests are reloaded.
+		return m, ui.LoadRequestsCmd(m.db)
+
+	case importpane.CloseImportModalMsg:
+		m.showImportModal = false
+		m.importPane.SetFocused(false)
+		// Refresh the sidebar in case the import added new requests.
+		return m, ui.LoadRequestsCmd(m.db)
+
+	case importpane.ImportResultMsg:
+		var importModel tea.Model
+		importModel, cmd = m.importPane.Update(msg)
+		m.importPane = importModel.(importpane.ImportPane)
+		return m, cmd
 
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
@@ -135,13 +188,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.shortcutPane.SetWidth(modalWidth)
 		m.shortcutPane.SetHeight(modalHeight)
+		m.groupsPane.SetWidth(modalWidth)
+		m.groupsPane.SetHeight(modalHeight)
+		m.importPane.SetWidth(modalWidth)
+		m.importPane.SetHeight(modalHeight)
 
 		// Existing size handling for other panels
 		m.sidebarPane.SetSize(m.width/2, (m.height-15)/2)
 	}
 
-	// Existing panel update routing (only when help modal is closed)
-	if !m.showHelpModal {
+	// Existing panel update routing (only when no modal is open)
+	if !m.showHelpModal && !m.showGroupsModal && !m.showImportModal {
 		if m.focusedPanel == utils.SidebarPanel {
 			var sidebarPaneModel tea.Model
 			sidebarPaneModel, cmd = m.sidebarPane.Update(msg)

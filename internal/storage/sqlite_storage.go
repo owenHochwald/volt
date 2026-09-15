@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,9 +83,11 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	if err != nil {
 		return err
 	}
-	q := `INSERT INTO requests (name, method, url, headers, body) VALUES (?, ?, ?, ?, ?)`
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id) VALUES (?, ?, ?, ?, ?, ?)`
 
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body)
+	// database/sql's default converter turns a nil *int64 into SQL NULL and
+	// dereferences a non-nil one, so request.GroupID can be passed as-is.
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID)
 	if err != nil {
 		return err
 	}
@@ -97,7 +100,7 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -114,9 +117,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			url     string
 			headers string
 			body    string
+			groupID sql.NullInt64
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID); err != nil {
 			return nil, err
 
 		}
@@ -131,6 +135,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			URL:     url,
 			Headers: headersMap,
 			Body:    body,
+		}
+		if groupID.Valid {
+			gid := groupID.Int64
+			request.GroupID = &gid
 		}
 		requests = append(requests, request)
 	}
@@ -170,4 +178,247 @@ func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
 		urls = append(urls, url)
 	}
 	return urls, nil
+}
+
+func checkRowsAffected(res sql.Result, kind, identifier string) error {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("%s not found: %s", kind, identifier)
+	}
+	return nil
+}
+
+// --- Servers ---
+// A Server is a named base URL (e.g. "prod" -> https://api.example.com)
+// that request groups can point at, so a group's requests can be
+// redirected at a different host just by switching servers.
+
+func (s *SQLiteStorage) SaveServer(server *http.Server) error {
+	q := `INSERT INTO servers (name, base_url) VALUES (?, ?)`
+	res, err := s.db.Exec(q, server.Name, server.BaseURL)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	server.ID = id
+	return nil
+}
+
+func (s *SQLiteStorage) GetServerByName(name string) (*http.Server, error) {
+	q := `SELECT id, name, base_url FROM servers WHERE name = ?`
+	var server http.Server
+	err := s.db.QueryRow(q, name).Scan(&server.ID, &server.Name, &server.BaseURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &server, nil
+}
+
+func (s *SQLiteStorage) ListServers() ([]http.Server, error) {
+	q := `SELECT id, name, base_url FROM servers ORDER BY name`
+	rows, err := s.db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var servers []http.Server
+	for rows.Next() {
+		var server http.Server
+		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL); err != nil {
+			return nil, err
+		}
+		servers = append(servers, server)
+	}
+	return servers, nil
+}
+
+// UpsertServer creates a server with the given name and base URL, or
+// updates its base URL if a server with that name already exists.
+func (s *SQLiteStorage) UpsertServer(name, baseURL string) (*http.Server, error) {
+	existing, err := s.GetServerByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		if err := s.UpdateServerURL(name, baseURL); err != nil {
+			return nil, err
+		}
+		existing.BaseURL = baseURL
+		return existing, nil
+	}
+	server := &http.Server{Name: name, BaseURL: baseURL}
+	if err := s.SaveServer(server); err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+func (s *SQLiteStorage) UpdateServerURL(name, baseURL string) error {
+	q := `UPDATE servers SET base_url = ? WHERE name = ?`
+	res, err := s.db.Exec(q, baseURL, name)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "server", name)
+}
+
+func (s *SQLiteStorage) RenameServer(oldName, newName string) error {
+	q := `UPDATE servers SET name = ? WHERE name = ?`
+	res, err := s.db.Exec(q, newName, oldName)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "server", oldName)
+}
+
+func (s *SQLiteStorage) DeleteServer(name string) error {
+	q := `DELETE FROM servers WHERE name = ?`
+	res, err := s.db.Exec(q, name)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "server", name)
+}
+
+// --- Request groups ---
+// A Group is a one-level folder for saved requests, optionally bound to a
+// Server so its requests' relative URLs resolve against that server.
+
+func (s *SQLiteStorage) SaveGroup(group *http.Group) error {
+	q := `INSERT INTO request_groups (name, server_id) VALUES (?, ?)`
+	res, err := s.db.Exec(q, group.Name, group.ServerID)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	group.ID = id
+	return nil
+}
+
+func (s *SQLiteStorage) GetGroupByName(name string) (*http.Group, error) {
+	q := `SELECT id, name, server_id FROM request_groups WHERE name = ?`
+	var group http.Group
+	var serverID sql.NullInt64
+	err := s.db.QueryRow(q, name).Scan(&group.ID, &group.Name, &serverID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if serverID.Valid {
+		id := serverID.Int64
+		group.ServerID = &id
+	}
+	return &group, nil
+}
+
+// GetOrCreateGroup returns the named group, creating an empty one (no
+// server assigned) if it doesn't already exist.
+func (s *SQLiteStorage) GetOrCreateGroup(name string) (*http.Group, error) {
+	existing, err := s.GetGroupByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+	group := &http.Group{Name: name}
+	if err := s.SaveGroup(group); err != nil {
+		return nil, err
+	}
+	return group, nil
+}
+
+func (s *SQLiteStorage) ListGroups() ([]http.Group, error) {
+	q := `SELECT id, name, server_id FROM request_groups ORDER BY name`
+	rows, err := s.db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []http.Group
+	for rows.Next() {
+		var group http.Group
+		var serverID sql.NullInt64
+		if err := rows.Scan(&group.ID, &group.Name, &serverID); err != nil {
+			return nil, err
+		}
+		if serverID.Valid {
+			id := serverID.Int64
+			group.ServerID = &id
+		}
+		groups = append(groups, group)
+	}
+	return groups, nil
+}
+
+func (s *SQLiteStorage) SetGroupServer(groupName, serverName string) error {
+	server, err := s.GetServerByName(serverName)
+	if err != nil {
+		return err
+	}
+	if server == nil {
+		return fmt.Errorf("server not found: %s", serverName)
+	}
+	q := `UPDATE request_groups SET server_id = ? WHERE name = ?`
+	res, err := s.db.Exec(q, server.ID, groupName)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "group", groupName)
+}
+
+func (s *SQLiteStorage) RenameGroup(oldName, newName string) error {
+	q := `UPDATE request_groups SET name = ? WHERE name = ?`
+	res, err := s.db.Exec(q, newName, oldName)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "group", oldName)
+}
+
+func (s *SQLiteStorage) DeleteGroup(name string) error {
+	q := `DELETE FROM request_groups WHERE name = ?`
+	res, err := s.db.Exec(q, name)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "group", name)
+}
+
+// ResolveEffectiveURL returns request.URL unchanged if it's already
+// absolute or belongs to no group. Otherwise it looks up the request's
+// group and, if one is configured, joins the URL onto that server's base
+// URL. With no group or no server configured, the relative URL is
+// returned as-is.
+func (s *SQLiteStorage) ResolveEffectiveURL(request *http.Request) (string, error) {
+	if request.IsAbsoluteURL() || request.GroupID == nil {
+		return request.URL, nil
+	}
+
+	q := `SELECT s.base_url FROM request_groups g JOIN servers s ON s.id = g.server_id WHERE g.id = ?`
+	var baseURL string
+	err := s.db.QueryRow(q, *request.GroupID).Scan(&baseURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return request.URL, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return request.EffectiveURL(&http.Server{BaseURL: baseURL}), nil
 }

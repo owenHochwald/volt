@@ -143,6 +143,60 @@ loop:
 	assert.NotNil(t, finalStats.Percentiles, "Percentiles are nil")
 }
 
+func TestJobConfig_RunDuration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	request := NewDefaultRequest()
+	request.URL = server.URL
+	request.Method = "GET"
+
+	testDuration := 300 * time.Millisecond
+	config := &JobConfig{
+		Request:     request,
+		Concurrency: 5,
+		Duration:    testDuration,
+		Timeout:     5 * time.Second,
+	}
+
+	updates := make(chan *LoadTestStats, 10)
+
+	start := time.Now()
+	go func() {
+		config.Run(updates)
+	}()
+
+	var finalStats *LoadTestStats
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
+loop:
+	for {
+		select {
+		case stats, ok := <-updates:
+			if !ok {
+				break loop
+			}
+			if stats != nil {
+				finalStats = stats
+			}
+		case <-timer.C:
+			t.Fatal("Timeout waiting for load test to finish")
+		}
+	}
+	elapsed := time.Since(start)
+
+	assert.NotNil(t, finalStats, "Final stats are nil")
+	// The run should stop close to the requested duration rather than
+	// racing through an estimated fixed request count.
+	assert.GreaterOrEqual(t, elapsed, testDuration, "Test stopped before the requested duration elapsed")
+	assert.Less(t, elapsed, testDuration+2*time.Second, "Test ran far longer than the requested duration")
+	assert.Greater(t, finalStats.CompletedRequests, 0, "Expected at least one completed request")
+}
+
 func TestNewLoadTestStats(t *testing.T) {
 	stats := NewLoadTestStats(100)
 

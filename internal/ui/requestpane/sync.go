@@ -37,6 +37,24 @@ func (m *RequestPane) syncRequest() {
 	m.ParseErrors = append(headerErrors, bodyErrors...)
 }
 
+// resolvedRequest returns a copy of m.Request with its URL resolved against
+// its group's configured server, when the request belongs to a group and
+// stores a relative path (e.g. "/pets"). The stored request itself is left
+// untouched, so editing and saving keep operating on the raw URL as saved
+// (relative paths stay relative, so a later server change still applies).
+func (m *RequestPane) resolvedRequest() *http.Request {
+	if m.Request.GroupID == nil || m.DB == nil {
+		return m.Request
+	}
+	resolved, err := m.DB.ResolveEffectiveURL(m.Request)
+	if err != nil || resolved == m.Request.URL {
+		return m.Request
+	}
+	resolvedReq := *m.Request
+	resolvedReq.URL = resolved
+	return &resolvedReq
+}
+
 // buildJobConfig builds a load test job configuration from current input
 func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 	var parseErrors []string
@@ -88,8 +106,13 @@ func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 		return nil, fmt.Errorf("invalid request: %w", err)
 	}
 
+	resolvedReq := m.resolvedRequest()
+	if !resolvedReq.IsAbsoluteURL() {
+		return nil, fmt.Errorf("url %q belongs to a group with no server configured; set one with `volt group set-server`", resolvedReq.URL)
+	}
+
 	return &http.JobConfig{
-		Request:       m.Request,
+		Request:       resolvedReq,
 		Concurrency:   concurrency,
 		TotalRequests: totalRequests,
 		QPS:           qps,

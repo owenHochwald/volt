@@ -9,6 +9,29 @@ func PrintHelp() {
 USAGE:
   volt             Launch interactive TUI
   volt bench       Run CLI load test
+  volt import      Import request URLs from an OpenAPI 3.x spec
+  volt group       Manage request groups (one-level folders for saved requests)
+  volt server      Manage named servers that groups can point their requests at
+
+IMPORT FLAGS:
+  -group <name>     Import into this request group (created if missing)
+  -base-url <url>   Set/override the group's server URL, or (ungrouped) the base
+                     URL prefixed onto every imported request
+
+GROUP SUBCOMMANDS:
+  volt group create <name>                 Create an empty group
+  volt group list                          List groups and their assigned server
+  volt group rename <old> <new>            Rename a group
+  volt group set-server <group> <server>   Point a group's requests at a server
+  volt group delete <name>                 Delete a group (its requests are kept, ungrouped)
+
+SERVER SUBCOMMANDS:
+  volt server add <name> <base-url>        Add (or update) a named server
+  volt server list                         List servers
+  volt server set-url <name> <base-url>    Change a server's base URL - every
+                                            group pointing at it moves with it
+  volt server rename <old> <new>           Rename a server
+  volt server delete <name>                Delete a server
 
 BENCH FLAGS:
   -url <string>     Target URL (required)
@@ -27,6 +50,20 @@ BENCH FLAGS:
   -o <file>         Write results to file
 
 EXAMPLES:
+  # Import all endpoints from a local OpenAPI spec into the saved-requests library
+  volt import openapi.yaml
+
+  # Import into a group; requests resolve against that group's server, so
+  # switching servers later redirects the whole group at once
+  volt import -group petstore -base-url http://localhost:3000 openapi.yaml
+
+  # Point the "petstore" group at a different server, e.g. staging vs prod
+  volt server add staging https://staging.api.example.com
+  volt group set-server petstore staging
+
+  # Import but point requests at a local server instead of the spec's server
+  volt import -base-url http://localhost:3000 openapi.json
+
   # Basic throughput test
   volt bench -url http://localhost:8080 -c 100 -d 30s
 

@@ -42,9 +42,15 @@ func (m Model) View() string {
 	bottomPanels := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightSide)
 	mainView := lipgloss.JoinVertical(lipgloss.Top, m.headerView(m.width), bottomPanels)
 
-	// If help modal is open, overlay it on top
+	// If a modal is open, overlay it on top (only one can be open at once)
 	if m.showHelpModal {
 		return m.overlayHelpModal()
+	}
+	if m.showGroupsModal {
+		return m.overlayModal(m.groupsPane.View())
+	}
+	if m.showImportModal {
+		return m.overlayModal(m.importPane.View())
 	}
 
 	return mainView
@@ -79,18 +85,19 @@ func (m Model) responseView(height, width int) string {
 
 // overlayHelpModal renders the help modal centered over the main view
 func (m Model) overlayHelpModal() string {
-	helpModal := m.shortcutPane.View()
+	return m.overlayModal(m.shortcutPane.View())
+}
 
-	// Position modal in center using Place
-	overlay := lipgloss.Place(
+// overlayModal centers any modal's rendered content over a dimmed backdrop
+// covering the whole terminal, matching the help modal's presentation.
+func (m Model) overlayModal(modal string) string {
+	return lipgloss.Place(
 		m.width,
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
-		helpModal,
+		modal,
 		lipgloss.WithWhitespaceChars("░"),
 		lipgloss.WithWhitespaceForeground(lipgloss.Color("236")),
 	)
-
-	return overlay
 }

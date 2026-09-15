@@ -79,7 +79,8 @@ type JobConfig struct {
 
 	// Load parameters
 	Concurrency   int           // number of concurrent requests
-	TotalRequests int           // total requests to send
+	TotalRequests int           // total requests to send (0 when Duration is used instead)
+	Duration      time.Duration // if > 0, run for this long instead of a fixed request count
 	RateLimit     int           // max requests per second
 	Timeout       time.Duration // time per request
 	QPS           float64       // rate limit for queries per second
@@ -118,6 +119,16 @@ func (s *JobConfig) Run(updates chan<- *LoadTestStats) {
 	s.workerStatsCh = make(chan workerStatsMsg, s.Concurrency*4)
 
 	s.stopCh = make(chan struct{}, s.Concurrency)
+
+	// Duration-based tests: stop all workers once the time budget is up.
+	if s.Duration > 0 {
+		go func() {
+			timer := time.NewTimer(s.Duration)
+			defer timer.Stop()
+			<-timer.C
+			s.once.Do(func() { close(s.stopCh) })
+		}()
+	}
 
 	// Aggregate in background
 	go s.aggregateStats(updates)
@@ -202,15 +213,21 @@ func (s *JobConfig) runWorker(workerID int, wg *sync.WaitGroup) {
 		throttle = qpsTicker.C
 	}
 
-	requestsPerWorker := s.TotalRequests / s.Concurrency
-	remainder := s.TotalRequests % s.Concurrency
+	// Duration-based tests run until the timer in Run() closes stopCh;
+	// count-based tests run a fixed, pre-allocated share of TotalRequests.
+	unbounded := s.Duration > 0
+	requestsPerWorker := 0
+	if !unbounded {
+		requestsPerWorker = s.TotalRequests / s.Concurrency
+		remainder := s.TotalRequests % s.Concurrency
 
-	// First 'remainder' workers get one extra request
-	if workerID < remainder {
-		requestsPerWorker++
+		// First 'remainder' workers get one extra request
+		if workerID < remainder {
+			requestsPerWorker++
+		}
 	}
 
-	for i := 0; i < requestsPerWorker; i++ {
+	for i := 0; unbounded || i < requestsPerWorker; i++ {
 		// QPS throttling
 		if s.QPS > 0 {
 			<-throttle

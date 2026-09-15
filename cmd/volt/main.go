@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/app"
@@ -17,6 +16,19 @@ func main() {
 		// Special handling for help
 		if os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "--help" {
 			cli.PrintHelp()
+			return
+		}
+
+		subcommands := map[string]func([]string) error{
+			"import": cli.RunImportCLI,
+			"group":  cli.RunGroupCLI,
+			"server": cli.RunServerCLI,
+		}
+		if run, ok := subcommands[os.Args[1]]; ok {
+			if err := run(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 			return
 		}
 
@@ -41,13 +53,12 @@ func main() {
 	}
 
 	// TUI mode
-	homeDir, err := os.UserHomeDir()
+	dbPath, err := storage.DefaultDBPath()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting home directory: %v", err)
 		os.Exit(1)
 	}
 
-	dbPath := filepath.Join(homeDir, ".volt", "volt.db")
 	store, err := storage.NewSQLiteStorage(dbPath)
 	if err != nil {
 		fmt.Printf("Error connecting to database: %v", err)

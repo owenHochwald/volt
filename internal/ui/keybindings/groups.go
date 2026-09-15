@@ -16,7 +16,18 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 			Bindings: []key.Binding{
 				km.ShowHelp,
 				km.CyclePanel,
+				km.OpenGroups,
+				km.OpenImport,
 				km.Quit,
+			},
+		},
+		{
+			Name: "Groups & Servers",
+			Bindings: []key.Binding{
+				km.CreateItem,
+				km.RenameItem,
+				km.DeleteItem,
+				km.CloseGroups,
 			},
 		},
 		{

@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 const (
@@ -36,6 +37,11 @@ type Request struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body,omitempty"`
+	// GroupID, when set, ties this request to a request group. If URL is a
+	// path (e.g. "/pets") rather than an absolute URL, it is meant to be
+	// resolved against that group's configured Server at send time - see
+	// EffectiveURL.
+	GroupID *int64 `json:"group_id,omitempty"`
 }
 
 func NewBlankRequest() *Request {
@@ -78,7 +84,9 @@ func (r *Request) Validate() error {
 	}
 
 	if r.URL != "" {
-		if r.URL[0:4] != "http" {
+		// A URL may also be a bare path (e.g. "/pets"), meant to be resolved
+		// against a group's server at send time - see EffectiveURL.
+		if !strings.HasPrefix(r.URL, "http") && !strings.HasPrefix(r.URL, "/") {
 			return fmt.Errorf("invalid url: %s", r.URL)
 		}
 	}
@@ -91,4 +99,24 @@ func (r *Request) Validate() error {
 	}
 
 	return nil
+}
+
+// IsAbsoluteURL reports whether r.URL is directly sendable as-is, as
+// opposed to a group-relative path that still needs a server to resolve
+// against (see EffectiveURL).
+func (r *Request) IsAbsoluteURL() bool {
+	return strings.HasPrefix(r.URL, "http")
+}
+
+// EffectiveURL returns r.URL unchanged if it's already absolute. Otherwise,
+// if server is non-nil, it joins r.URL onto server.BaseURL. With no server
+// available, the relative URL is returned as-is (not directly sendable).
+func (r *Request) EffectiveURL(server *Server) string {
+	if r.IsAbsoluteURL() {
+		return r.URL
+	}
+	if server == nil || server.BaseURL == "" {
+		return r.URL
+	}
+	return strings.TrimRight(server.BaseURL, "/") + r.URL
 }

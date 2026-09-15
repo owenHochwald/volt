@@ -24,21 +24,11 @@ func RunBench(config *BenchConfig) error {
 		Body:    config.Body,
 	}
 
-	// Calculate total requests if duration-based
-	totalRequests := config.TotalRequests
-	if totalRequests == 0 {
-		estimatedReqsPerWorkerPerSec := 1000
-		totalRequests = config.Concurrency * int(config.Duration.Seconds()) * estimatedReqsPerWorkerPerSec
-
-		if totalRequests < 1 {
-			totalRequests = 1
-		}
-	}
-
 	jobConfig := &http.JobConfig{
 		Request:       req,
 		Concurrency:   config.Concurrency,
-		TotalRequests: totalRequests,
+		TotalRequests: config.TotalRequests, // 0 when duration-based; Duration governs stopping instead
+		Duration:      config.Duration,
 		Timeout:       config.Timeout,
 		QPS:           float64(config.RateLimit),
 		StreamUpdates: false,
