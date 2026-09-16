@@ -12,13 +12,28 @@ import (
 )
 
 type RequestItem struct {
-	title, desc string
-	Request     *http.Request
+	title, desc, group string
+	Request            *http.Request
 }
 
 func (i RequestItem) Title() string       { return i.title }
 func (i RequestItem) Description() string { return i.desc }
-func (i RequestItem) FilterValue() string { return i.title }
+
+// FilterValue is what "/" search matches against. It deliberately uses the
+// request's full, untruncated method+URL (not desc, which is cut down to
+// fit the sidebar's width) so searching for something that only appears in
+// the truncated-away part of a long URL still finds it - plus the name and
+// group, so any of those can be searched by.
+func (i RequestItem) FilterValue() string {
+	value := i.title
+	if i.Request != nil {
+		value += " " + i.Request.Method + " " + i.Request.URL
+	}
+	if i.group != "" {
+		value += " " + i.group
+	}
+	return value
+}
 
 type SidebarPane struct {
 	panelFocused  bool
@@ -33,8 +48,49 @@ type SidebarPane struct {
 	keys keybindings.KeyMap
 }
 
+// helpHintLines is how many rows View()'s "Press ? for help" hint occupies
+// (HelpStyle's Margin(1, 2) adds a blank line above and below the text
+// itself), reserved out of the list's height so the two together fit
+// within the space SetSize was given instead of overflowing it.
+const helpHintLines = 3
+
+func (s *SidebarPane) listHeight() int {
+	return max(s.height-helpHintLines, 0)
+}
+
+// IsFiltering reports whether the user is actively typing a "/" search
+// query, so callers outside this package (the global '?' help shortcut)
+// can avoid stealing keys - notably '?' itself, which is a legitimate
+// character to search for in a URL's query string - from the filter input.
+func (s *SidebarPane) IsFiltering() bool {
+	return s.requestsList.FilterState() == list.Filtering
+}
+
+// describeURL builds an item's description line, filling as much of the
+// available sidebar width as the URL needs instead of always truncating
+// to a fixed handful of characters - a wider sidebar (see Model.sidebarWidth)
+// should actually show more of the URL, not leave the extra space blank.
+// When it doesn't fit, the tail (usually the more distinguishing part -
+// the path, not the shared scheme/host) is kept, with a leading "…".
+func (s *SidebarPane) describeURL(url, groupLabel string) string {
+	prefix := ""
+	if groupLabel != "" {
+		prefix = "[" + groupLabel + "] "
+	}
+
+	// Leave a little room for the list item's own border/padding so the
+	// line doesn't wrap.
+	const chrome = 4
+	budget := max(s.width-len(prefix)-chrome, 10)
+
+	if len(url) > budget {
+		url = "…" + url[len(url)-(budget-1):]
+	}
+	return prefix + url
+}
+
 func (s *SidebarPane) SetRequests(items []list.Item) {
-	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.height)
+	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.listHeight())
 	s.requestsList.SetShowHelp(false)
 }
 
@@ -64,15 +120,16 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		items := make([]list.Item, 0, len(msg.Requests))
 		for _, req := range msg.Requests {
-			desc := req.URL[max(len(req.URL)-10, 0):]
+			var groupLabel string
 			if req.GroupID != nil {
 				if name, ok := groupNames[*req.GroupID]; ok {
-					desc = fmt.Sprintf("[%s] %s", name, desc)
+					groupLabel = name
 				}
 			}
 			items = append(items, RequestItem{
 				title:   req.Name,
-				desc:    desc,
+				desc:    s.describeURL(req.URL, groupLabel),
+				group:   groupLabel,
 				Request: &req,
 			})
 		}
@@ -86,6 +143,14 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 	case tea.KeyMsg:
+		// While the user is actively typing a "/" filter query, every key
+		// must go straight to the list's own filter text input instead of
+		// being intercepted below - otherwise typing e.g. "json" would
+		// trigger DeleteRequest ('d') or navigation ('j'/'k') on whatever's
+		// currently selected instead of being typed into the search box.
+		if s.requestsList.FilterState() == list.Filtering {
+			break
+		}
 		if keybindings.Matches(msg, s.keys.DeleteRequest) {
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
@@ -93,7 +158,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			currentIndex := s.requestsList.Index()
-			itemCount := len(s.requestsList.Items())
+			itemCount := len(s.requestsList.VisibleItems())
 			if itemCount > 1 {
 				if currentIndex == itemCount-1 {
 					s.desiredCursorIndex = currentIndex - 1
@@ -106,23 +171,43 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, DeleteRequestCmd(s.db, item.Request.ID)
 		}
 
-		// Navigation override - wrapped to cycle
+		// Navigation override - wrapped to cycle. Two things bubbles'
+		// list.Select() doesn't do on its own, both handled below:
+		//
+		//  - Index()/Select() operate on the currently visible (i.e.
+		//    filtered, when a filter is active) list, so the wrap bound
+		//    must come from VisibleItems(), not Items() (always the full,
+		//    unfiltered set) - using the latter selected an index past the
+		//    end of a filtered list and crashed on render.
+		//  - Select(index) does *unclamped* arithmetic (page = index /
+		//    perPage, cursor = index % perPage) - given an out-of-range
+		//    index, it leaves the cursor pointing past the real items
+		//    instead of rejecting it, and Index() keeps faithfully
+		//    reporting that same bad value back afterwards. A wrap check
+		//    written as current == bound therefore never fires again once
+		//    the cursor has drifted out of range this way - each further
+		//    "down" press just drifts it further, and it takes exactly as
+		//    many "up" presses to walk back into valid range (or, far
+		//    enough out, something downstream indexes past the actual
+		//    slice and panics). Using >=/< instead of == self-corrects in
+		//    a single press no matter how far off the cursor already is.
 		if keybindings.Matches(msg, s.keys.NavUp) {
-			currentIndex := s.requestsList.Index()
-			if currentIndex == 0 {
-				s.requestsList.Select(len(s.requestsList.Items()) - 1)
-			} else {
-				s.requestsList.Select(currentIndex - 1)
+			if n := len(s.requestsList.VisibleItems()); n > 0 {
+				next := s.requestsList.Index() - 1
+				if next < 0 {
+					next = n - 1
+				}
+				s.requestsList.Select(next)
 			}
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavDown) {
-			currentIndex := s.requestsList.Index()
-			itemCount := len(s.requestsList.Items()) - 1
-			if currentIndex == itemCount {
-				s.requestsList.Select(0)
-			} else {
-				s.requestsList.Select(currentIndex + 1)
+			if n := len(s.requestsList.VisibleItems()); n > 0 {
+				next := s.requestsList.Index() + 1
+				if next >= n {
+					next = 0
+				}
+				s.requestsList.Select(next)
 			}
 			return s, nil
 		}
@@ -134,12 +219,11 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *SidebarPane) View() string {
-	helpText := HelpStyle.Render("Press ? for help")
+	helpText := HelpStyle.Render("/ to search • ? for help")
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		s.requestsList.View(),
-		lipgloss.NewStyle().Height(s.height-1).Render(""),
 		helpText,
 	)
 }
@@ -156,7 +240,7 @@ func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 func (s *SidebarPane) SetSize(width, height int) {
 	s.width = width
 	s.height = height
-	s.requestsList.SetSize(width, height)
+	s.requestsList.SetSize(width, s.listHeight())
 }
 
 func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {

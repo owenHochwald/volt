@@ -23,7 +23,7 @@ GROUP SUBCOMMANDS:
   volt group list                          List groups and their assigned server
   volt group rename <old> <new>            Rename a group
   volt group set-server <group> <server>   Point a group's requests at a server
-  volt group delete <name>                 Delete a group (its requests are kept, ungrouped)
+  volt group delete <name>                 Delete a group AND every request in it
 
 SERVER SUBCOMMANDS:
   volt server add <name> <base-url>        Add (or update) a named server

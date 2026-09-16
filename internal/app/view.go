@@ -7,13 +7,12 @@ import (
 )
 
 func (m Model) View() string {
-	sidebarWidth := 20
-	contentHeight := m.height - 5
+	sidebarWidth := m.sidebarWidth()
+	mainWidth := m.mainWidth()
+	mainHeight := m.mainHeight()
 
-	mainWidth := m.width - sidebarWidth - 4
-	mainHeight := contentHeight - 2
-
-	requestHeight := int(float64(mainHeight)/2.2) - 10
+	requestHeight := m.requestHeight()
+	requestWidth := m.requestWidth()
 	responseHeight := int(float64(mainHeight)/2.2) - 2
 
 	sidebar := m.sidebarView(mainHeight, sidebarWidth)
@@ -23,16 +22,16 @@ func (m Model) View() string {
 	var response string
 	if m.requestPane.LoadTestMode {
 		// Load test style already has yellow border, background, and bold - don't apply focus
-		request = ui.LoadTestBorderStyle.Width(mainWidth - 10).
+		request = ui.LoadTestBorderStyle.Width(requestWidth).
 			Height(requestHeight).
-			Render(m.requestView(requestHeight))
+			Render(m.requestView(requestHeight, requestWidth))
 		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(mainWidth - 10).
 			Height(responseHeight - 3).
 			Render(m.responseView(responseHeight, mainWidth-10))
 	} else {
-		request = ui.ApplyFocus(ui.RequestStyle, m.focusedPanel == 1).Width(mainWidth - 10).
+		request = ui.ApplyFocus(ui.RequestStyle, m.focusedPanel == 1).Width(requestWidth).
 			Height(requestHeight).
-			Render(m.requestView(requestHeight))
+			Render(m.requestView(requestHeight, requestWidth))
 		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(mainWidth - 10).
 			Height(responseHeight).
 			Render(m.responseView(responseHeight, mainWidth-10))
@@ -68,10 +67,11 @@ func (m Model) sidebarView(height, width int) string {
 	return sidebar
 }
 
-func (m Model) requestView(height int) string {
+func (m Model) requestView(height, width int) string {
 	m.requestPane.SetFocused(m.focusedPanel == utils.RequestPanel)
 	//m.requestPane.LoadTestMode
 	m.requestPane.SetHeight(height)
+	m.requestPane.SetWidth(width)
 
 	return m.requestPane.View()
 }

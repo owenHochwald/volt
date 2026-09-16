@@ -20,8 +20,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
 
-		// Handle '?' to toggle help modal
-		if keybindings.Matches(msg, m.keys.ShowHelp) && noModalOpen && m.focusedPanel != utils.RequestPanel {
+		// Handle '?' to toggle help modal. Also stays out of the way while
+		// searching the sidebar, since '?' is a legitimate character to
+		// filter a URL's query string by.
+		if keybindings.Matches(msg, m.keys.ShowHelp) && noModalOpen && m.focusedPanel != utils.RequestPanel && !m.sidebarPane.IsFiltering() {
 			m.showHelpModal = true
 			m.shortcutPane.SetFocused(true)
 			return m, nil
@@ -35,8 +37,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Handle 'g' to toggle the groups & servers manager
-		if keybindings.Matches(msg, m.keys.OpenGroups) && noModalOpen && m.focusedPanel != utils.RequestPanel {
+		// Handle ctrl+g to toggle the groups & servers manager. Unlike '?',
+		// this doesn't collide with typing, so it works from any panel.
+		if keybindings.Matches(msg, m.keys.OpenGroups) && noModalOpen {
 			m.showGroupsModal = true
 			m.groupsPane.Open()
 			return m, nil
@@ -50,8 +53,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Handle 'i' to toggle the OpenAPI import dialog
-		if keybindings.Matches(msg, m.keys.OpenImport) && noModalOpen && m.focusedPanel != utils.RequestPanel {
+		// Handle ctrl+i to toggle the OpenAPI import dialog. Unlike '?',
+		// this doesn't collide with typing, so it works from any panel.
+		if keybindings.Matches(msg, m.keys.OpenImport) && noModalOpen {
 			m.showImportModal = true
 			m.importPane.Open()
 			return m, nil
@@ -79,7 +83,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if keybindings.Matches(msg, m.keys.LoadRequest) {
+		if keybindings.Matches(msg, m.keys.LoadRequest) && !m.sidebarPane.IsFiltering() {
+			// Guarded on IsFiltering(): LoadRequest is bound to enter/space,
+			// which while filtering must type a space or confirm the query
+			// instead of immediately loading whatever's selected.
 			if m.focusedPanel == utils.SidebarPanel {
 				if item, ok := m.sidebarPane.SelectedItem(); ok {
 					m.focusedPanel = utils.RequestPanel
@@ -193,8 +200,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.importPane.SetWidth(modalWidth)
 		m.importPane.SetHeight(modalHeight)
 
-		// Existing size handling for other panels
-		m.sidebarPane.SetSize(m.width/2, (m.height-15)/2)
+		// Existing size handling for other panels. sidebarWidth/
+		// sidebarContentHeight are shared with view.go's rendering (see
+		// layout.go) - they must match the box the sidebar is actually
+		// rendered into, otherwise the list wraps its content to fit a
+		// differently-sized box than it thinks it has, so the wrapped line
+		// count (and therefore the sidebar's rendered height) drifts as
+		// different items are selected, visibly shifting the right panel.
+		m.sidebarPane.SetSize(m.sidebarWidth(), m.sidebarContentHeight())
+
+		// requestPane.Height/Width/FieldsViewport are plain value fields,
+		// unlike its *textinput.Model etc. fields - view.go's calls to
+		// SetHeight/SetWidth only ever mutate View()'s own local, discarded
+		// copy (value receiver), so without this, requestPane.Update() (a
+		// pgup/pgdown scroll, say) would always see FieldsViewport at its
+		// zero value and be unable to scroll at all.
+		m.requestPane.SetHeight(m.requestHeight())
+		m.requestPane.SetWidth(m.requestWidth())
 	}
 
 	// Existing panel update routing (only when no modal is open)

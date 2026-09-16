@@ -47,6 +47,7 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 				km.ToggleLoadTest,
 				km.NextField,
 				km.ChangeMethodNext,
+				km.ScrollFieldsDown,
 			},
 		},
 		{

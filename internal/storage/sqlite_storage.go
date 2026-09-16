@@ -392,13 +392,42 @@ func (s *SQLiteStorage) RenameGroup(oldName, newName string) error {
 	return checkRowsAffected(res, "group", oldName)
 }
 
-func (s *SQLiteStorage) DeleteGroup(name string) error {
-	q := `DELETE FROM request_groups WHERE name = ?`
-	res, err := s.db.Exec(q, name)
+// DeleteGroup deletes the named group along with every request that
+// belongs to it (SQLite foreign keys aren't enforced here, so this is done
+// explicitly rather than relying on the migration's ON DELETE SET NULL).
+// Returns how many requests were deleted with it.
+func (s *SQLiteStorage) DeleteGroup(name string) (int64, error) {
+	group, err := s.GetGroupByName(name)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return checkRowsAffected(res, "group", name)
+	if group == nil {
+		return 0, fmt.Errorf("group not found: %s", name)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`DELETE FROM requests WHERE group_id = ?`, group.ID)
+	if err != nil {
+		return 0, err
+	}
+	deletedRequests, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM request_groups WHERE id = ?`, group.ID); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return deletedRequests, nil
 }
 
 // ResolveEffectiveURL returns request.URL unchanged if it's already

@@ -1,6 +1,8 @@
 package requestpane
 
 import (
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -11,8 +13,6 @@ type LoadTestMode struct{}
 
 // HandleInput handles keyboard input in load test mode
 func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	// Check for special keybindings FIRST before delegating to text components
 	if keybindings.Matches(msg, m.keys.SendRequest) {
 		return ltm.handleSubmit(m, msg)
@@ -26,51 +26,31 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model,
 		return m, nil
 	}
 
-	switch FieldIndex(m.FocusManager.CurrentIndex()) {
-	case FieldMethodSelector:
+	// Dispatch by the focused component's own type rather than a fixed
+	// position, since the number of fields (PathParams) varies with the
+	// URL. Every text input in this mode - URL, path params, name, and the
+	// load-test config fields - is a *textinput.Model, so one case covers
+	// them all.
+	switch c := m.FocusManager.Current().(type) {
+	case *ui.MethodSelector:
 		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
-			m.MethodSelector.Next()
+			c.Next()
 		}
 		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
-			m.MethodSelector.Prev()
+			c.Prev()
 		}
-	case FieldURL:
+	case *textinput.Model:
 		var cmd tea.Cmd
-		*m.URLInput, cmd = m.URLInput.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldName:
+		*c, cmd = c.Update(msg)
+		return m, cmd
+	case *textarea.Model:
 		var cmd tea.Cmd
-		*m.NameInput, cmd = m.NameInput.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldHeaders:
-		var cmd tea.Cmd
-		*m.Headers, cmd = m.Headers.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldBody:
-		var cmd tea.Cmd
-		*m.Body, cmd = m.Body.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldLTConcurrency:
-		var cmd tea.Cmd
-		*m.LoadTestConcurrency, cmd = m.LoadTestConcurrency.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldLTTotalReqs:
-		var cmd tea.Cmd
-		*m.LoadTestTotalReqs, cmd = m.LoadTestTotalReqs.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldLTQPS:
-		var cmd tea.Cmd
-		*m.LoadTestQPS, cmd = m.LoadTestQPS.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldLTTimeout:
-		var cmd tea.Cmd
-		*m.LoadTestTimeout, cmd = m.LoadTestTimeout.Update(msg)
-		cmds = append(cmds, cmd)
-	case FieldLTSubmit:
+		*c, cmd = c.Update(msg)
+		return m, cmd
+	case *ui.SubmitButton:
 		return ltm.handleSubmit(m, msg)
 	}
-
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 // handleSubmit handles the submit button in load test mode
@@ -94,38 +74,37 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 	return m, nil
 }
 
-// GetFocusManager returns the focus manager for load test mode
-func (ltm *LoadTestMode) GetFocusManager(m *RequestPane) *ui.FocusManager {
-	unifiedComponents := []ui.Focusable{
-		m.MethodSelector,
-		m.URLInput,
-		m.NameInput,
-		m.Headers,
-		m.Body,
+// components lists this mode's focusable fields in tab order: method, URL,
+// any path params extracted from the URL, name, headers, then either the
+// body params (an imported request with a known JSON schema) or the
+// freeform body textarea, the load-test config fields, then submit.
+func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
+	components := []ui.Focusable{m.MethodSelector, m.URLInput}
+	components = append(components, paramFocusables(m.PathParams)...)
+	components = append(components, m.NameInput, m.Headers)
+	if len(m.BodyParams) > 0 {
+		components = append(components, paramFocusables(m.BodyParams)...)
+	} else {
+		components = append(components, m.Body)
+	}
+	components = append(components,
 		m.LoadTestConcurrency,
 		m.LoadTestTotalReqs,
 		m.LoadTestQPS,
 		m.LoadTestTimeout,
 		m.SubmitButton,
-	}
-	return ui.NewFocusManager(unifiedComponents)
+	)
+	return components
+}
+
+// GetFocusManager returns the focus manager for load test mode
+func (ltm *LoadTestMode) GetFocusManager(m *RequestPane) *ui.FocusManager {
+	return ui.NewFocusManager(ltm.components(m))
 }
 
 // GetFocusManagerWithIndex returns the focus manager for load test mode starting at a specific index
 func (ltm *LoadTestMode) GetFocusManagerWithIndex(m *RequestPane, index int) *ui.FocusManager {
-	unifiedComponents := []ui.Focusable{
-		m.MethodSelector,
-		m.URLInput,
-		m.NameInput,
-		m.Headers,
-		m.Body,
-		m.LoadTestConcurrency,
-		m.LoadTestTotalReqs,
-		m.LoadTestQPS,
-		m.LoadTestTimeout,
-		m.SubmitButton,
-	}
-	return ui.NewFocusManagerWithIndex(unifiedComponents, index)
+	return ui.NewFocusManagerWithIndex(ltm.components(m), index)
 }
 
 // OnEnter is called when entering load test mode

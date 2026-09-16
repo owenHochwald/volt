@@ -78,10 +78,15 @@ func RunGroupCLI(args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("usage: volt group delete <name>")
 		}
-		if err := db.DeleteGroup(args[1]); err != nil {
+		deletedRequests, err := db.DeleteGroup(args[1])
+		if err != nil {
 			return err
 		}
-		fmt.Printf("Deleted group %q\n", args[1])
+		if deletedRequests > 0 {
+			fmt.Printf("Deleted group %q and %d request(s) in it\n", args[1], deletedRequests)
+		} else {
+			fmt.Printf("Deleted group %q\n", args[1])
+		}
 		return nil
 
 	default:

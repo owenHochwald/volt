@@ -26,6 +26,8 @@ type KeyMap struct {
 	PrevField        key.Binding
 	ChangeMethodNext key.Binding
 	ChangeMethodPrev key.Binding
+	ScrollFieldsUp   key.Binding
+	ScrollFieldsDown key.Binding
 
 	// Response Pane
 	CopyResponse key.Binding
@@ -69,12 +71,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("esc", "return to sidebar"),
 		),
 		OpenGroups: key.NewBinding(
-			key.WithKeys("g"),
-			key.WithHelp("g", "groups & servers"),
+			key.WithKeys("ctrl+g"),
+			key.WithHelp("ctrl+g", "groups & servers"),
 		),
 		OpenImport: key.NewBinding(
-			key.WithKeys("i"),
-			key.WithHelp("i", "import OpenAPI spec"),
+			key.WithKeys("ctrl+n"),
+			key.WithHelp("ctrl+n", "import OpenAPI spec"),
 		),
 
 		// Sidebar
@@ -122,6 +124,14 @@ func DefaultKeyMap() KeyMap {
 		ChangeMethodPrev: key.NewBinding(
 			key.WithKeys("h", "left"),
 			key.WithHelp("h/←", "previous method"),
+		),
+		ScrollFieldsUp: key.NewBinding(
+			key.WithKeys("pgup"),
+			key.WithHelp("pgup", "scroll fields up"),
+		),
+		ScrollFieldsDown: key.NewBinding(
+			key.WithKeys("pgdown"),
+			key.WithHelp("pgdown", "scroll fields down"),
 		),
 
 		// Response Pane

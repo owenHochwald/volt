@@ -1,6 +1,8 @@
 package requestpane
 
 import (
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -24,31 +26,27 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, te
 		return m, nil
 	}
 
-	switch FieldIndex(m.FocusManager.CurrentIndex()) {
-	case FieldMethodSelector:
+	// Dispatch by the focused component's own type rather than a fixed
+	// position, since the number of fields (PathParams) varies with the
+	// URL. URLInput/NameInput/PathParam inputs are all *textinput.Model,
+	// so this one case handles all of them.
+	switch c := m.FocusManager.Current().(type) {
+	case *ui.MethodSelector:
 		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
-			m.MethodSelector.Next()
+			c.Next()
 		}
 		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
-			m.MethodSelector.Prev()
+			c.Prev()
 		}
-	case FieldURL:
+	case *textinput.Model:
 		var cmd tea.Cmd
-		*m.URLInput, cmd = m.URLInput.Update(msg)
+		*c, cmd = c.Update(msg)
 		return m, cmd
-	case FieldName:
+	case *textarea.Model:
 		var cmd tea.Cmd
-		*m.NameInput, cmd = m.NameInput.Update(msg)
+		*c, cmd = c.Update(msg)
 		return m, cmd
-	case FieldHeaders:
-		var cmd tea.Cmd
-		*m.Headers, cmd = m.Headers.Update(msg)
-		return m, cmd
-	case FieldBody:
-		var cmd tea.Cmd
-		*m.Body, cmd = m.Body.Update(msg)
-		return m, cmd
-	case FieldSubmitButton:
+	case *ui.SubmitButton:
 		return nm.handleSubmit(m, msg)
 	}
 	return m, nil
@@ -72,30 +70,31 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 	return m, nil
 }
 
+// components lists this mode's focusable fields in tab order: method, URL,
+// any path params extracted from the URL, name, headers, then either the
+// body params (an imported request with a known JSON schema) or the
+// freeform body textarea, then submit.
+func (nm *NormalMode) components(m *RequestPane) []ui.Focusable {
+	components := []ui.Focusable{m.MethodSelector, m.URLInput}
+	components = append(components, paramFocusables(m.PathParams)...)
+	components = append(components, m.NameInput, m.Headers)
+	if len(m.BodyParams) > 0 {
+		components = append(components, paramFocusables(m.BodyParams)...)
+	} else {
+		components = append(components, m.Body)
+	}
+	components = append(components, m.SubmitButton)
+	return components
+}
+
 // GetFocusManager returns the focus manager for normal mode
 func (nm *NormalMode) GetFocusManager(m *RequestPane) *ui.FocusManager {
-	components := []ui.Focusable{
-		m.MethodSelector,
-		m.URLInput,
-		m.NameInput,
-		m.Headers,
-		m.Body,
-		m.SubmitButton,
-	}
-	return ui.NewFocusManager(components)
+	return ui.NewFocusManager(nm.components(m))
 }
 
 // GetFocusManagerWithIndex returns the focus manager for normal mode starting at a specific index
 func (nm *NormalMode) GetFocusManagerWithIndex(m *RequestPane, index int) *ui.FocusManager {
-	components := []ui.Focusable{
-		m.MethodSelector,
-		m.URLInput,
-		m.NameInput,
-		m.Headers,
-		m.Body,
-		m.SubmitButton,
-	}
-	return ui.NewFocusManagerWithIndex(components, index)
+	return ui.NewFocusManagerWithIndex(nm.components(m), index)
 }
 
 // OnEnter is called when entering normal mode

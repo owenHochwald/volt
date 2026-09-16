@@ -21,37 +21,58 @@ func (m *RequestPane) syncRequest() {
 	m.Request.Name = m.NameInput.Value()
 
 	headerMap, headerErrors := utils.ParseKeyValuePairs(m.Headers.Value())
-	bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
+	m.Request.Headers = headerMap
+	m.ParseErrors = headerErrors
 
-	jsonData, err := json.Marshal(bodyMap)
-	if err != nil {
-		m.ParseErrors = append(m.ParseErrors, "JSON marshal error: "+err.Error())
-		m.Request.Headers = headerMap
-		m.Request.Body = "{}" // Set to valid empty JSON
-		m.ParseErrors = append(m.ParseErrors, headerErrors...)
-		return
+	// When BodyParams is populated (an imported request with a known JSON
+	// schema), the structured fields drive the body instead - see
+	// resolvedRequest - so the freeform Body textarea is hidden and must
+	// not overwrite the schema's field set here.
+	if len(m.BodyParams) == 0 {
+		bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
+		jsonData, err := json.Marshal(bodyMap)
+		if err != nil {
+			m.ParseErrors = append(m.ParseErrors, "JSON marshal error: "+err.Error())
+			m.Request.Body = "{}" // Set to valid empty JSON
+		} else {
+			m.Request.Body = string(jsonData)
+			m.ParseErrors = append(m.ParseErrors, bodyErrors...)
+		}
 	}
 
-	m.Request.Headers = headerMap
-	m.Request.Body = string(jsonData)
-	m.ParseErrors = append(headerErrors, bodyErrors...)
+	// Unlike path params (which must track live edits to the URL text),
+	// body params are derived once when a request is loaded/created (see
+	// reinitRequestPane) and then left alone: the body's field set is
+	// fixed metadata from the API schema, not something to keep re-guessing
+	// from arbitrary text typed elsewhere - re-deriving it here on every
+	// tick would risk a hand-typed freeform body flipping into structured
+	// fields mid-edit purely because its values happened to go through an
+	// empty state while being typed.
+	m.syncPathParams()
 }
 
-// resolvedRequest returns a copy of m.Request with its URL resolved against
-// its group's configured server, when the request belongs to a group and
-// stores a relative path (e.g. "/pets"). The stored request itself is left
-// untouched, so editing and saving keep operating on the raw URL as saved
-// (relative paths stay relative, so a later server change still applies).
+// resolvedRequest returns a copy of m.Request with any {name} path
+// placeholders filled in from PathParams, its body rebuilt from BodyParams
+// (when present), and, if the request belongs to a group and stores a
+// relative path (e.g. "/pets"), its URL resolved against that group's
+// configured server. The stored request itself is left untouched, so
+// editing and saving keep operating on the raw URL/body template as saved.
 func (m *RequestPane) resolvedRequest() *http.Request {
-	if m.Request.GroupID == nil || m.DB == nil {
-		return m.Request
-	}
-	resolved, err := m.DB.ResolveEffectiveURL(m.Request)
-	if err != nil || resolved == m.Request.URL {
-		return m.Request
-	}
 	resolvedReq := *m.Request
-	resolvedReq.URL = resolved
+	resolvedReq.URL = SubstitutePathParams(m.Request.URL, m.PathParams)
+	if len(m.BodyParams) > 0 {
+		resolvedReq.Body = BuildRequestBody(m.BodyParams)
+	}
+
+	if m.Request.GroupID != nil && m.DB != nil {
+		if resolved, err := m.DB.ResolveEffectiveURL(&resolvedReq); err == nil {
+			resolvedReq.URL = resolved
+		}
+	}
+
+	if resolvedReq.URL == m.Request.URL && resolvedReq.Body == m.Request.Body {
+		return m.Request
+	}
 	return &resolvedReq
 }
 

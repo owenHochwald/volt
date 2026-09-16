@@ -40,6 +40,21 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.FocusManager.Prev()
 			return m, nil
 		}
+		if keybindings.Matches(msg, m.keys.ScrollFieldsUp) {
+			// SetContent first: FieldsViewport.lines are only ever
+			// populated inside View() (value receiver - never persisted
+			// here), so without this refresh every scroll would see empty
+			// content, read maxYOffset()==0, and PageUp/PageDown would be
+			// a permanent no-op.
+			m.FieldsViewport.SetContent(m.fieldsContent())
+			m.FieldsViewport.PageUp()
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.ScrollFieldsDown) {
+			m.FieldsViewport.SetContent(m.fieldsContent())
+			m.FieldsViewport.PageDown()
+			return m, nil
+		}
 
 		// Delegate to current mode strategy
 		model, cmd := m.currentMode.HandleInput(&m, msg)
@@ -85,5 +100,27 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	m.URLInput.SetValue(request.URL)
 	m.NameInput.SetValue(request.Name)
 	m.Headers.SetValue(utils.ParseMapToString(request.Headers))
-	m.Body.SetValue(request.Body[1 : len(request.Body)-1])
+	m.Body.SetValue(bodyInnerContent(request.Body))
+
+	// Discard any param values from whatever request was loaded before, so
+	// switching requests doesn't leak one request's {id} or body field
+	// value into another's - only re-editing the *same* request should
+	// keep values as you type.
+	m.PathParams = nil
+	m.BodyParams = nil
+	m.syncPathParams()
+	m.syncBodyParams()
+}
+
+// bodyInnerContent strips the outer braces from a request body stored as a
+// JSON object (e.g. `{"a":"b"}` -> `"a":"b"`), matching how syncRequest
+// re-wraps the body textarea's key=value pairs into JSON. Bodies too short
+// to contain braces - "" for a request that was never synced through the
+// editor, such as one saved directly by `volt import` - render blank
+// instead of panicking on the slice.
+func bodyInnerContent(body string) string {
+	if len(body) < 2 {
+		return ""
+	}
+	return body[1 : len(body)-1]
 }

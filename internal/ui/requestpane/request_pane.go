@@ -6,32 +6,12 @@ import (
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
-)
-
-// FieldIndex represents the index of a focusable field in the request pane
-type FieldIndex int
-
-const (
-	FieldMethodSelector FieldIndex = iota
-	FieldURL
-	FieldName
-	FieldHeaders
-	FieldBody
-	FieldSubmitButton
-)
-
-// Load test mode field indices (extend from base fields)
-const (
-	FieldLTConcurrency FieldIndex = iota + 5
-	FieldLTTotalReqs
-	FieldLTQPS
-	FieldLTTimeout
-	FieldLTSubmit
 )
 
 // RequestPane is the main component for handling HTTP request input
@@ -45,16 +25,35 @@ type RequestPane struct {
 
 	FocusManager *ui.FocusManager
 
+	// FieldsViewport scrolls everything from the method/URL line through
+	// Headers/Body(Params) (and, in load-test mode, the load-test config
+	// fields) - i.e. everything except the pinned Send button/help line
+	// below it. Without this, a request with many body params (a wide
+	// OpenAPI schema) could render taller than its box, which lipgloss's
+	// Height() doesn't clip (only pads), corrupting the whole layout - see
+	// View() and SetHeight/SetWidth for how it's kept sized to match.
+	FieldsViewport viewport.Model
+
 	MethodSelector *ui.MethodSelector
 	URLInput       *textinput.Model
-	NameInput      *textinput.Model
-	Headers        *textarea.Model
-	Body           *textarea.Model
-	SubmitButton   *ui.SubmitButton
+	// PathParams holds one editable field per {name} placeholder in the
+	// URL (e.g. "/cluster/{cluster_id}/repository"), kept in sync with the
+	// URL by syncPathParams. They sit between the URL and Name fields.
+	PathParams []Param
+	NameInput  *textinput.Model
+	Headers    *textarea.Model
+	// BodyParams holds one editable field per top-level property of a JSON
+	// request body (populated by `volt import` from the OpenAPI
+	// requestBody schema), kept in sync with Body by syncBodyParams. When
+	// non-empty, they're shown instead of the freeform Body textarea.
+	BodyParams   []Param
+	Body         *textarea.Model
+	SubmitButton *ui.SubmitButton
 
 	Request *http.Request
 
 	Height int
+	Width  int
 
 	ParseErrors []string
 
@@ -85,9 +84,59 @@ func (m *RequestPane) SetFocused(focused bool) {
 	m.PanelFocused = focused
 }
 
-// SetHeight sets the height of the request pane
+// approxFooterLines is a rough, constant estimate of the pinned footer's
+// height (blank separator + Send button + stopwatch line + help hint),
+// used only to give FieldsViewport a sane Height for Update() to compute
+// pgup/pgdown scroll amounts against. View() overrides this every render
+// with the footer's *actual* rendered height (which varies with
+// RequestInProgress/LoadTestMode), so this estimate only needs to be
+// close, not exact - it never affects what's actually drawn.
+const approxFooterLines = 4
+
+// SetHeight sets the height of the request pane and gives FieldsViewport a
+// matching (approximate - see approxFooterLines) height, so that
+// Update() - e.g. a pgup/pgdown keypress - has a usable viewport to scroll
+// even before the next View() call refines it. Without this,
+// FieldsViewport.Height stays at its zero value from Update()'s
+// perspective (View() has a value receiver, so its own adjustments to
+// FieldsViewport never persist back - see View()), and page-scrolling by a
+// zero height is a no-op.
 func (m *RequestPane) SetHeight(height int) {
 	m.Height = height
+	m.FieldsViewport.Height = max(height-approxFooterLines, 1)
+}
+
+// SetWidth sets the panel's available content width and resizes its text
+// inputs to fit it, so long URLs/names/headers/bodies use the space
+// available on a wide terminal instead of staying clipped to a fixed
+// width, and don't overflow a narrow one.
+func (m *RequestPane) SetWidth(width int) {
+	m.Width = width
+	m.FieldsViewport.Width = width
+
+	const (
+		minInputWidth   = 20
+		methodBoxWidth  = 9 // rendered "┌─────┐ " prefix before the URL input
+		nameLabelWidth  = 5 // "Name " prefix before the name input
+		fieldLabelWidth = 8 // "Headers "/"Body    " prefix before the textareas
+		safetyMargin    = 2
+	)
+
+	m.URLInput.Width = max(width-methodBoxWidth-safetyMargin, minInputWidth)
+	m.NameInput.Width = max(width-nameLabelWidth-safetyMargin, minInputWidth)
+
+	textAreaWidth := max(width-fieldLabelWidth-safetyMargin, minInputWidth)
+	m.Headers.SetWidth(textAreaWidth)
+	m.Body.SetWidth(textAreaWidth)
+
+	resizeParams := func(params []Param) {
+		for i := range params {
+			labelWidth := len(params[i].Name) + 1 // "name "
+			params[i].Input.Width = max(width-labelWidth-safetyMargin, minInputWidth)
+		}
+	}
+	resizeParams(m.PathParams)
+	resizeParams(m.BodyParams)
 }
 
 // GetCurrentMethod returns the currently selected HTTP method

@@ -95,6 +95,9 @@ func ParseOpenAPIURLs(data []byte, isYAML bool, baseURLOverride string, allowRel
 			}
 			req := http.NewRequestWithParams(method, url)
 			req.Name = truncateName(operationName(op, method, path))
+			if fields := jsonRequestBodyFields(doc, op); len(fields) > 0 {
+				req.Body = requestBodyTemplate(fields)
+			}
 
 			if err := req.Validate(); err != nil {
 				warnings = append(warnings, fmt.Sprintf("skipped %s %s: %v", method, req.URL, err))
@@ -152,6 +155,118 @@ func firstServerURL(doc map[string]interface{}) string {
 		}
 	}
 	return ""
+}
+
+// bodyField is one top-level property of a request body's JSON schema.
+type bodyField struct {
+	Name string
+	// Type is the schema's declared "type" (string, integer, number,
+	// boolean, array, object), or "" if the schema doesn't say. Every
+	// field is still edited as plain text in the TUI regardless of Type -
+	// it's shown only as a hint - so an array/object type isn't resolved
+	// any further.
+	Type string
+}
+
+// jsonRequestBodyFields returns the top-level properties of an operation's
+// `application/json` request body schema, sorted by name. Local $ref
+// chains (e.g. "#/components/schemas/Foo") are resolved via
+// resolveSchemaRef; anything else (external refs, allOf/oneOf composition,
+// other content types) is left alone for now - scope deliberately limited
+// to flat JSON object bodies.
+func jsonRequestBodyFields(doc, op map[string]interface{}) []bodyField {
+	requestBody, _ := op["requestBody"].(map[string]interface{})
+	if requestBody == nil {
+		return nil
+	}
+	content, _ := requestBody["content"].(map[string]interface{})
+	if content == nil {
+		return nil
+	}
+	jsonContent, _ := content["application/json"].(map[string]interface{})
+	if jsonContent == nil {
+		return nil
+	}
+	schema, _ := jsonContent["schema"].(map[string]interface{})
+	if schema == nil {
+		return nil
+	}
+	schema = resolveSchemaRef(doc, schema)
+
+	properties, _ := schema["properties"].(map[string]interface{})
+	if len(properties) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fields := make([]bodyField, len(names))
+	for i, name := range names {
+		propType := ""
+		if prop, ok := properties[name].(map[string]interface{}); ok {
+			propType, _ = prop["type"].(string)
+		}
+		fields[i] = bodyField{Name: name, Type: propType}
+	}
+	return fields
+}
+
+// maxSchemaRefDepth caps how many "$ref": "#/components/schemas/Name"
+// hops resolveSchemaRef will follow (A -> B -> C -> ...). Besides bounding
+// pathological specs, this also protects against a circular ref chain
+// (A -> B -> A) spinning forever - resolution just stops at the cap and
+// works with whatever schema it landed on.
+const maxSchemaRefDepth = 10
+
+// resolveSchemaRef follows a chain of "$ref": "#/components/schemas/Name"
+// (up to maxSchemaRefDepth hops) to the schema it ultimately points at.
+// Any other shape of $ref (external files, non-schema targets) stops
+// resolution at that point.
+func resolveSchemaRef(doc, schema map[string]interface{}) map[string]interface{} {
+	const localSchemaPrefix = "#/components/schemas/"
+
+	current := schema
+	for i := 0; i < maxSchemaRefDepth; i++ {
+		ref, ok := current["$ref"].(string)
+		if !ok || !strings.HasPrefix(ref, localSchemaPrefix) {
+			return current
+		}
+		name := strings.TrimPrefix(ref, localSchemaPrefix)
+
+		components, _ := doc["components"].(map[string]interface{})
+		schemas, _ := components["schemas"].(map[string]interface{})
+		resolved, _ := schemas[name].(map[string]interface{})
+		if resolved == nil {
+			return current
+		}
+		current = resolved
+	}
+	return current
+}
+
+// requestBodyTemplate builds a flat JSON object with each field mapped to
+// either an empty string (unknown type) or a "<type>" marker (e.g.
+// "<integer>") - a fill-in-the-blanks starting point for the body params
+// UI, matching how PathParams are edited. The TUI recognizes this exact
+// shape (see requestpane.extractBodySpecs) to show each field with its
+// declared type and know it's safe to present as blank, fillable inputs.
+func requestBodyTemplate(fields []bodyField) string {
+	template := make(map[string]string, len(fields))
+	for _, f := range fields {
+		if f.Type != "" {
+			template[f.Name] = "<" + f.Type + ">"
+		} else {
+			template[f.Name] = ""
+		}
+	}
+	data, err := json.Marshal(template)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func operationName(op map[string]interface{}, method, path string) string {

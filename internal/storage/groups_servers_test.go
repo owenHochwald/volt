@@ -98,10 +98,37 @@ func TestSQLiteStorage_GroupCRUD(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(groups))
 
-	assert.NoError(t, db.DeleteGroup("shop"))
+	deleted, err := db.DeleteGroup("shop")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), deleted, "an empty group deletes 0 requests")
 	groups, err = db.ListGroups()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(groups))
+
+	_, err = db.DeleteGroup("shop")
+	assert.Error(t, err, "deleting an already-gone group must fail")
+}
+
+func TestSQLiteStorage_DeleteGroup_CascadesToItsRequests(t *testing.T) {
+	db := setupTestDB(t)
+
+	group, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+
+	inGroup := &http.Request{Name: "in group", Method: http.GET, URL: "/pets", Headers: map[string]string{}, GroupID: &group.ID}
+	assert.NoError(t, db.Save(inGroup))
+
+	ungrouped := &http.Request{Name: "ungrouped", Method: http.GET, URL: "http://example.com", Headers: map[string]string{}}
+	assert.NoError(t, db.Save(ungrouped))
+
+	deleted, err := db.DeleteGroup("petstore")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+
+	remaining, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(remaining))
+	assert.Equal(t, "ungrouped", remaining[0].Name)
 }
 
 func TestSQLiteStorage_GetOrCreateGroup(t *testing.T) {

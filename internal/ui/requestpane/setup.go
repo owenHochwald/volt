@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/stopwatch"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -34,6 +35,7 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 	normalMode := &NormalMode{}
 
 	m := RequestPane{
+		FieldsViewport:      viewport.New(0, 0),
 		MethodSelector:      methodSelector,
 		URLInput:            &urlInput,
 		NameInput:           &nameInput,
