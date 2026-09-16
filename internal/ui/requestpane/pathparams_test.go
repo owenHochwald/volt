@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -103,4 +104,118 @@ func TestRequestPane_SyncPathParams_ReloadDoesNotLeakValues(t *testing.T) {
 	if got := pane.PathParams[0].Input.Value(); got != "" {
 		t.Errorf("expected a blank value after loading a different request, got %q", got)
 	}
+}
+
+// TestRequestPane_PathParamSchema_CarriesConstraintsThrough is a
+// regression test for a real bug report: a path param's OpenAPI
+// constraints (type, minimum/maximum, required, enum) were entirely
+// discarded on import - every {name} placeholder was edited as
+// unconstrained free text, unlike a body field with the same schema
+// shape. It should behave exactly like a body field: typed hint, live
+// invalid-value highlighting, blocked send on a required-but-missing
+// value.
+func TestRequestPane_PathParamSchema_CarriesConstraintsThrough(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	req := &http.Request{
+		Method:  http.GET,
+		URL:     "https://api.example.com/hosts/{host_id}/region/{region}",
+		Headers: map[string]string{},
+		PathParamSchema: map[string]http.BodyFieldSchema{
+			"host_id": {Type: "integer", Required: true, Minimum: floatPtr(1)},
+			"region":  {Type: "string", Enum: []string{"us", "eu"}, Default: "us"},
+		},
+	}
+	pane.reinitRequestPane(req)
+
+	if len(pane.PathParams) != 2 {
+		t.Fatalf("expected 2 path params, got %+v", pane.PathParams)
+	}
+	byName := make(map[string]Param, len(pane.PathParams))
+	for _, p := range pane.PathParams {
+		byName[p.Name] = p
+	}
+
+	hostID := byName["host_id"]
+	if hostID.Type != "integer" {
+		t.Errorf("expected host_id.Type=integer, got %q", hostID.Type)
+	}
+	if !hostID.Required {
+		t.Error("expected host_id to be Required")
+	}
+	if hostID.Minimum == nil || *hostID.Minimum != 1 {
+		t.Errorf("expected host_id.Minimum=1, got %v", hostID.Minimum)
+	}
+	if hostID.Enum != nil {
+		t.Error("expected host_id to be a plain Input, not an Enum picker")
+	}
+
+	region := byName["region"]
+	if region.Enum == nil {
+		t.Fatal("expected region to get an Enum picker")
+	}
+	if got := region.Value(); got != "us" {
+		t.Errorf("expected region to start on its schema default %q, got %q", "us", got)
+	}
+
+	// Live validation: an out-of-range integer must be flagged, same as a
+	// body field with the same constraint.
+	for i := range pane.PathParams {
+		if pane.PathParams[i].Name == "host_id" {
+			pane.PathParams[i].Input.SetValue("0")
+		}
+	}
+	hostIDField, _ := findPathParam(pane.PathParams, "host_id")
+	if _, ok := ValidateParam(hostIDField); ok {
+		t.Error("expected host_id=0 to violate minimum=1")
+	}
+}
+
+// TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredPathParam is an
+// end-to-end check mirroring the equivalent BodyParams test: a required
+// path param left empty prevents sending and jumps focus to it.
+func TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredPathParam(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	req := &http.Request{
+		Method:  http.GET,
+		URL:     "https://api.example.com/hosts/{host_id}",
+		Headers: map[string]string{},
+		PathParamSchema: map[string]http.BodyFieldSchema{
+			"host_id": {Type: "integer", Required: true},
+		},
+	}
+	pane.reinitRequestPane(req)
+	pane.PanelFocused = true
+	// host_id left empty on purpose.
+
+	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
+	result, ok := model.(*RequestPane)
+	if !ok {
+		t.Fatalf("expected *RequestPane, got %T", model)
+	}
+	if result.RequestInProgress {
+		t.Error("expected the missing required path param to block sending")
+	}
+	if len(result.ParseErrors) == 0 {
+		t.Error("expected a ParseErrors entry explaining why the send was blocked")
+	}
+
+	current, ok := result.FocusManager.Current().(*textinput.Model)
+	if !ok {
+		t.Fatalf("expected focus to land on a text input, got %T", result.FocusManager.Current())
+	}
+	if current != &result.PathParams[0].Input {
+		t.Error("expected focus to jump to the missing required path param")
+	}
+}
+
+// findPathParam is a small test helper for looking up a Param by name.
+func findPathParam(params []Param, name string) (Param, bool) {
+	for _, p := range params {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return Param{}, false
 }

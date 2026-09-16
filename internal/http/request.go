@@ -47,6 +47,17 @@ type Request struct {
 	// merge that server's default headers in. It takes priority over
 	// GroupID's server when both are set (see storage.ResolveEffectiveServer).
 	ServerID *int64 `json:"server_id,omitempty"`
+	// PathParamSchema holds each {name} URL placeholder's OpenAPI
+	// parameter schema (type/enum/min-max/required), keyed by name - the
+	// path-param counterpart of a body's BodySchemaKey-wrapped template
+	// (see BodyFieldSchema), but stored directly on the request rather
+	// than smuggled into Body (path params aren't body content). Set by
+	// `volt import` when the spec declares a path parameter's schema; nil
+	// for a request created/imported before this existed, or whose spec
+	// declared no schema for a given placeholder - either way, that
+	// placeholder is just edited as unconstrained free text (see
+	// requestpane.rebuildParams).
+	PathParamSchema map[string]BodyFieldSchema `json:"path_param_schema,omitempty"`
 }
 
 func NewBlankRequest() *Request {

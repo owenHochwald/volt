@@ -7,12 +7,28 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/app"
 	"github.com/owenHochwald/Volt/internal/cli"
+	"github.com/owenHochwald/Volt/internal/logging"
 	"github.com/owenHochwald/Volt/internal/storage"
 )
 
 func main() {
 	args, verbose := extractVerboseFlag(os.Args[1:])
 	storage.Verbose = verbose
+	if verbose {
+		// File-based (see logging.DefaultLogPath) since stdout/stderr
+		// aren't usable once the TUI takes over the terminal - the same
+		// -v/--debug flag that turns on goose's migration logging
+		// (storage.Verbose) also turns this on, for troubleshooting HTTP
+		// request/response handling (see internal/http/client.go).
+		if path, err := logging.DefaultLogPath(); err == nil {
+			if err := logging.Enable(path); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to enable logging: %v\n", err)
+			} else {
+				defer logging.Close()
+				logging.Logf("volt starting (args=%v)", args)
+			}
+		}
+	}
 
 	// If any command line arguments are provided, use CLI mode
 	if len(args) > 0 {

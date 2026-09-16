@@ -47,6 +47,7 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 			Bindings: []key.Binding{
 				km.SendRequest,
 				km.SaveRequest,
+				km.ResetRequest,
 				km.ToggleLoadTest,
 				km.NextField,
 				km.ChangeMethodNext,

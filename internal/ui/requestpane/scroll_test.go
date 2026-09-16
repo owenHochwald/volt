@@ -89,8 +89,9 @@ func TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem(t *testing.T) {
 	pane.SetHeight(14)
 	pane.PanelFocused = true
 
-	// Tab order: ServerSelector, Method, URL, Name, ArrayCountControl.
-	for i := 0; i < 4; i++ {
+	// Tab order (this request has no group, so no ServerSelector - see
+	// ShowServerSelector): Method, URL, Name, ArrayCountControl.
+	for i := 0; i < 3; i++ {
 		pane.FocusManager.Next()
 	}
 	if _, ok := pane.FocusManager.Current().(*ArrayCountControl); !ok {

@@ -99,6 +99,9 @@ func ParseOpenAPIURLs(data []byte, isYAML bool, baseURLOverride string, allowRel
 			if fields := jsonRequestBodyFields(doc, op); len(fields) > 0 {
 				req.Body = requestBodyTemplate(fields)
 			}
+			if pathFields := pathParamFields(doc, item, op); len(pathFields) > 0 {
+				req.PathParamSchema = pathFields
+			}
 
 			if err := req.Validate(); err != nil {
 				warnings = append(warnings, fmt.Sprintf("skipped %s %s: %v", method, req.URL, err))
@@ -180,10 +183,11 @@ type bodyField struct {
 	MaxLength *int
 	Minimum   *float64
 	Maximum   *float64
-	// Items/ItemsRefName mirror http.BodyFieldSchema's fields of the same
-	// name - see extractFieldSchema for how they're derived.
+	// Items/ItemsRefName/ItemType mirror http.BodyFieldSchema's fields of
+	// the same name - see extractFieldSchema for how they're derived.
 	Items        map[string]http.BodyFieldSchema
 	ItemsRefName string
+	ItemType     string
 	// Required mirrors whether this field's name appeared in the parent
 	// object schema's "required" list - see requiredSet.
 	Required bool
@@ -239,9 +243,59 @@ func jsonRequestBodyFields(doc, op map[string]interface{}) []bodyField {
 			field.Maximum = schema.Maximum
 			field.Items = schema.Items
 			field.ItemsRefName = schema.ItemsRefName
+			field.ItemType = schema.ItemType
 		}
 		fields[i] = field
 	}
+	return fields
+}
+
+// pathParamFields extracts the "in: path" parameters declared for a path
+// item/operation pair, keyed by name - path-item-level parameters (shared
+// across every verb on that path, e.g. the {host_id} in
+// "/hosts/{host_id}") merged with the operation's own (which, per the
+// OpenAPI spec, override a path-item entry of the same name+in). Used to
+// populate http.Request.PathParamSchema so the TUI can validate a path
+// param's value the same way it already does for body fields (type,
+// min/maxLength, minimum/maximum, enum, required) instead of treating
+// every {name} URL placeholder as unconstrained free text. Local $ref
+// chains in a parameter's own "schema" are resolved via extractFieldSchema
+// the same way a body property's schema is; a $ref'd *parameter object*
+// itself (rather than its schema) isn't resolved, matching this package's
+// existing scope (see jsonRequestBodyFields's doc comment).
+func pathParamFields(doc, item, op map[string]interface{}) map[string]http.BodyFieldSchema {
+	fields := make(map[string]http.BodyFieldSchema)
+	collect := func(raw interface{}) {
+		params, _ := raw.([]interface{})
+		for _, p := range params {
+			param, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if in, _ := param["in"].(string); in != "path" {
+				continue
+			}
+			name, _ := param["name"].(string)
+			if name == "" {
+				continue
+			}
+			paramSchema, _ := param["schema"].(map[string]interface{})
+			field := extractFieldSchema(doc, paramSchema, 0)
+			// A path parameter's own "required" - distinct from a body
+			// property's parent-object "required" list (see requiredSet) -
+			// is spec-mandated true for any "in: path" parameter; read an
+			// explicit value if present (a spec that gets this wrong still
+			// shouldn't crash), defaulting to true otherwise rather than
+			// treating an unspecified one as silently optional.
+			field.Required = true
+			if req, ok := param["required"].(bool); ok {
+				field.Required = req
+			}
+			fields[name] = field
+		}
+	}
+	collect(item["parameters"])
+	collect(op["parameters"])
 	return fields
 }
 
@@ -318,6 +372,11 @@ func extractFieldSchema(doc, prop map[string]interface{}, depth int) http.BodyFi
 	resolvedItems := resolveSchemaRef(doc, itemsRaw)
 	itemProperties, _ := resolvedItems["properties"].(map[string]interface{})
 	if len(itemProperties) == 0 {
+		// A "simple" array - its items have no object structure to compose
+		// (e.g. items: {type: number}) - still declares a scalar item type
+		// worth keeping (see http.BodyFieldSchema.ItemType), rather than
+		// discarding it and leaving the array's entries typeless.
+		field.ItemType, _ = resolvedItems["type"].(string)
 		return field
 	}
 	itemRequired := requiredSet(resolvedItems)
@@ -441,6 +500,7 @@ func requestBodyTemplate(fields []bodyField) string {
 			Maximum:      f.Maximum,
 			Items:        f.Items,
 			ItemsRefName: f.ItemsRefName,
+			ItemType:     f.ItemType,
 			Required:     f.Required,
 		}
 	}

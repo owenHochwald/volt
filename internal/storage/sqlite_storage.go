@@ -45,6 +45,35 @@ func deserializeHeaders(jsonStr string) (map[string]string, error) {
 	return headers, nil
 }
 
+// serializePathParamSchema/deserializePathParamSchema mirror
+// serializeHeaders/deserializeHeaders for http.Request.PathParamSchema,
+// except an empty/nil schema round-trips as an empty string rather than
+// the literal 4-byte "null" - matching path_param_schema's migration
+// default (empty string, not SQL NULL) for every row saved before this
+// column existed, so Load doesn't need to special-case old rows
+// differently from new ones with no path params.
+func serializePathParamSchema(schema map[string]http.BodyFieldSchema) (string, error) {
+	if len(schema) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func deserializePathParamSchema(jsonStr string) (map[string]http.BodyFieldSchema, error) {
+	if jsonStr == "" {
+		return nil, nil
+	}
+	var schema map[string]http.BodyFieldSchema
+	if err := json.Unmarshal([]byte(jsonStr), &schema); err != nil {
+		return nil, err
+	}
+	return schema, nil
+}
+
 func runMigrations(db *sql.DB) error {
 	if !Verbose {
 		goose.SetLogger(goose.NopLogger())
@@ -95,12 +124,16 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	if err != nil {
 		return err
 	}
-	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	pathParamSchemaString, err := serializePathParamSchema(request.PathParamSchema)
+	if err != nil {
+		return err
+	}
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	// database/sql's default converter turns a nil *int64 into SQL NULL and
 	// dereferences a non-nil one, so request.GroupID/ServerID can be passed
 	// as-is.
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID)
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString)
 	if err != nil {
 		return err
 	}
@@ -112,25 +145,30 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	return nil
 }
 
-// UpdateRequestSchema overwrites an existing request's name, headers, and
-// body - used by `volt import -force` to refresh a previously imported
-// request from a changed OpenAPI spec without touching its group/server
-// association or its identity (method/url, which is what matched it to the
-// existing row in the first place - see cli.dedupKey). Deliberately leaves
-// group_id/server_id/method/url alone: those are either the match key
-// itself or a user-controlled association unrelated to the spec's content.
-func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string) error {
+// UpdateRequestSchema overwrites an existing request's name, headers,
+// body, and path param schema - used by `volt import -force` to refresh a
+// previously imported request from a changed OpenAPI spec without
+// touching its group/server association or its identity (method/url,
+// which is what matched it to the existing row in the first place - see
+// cli.dedupKey). Deliberately leaves group_id/server_id/method/url alone:
+// those are either the match key itself or a user-controlled association
+// unrelated to the spec's content.
+func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string, pathParamSchema map[string]http.BodyFieldSchema) error {
 	headerString, err := serializeHeaders(headers)
 	if err != nil {
 		return err
 	}
-	q := `UPDATE requests SET name = ?, headers = ?, body = ? WHERE id = ?`
-	_, err = s.db.Exec(q, name, headerString, body, id)
+	pathParamSchemaString, err := serializePathParamSchema(pathParamSchema)
+	if err != nil {
+		return err
+	}
+	q := `UPDATE requests SET name = ?, headers = ?, body = ?, path_param_schema = ? WHERE id = ?`
+	_, err = s.db.Exec(q, name, headerString, body, pathParamSchemaString, id)
 	return err
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body, group_id, server_id FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -141,17 +179,18 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 
 	for rows.Next() {
 		var (
-			id       int64
-			name     string
-			method   string
-			url      string
-			headers  string
-			body     string
-			groupID  sql.NullInt64
-			serverID sql.NullInt64
+			id              int64
+			name            string
+			method          string
+			url             string
+			headers         string
+			body            string
+			groupID         sql.NullInt64
+			serverID        sql.NullInt64
+			pathParamSchema string
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema); err != nil {
 			return nil, err
 
 		}
@@ -159,13 +198,18 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 		if err != nil {
 			return nil, err
 		}
+		pathParamSchemaMap, err := deserializePathParamSchema(pathParamSchema)
+		if err != nil {
+			return nil, err
+		}
 		request := http.Request{
-			ID:      id,
-			Name:    name,
-			Method:  method,
-			URL:     url,
-			Headers: headersMap,
-			Body:    body,
+			ID:              id,
+			Name:            name,
+			Method:          method,
+			URL:             url,
+			Headers:         headersMap,
+			Body:            body,
+			PathParamSchema: pathParamSchemaMap,
 		}
 		if groupID.Valid {
 			gid := groupID.Int64
@@ -194,6 +238,58 @@ func (s *SQLiteStorage) Delete(id int64) error {
 		return fmt.Errorf("request not found: %d", id)
 	}
 	return nil
+}
+
+// lastSentRequestKey is the app_state row SaveLastSentRequest/
+// LoadLastSentRequest read and write - a single well-known key rather
+// than a dedicated table, since this is the only piece of app-level
+// (non-request) state Volt persists today.
+const lastSentRequestKey = "last_sent_request"
+
+// SaveLastSentRequest persists snapshot as the request to restore on the
+// next app start (see LoadLastSentRequest) - overwriting whatever was
+// saved before, since only the *last* send matters. Called only once a
+// send actually goes out (see requestpane's handleSubmit), never for a
+// request that's merely being edited.
+func (s *SQLiteStorage) SaveLastSentRequest(snapshot *http.RequestSnapshot) error {
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+	_, err = s.db.Exec(q, lastSentRequestKey, string(data))
+	return err
+}
+
+// LoadLastSentRequest returns the request saved by SaveLastSentRequest, or
+// (nil, nil) if nothing's been sent yet (a fresh database, or one from
+// before this existed) - not an error, since that's the ordinary starting
+// state.
+func (s *SQLiteStorage) LoadLastSentRequest() (*http.RequestSnapshot, error) {
+	q := `SELECT value FROM app_state WHERE key = ?`
+	var value string
+	if err := s.db.QueryRow(q, lastSentRequestKey).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var snapshot http.RequestSnapshot
+	if err := json.Unmarshal([]byte(value), &snapshot); err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
+}
+
+// ClearLastSentRequest deletes whatever SaveLastSentRequest last saved, so
+// LoadLastSentRequest goes back to returning (nil, nil) - used when the
+// request pane is reset to blank (see requestpane's resetToBlank): without
+// this, resetting the *pane* wouldn't reset what the *next* app start
+// restores, and the discarded request would silently reappear on restart.
+// A no-op, not an error, if nothing was saved to begin with.
+func (s *SQLiteStorage) ClearLastSentRequest() error {
+	_, err := s.db.Exec(`DELETE FROM app_state WHERE key = ?`, lastSentRequestKey)
+	return err
 }
 
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
@@ -360,13 +456,40 @@ func (s *SQLiteStorage) RenameServer(oldName, newName string) error {
 	return checkRowsAffected(res, "server", oldName)
 }
 
+// DeleteServer deletes the named server along with its group membership
+// rows (see group_servers) - SQLite foreign keys aren't enforced here (see
+// DeleteGroup's own comment), so this is done explicitly rather than
+// relying on the migration's ON DELETE CASCADE. A group whose *default*
+// server (request_groups.server_id) is this one is left pointing at a
+// now-nonexistent id; ResolveEffectiveServer's GetServerByID lookup
+// already treats that as "no server" via sql.ErrNoRows, so this doesn't
+// need its own NULL-out - same as before group_servers existed.
 func (s *SQLiteStorage) DeleteServer(name string) error {
-	q := `DELETE FROM servers WHERE name = ?`
-	res, err := s.db.Exec(q, name)
+	server, err := s.GetServerByName(name)
 	if err != nil {
 		return err
 	}
-	return checkRowsAffected(res, "server", name)
+	if server == nil {
+		return fmt.Errorf("server not found: %s", name)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM group_servers WHERE server_id = ?`, server.ID); err != nil {
+		return err
+	}
+	res, err := tx.Exec(`DELETE FROM servers WHERE id = ?`, server.ID)
+	if err != nil {
+		return err
+	}
+	if err := checkRowsAffected(res, "server", name); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // --- Request groups ---
@@ -446,7 +569,19 @@ func (s *SQLiteStorage) ListGroups() ([]http.Group, error) {
 	return groups, nil
 }
 
+// SetGroupServer sets groupName's *default* server - the one its
+// requests' relative URLs resolve against when they don't pick one of
+// their own (see ResolveEffectiveServer) - and, since a group's default
+// server obviously has to be usable by that group, also adds it to the
+// group's allowed set (see AddGroupServer) if it isn't already a member.
 func (s *SQLiteStorage) SetGroupServer(groupName, serverName string) error {
+	group, err := s.GetGroupByName(groupName)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return fmt.Errorf("group not found: %s", groupName)
+	}
 	server, err := s.GetServerByName(serverName)
 	if err != nil {
 		return err
@@ -454,12 +589,118 @@ func (s *SQLiteStorage) SetGroupServer(groupName, serverName string) error {
 	if server == nil {
 		return fmt.Errorf("server not found: %s", serverName)
 	}
-	q := `UPDATE request_groups SET server_id = ? WHERE name = ?`
-	res, err := s.db.Exec(q, server.ID, groupName)
+
+	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
-	return checkRowsAffected(res, "group", groupName)
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`UPDATE request_groups SET server_id = ? WHERE id = ?`, server.ID, group.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO group_servers (group_id, server_id) VALUES (?, ?)`, group.ID, server.ID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// AddGroupServer adds server to groupName's allowed set of servers - the
+// only servers a request belonging to that group can pick via its own
+// ServerSelector (see requestpane.rebuildServerSelector /
+// ListGroupServers), so a request never ends up resolving against a
+// server that has nothing to do with its group's API. A no-op (not an
+// error) if server is already a member. Does not change the group's
+// *default* server (see SetGroupServer) - a group can allow several
+// servers (e.g. dev/staging/prod) while defaulting to just one of them.
+func (s *SQLiteStorage) AddGroupServer(groupName, serverName string) error {
+	group, err := s.GetGroupByName(groupName)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return fmt.Errorf("group not found: %s", groupName)
+	}
+	server, err := s.GetServerByName(serverName)
+	if err != nil {
+		return err
+	}
+	if server == nil {
+		return fmt.Errorf("server not found: %s", serverName)
+	}
+	q := `INSERT OR IGNORE INTO group_servers (group_id, server_id) VALUES (?, ?)`
+	_, err = s.db.Exec(q, group.ID, server.ID)
+	return err
+}
+
+// RemoveGroupServer removes server from groupName's allowed set (see
+// AddGroupServer). If server was the group's *default* (see
+// SetGroupServer), the default is cleared too - a group's default server
+// must always be one of its own allowed servers, so leaving it pointing
+// at one that's just been disallowed would be a silent inconsistency.
+func (s *SQLiteStorage) RemoveGroupServer(groupName, serverName string) error {
+	group, err := s.GetGroupByName(groupName)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return fmt.Errorf("group not found: %s", groupName)
+	}
+	server, err := s.GetServerByName(serverName)
+	if err != nil {
+		return err
+	}
+	if server == nil {
+		return fmt.Errorf("server not found: %s", serverName)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`DELETE FROM group_servers WHERE group_id = ? AND server_id = ?`, group.ID, server.ID)
+	if err != nil {
+		return err
+	}
+	if err := checkRowsAffected(res, "server in group", fmt.Sprintf("%s/%s", groupName, serverName)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE request_groups SET server_id = NULL WHERE id = ? AND server_id = ?`, group.ID, server.ID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ListGroupServers returns the servers allowed for groupID (see
+// AddGroupServer), sorted by name - what a request belonging to that
+// group's own ServerSelector should offer, instead of every server in the
+// database. An empty (non-nil) slice, not an error, when the group allows
+// none yet.
+func (s *SQLiteStorage) ListGroupServers(groupID int64) ([]http.Server, error) {
+	q := `SELECT s.id, s.name, s.base_url, s.headers FROM group_servers gs JOIN servers s ON s.id = gs.server_id WHERE gs.group_id = ? ORDER BY s.name`
+	rows, err := s.db.Query(q, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := make([]http.Server, 0)
+	for rows.Next() {
+		var server http.Server
+		var headerString string
+		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString); err != nil {
+			return nil, err
+		}
+		headers, err := deserializeHeaders(headerString)
+		if err != nil {
+			return nil, err
+		}
+		server.Headers = headers
+		servers = append(servers, server)
+	}
+	return servers, rows.Err()
 }
 
 func (s *SQLiteStorage) RenameGroup(oldName, newName string) error {
@@ -496,6 +737,10 @@ func (s *SQLiteStorage) DeleteGroup(name string) (int64, error) {
 	}
 	deletedRequests, err := res.RowsAffected()
 	if err != nil {
+		return 0, err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM group_servers WHERE group_id = ?`, group.ID); err != nil {
 		return 0, err
 	}
 

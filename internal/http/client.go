@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/owenHochwald/Volt/internal/logging"
 )
 
 const (
@@ -20,7 +22,15 @@ type Client struct {
 	Client    *http.Client
 }
 
-func (c *Client) makeCustomRequest(req *Request) (*http.Response, error) {
+// makeCustomRequest builds the outgoing *http.Request and dispatches it
+// under ctx - which callers (see Send) must keep alive for as long as
+// they intend to read the response body, not just until this function
+// returns. c.Client.Do only blocks for the response's headers; on a
+// streamed body (the normal case for anything but a tiny response) the
+// body is read separately, afterward, by the caller - a context that's
+// already been cancelled by then aborts that read with "context
+// canceled", even though the request itself succeeded.
+func (c *Client) makeCustomRequest(ctx context.Context, req *Request) (*http.Response, error) {
 	payload := strings.NewReader(req.Body)
 	customReq, err := http.NewRequest(req.Method, req.URL, payload)
 	if err != nil {
@@ -30,20 +40,9 @@ func (c *Client) makeCustomRequest(req *Request) (*http.Response, error) {
 	for key, val := range req.Headers {
 		customReq.Header.Set(key, val)
 	}
+	customReq = customReq.WithContext(ctx)
 
-	if c.Timeout > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-		defer cancel()
-		customReq = customReq.WithContext(ctx)
-	}
-
-	res, err := c.Client.Do(customReq)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return res, err
+	return c.Client.Do(customReq)
 }
 
 func (c *Client) Send(req *Request, result chan<- *Response) {
@@ -54,8 +53,29 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 		start = time.Now()
 	}
 
-	res, err := c.makeCustomRequest(req)
+	// This context's cancellation must stay in scope for the whole
+	// send - headers *and* body - not just until makeCustomRequest
+	// returns (that used to be a real bug: deferring cancel() inside
+	// makeCustomRequest cancelled the request's context the moment
+	// c.Client.Do got the response headers back, before the body below
+	// was read at all. A response small enough to already be fully
+	// buffered read fine regardless (nothing left to block on), but
+	// anything that actually needed a further blocking read off the
+	// socket - any response of meaningful size - failed with "context
+	// canceled", looking like a random, response-size-dependent failure
+	// with no connection to what was actually wrong).
+	ctx := context.Background()
+	if c.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		defer cancel()
+	}
+
+	logging.Logf("http: -> %s %s (%d header(s), %d byte body)", req.Method, req.URL, len(req.Headers), len(req.Body))
+
+	res, err := c.makeCustomRequest(ctx, req)
 	if err != nil {
+		logging.Logf("http: <- %s %s failed: %v", req.Method, req.URL, err)
 		result <- &Response{Error: err.Error()}
 		return
 	}
@@ -69,11 +89,14 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
+		logging.Logf("http: <- %s %s: got status %s but failed reading body: %v", req.Method, req.URL, res.Status, err)
 		result <- &Response{Error: err.Error()}
 		return
 	}
 
 	duration := time.Since(start)
+
+	logging.Logf("http: <- %s %s -> %s (%d bytes) in %s", req.Method, req.URL, res.Status, len(body), duration)
 
 	result <- &Response{
 		Status:     res.Status,

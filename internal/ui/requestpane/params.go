@@ -1,10 +1,12 @@
 package requestpane
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
@@ -52,6 +54,34 @@ func (p Param) Value() string {
 	return p.Input.Value()
 }
 
+// SetValue sets the field's current value, whichever of Input/Enum drives
+// it - the write counterpart of Value(), used to restore a previously
+// saved value (see RequestPane.ApplySnapshot). p must be addressed
+// through a slice element (e.g. &params[i]), not a loop copy - same
+// caveat as everywhere else a Param's Input/Enum is mutated in place.
+func (p *Param) SetValue(value string) {
+	if p.Enum != nil {
+		p.Enum.SetValue(value)
+		return
+	}
+	p.Input.SetValue(value)
+}
+
+// DisplayType returns what to show next to the field's name (see
+// paramLabel in view.go): "enum" for a genuine schema-declared enum picker
+// - its Type is whatever the enum's values are declared as (usually
+// "string"), which read as a free-text field even though it's actually a
+// fixed choice - rather than that underlying type. A boolean is left as
+// "boolean": it's also rendered as a picker (see paramFromFieldSchema),
+// but unlike an arbitrary enum, "boolean" is already the accurate,
+// unambiguous type to show.
+func (p Param) DisplayType() string {
+	if p.Enum != nil && p.Type != "boolean" {
+		return "enum"
+	}
+	return p.Type
+}
+
 // ValidateParam checks a single param's current value against its declared
 // type ("integer"/"number" must actually parse as such) and its
 // MinLength/MaxLength/Minimum/Maximum constraints, returning a short
@@ -79,6 +109,22 @@ func ValidateParam(p Param) (string, bool) {
 	case "number":
 		if _, err := strconv.ParseFloat(val, 64); err != nil {
 			return "must be a number", false
+		}
+	case "", "string":
+		// A string (or untyped) field is sent close to verbatim rather
+		// than through the usual full JSON string escaping (see
+		// rawJSONStringValue in bodyparams.go) - only a literal `"` is
+		// escaped, so a real JSON escape sequence typed directly (e.g.
+		// "\n", the two characters backslash+n) reaches the server as
+		// that escape sequence - a genuine newline once parsed there -
+		// rather than being re-escaped into literal backslash-n text.
+		// The tradeoff is a backslash that isn't part of a valid JSON
+		// escape (e.g. a Windows path "C:\Users") would produce invalid
+		// JSON - caught here so it blocks sending with a clear reason,
+		// instead of silently corrupting the whole request body (see
+		// BuildRequestBody's marshal-error fallback).
+		if !json.Valid([]byte(rawJSONStringValue(val))) {
+			return `contains an invalid escape sequence - \ must start a valid one: \", \\, \/, \n, \r, \t, \b, \f, or \uXXXX`, false
 		}
 	}
 
@@ -138,21 +184,25 @@ func RequiredFieldErrors(params []Param) []string {
 	return errs
 }
 
-// firstErrorFocusIndex returns the focus index of the first BodyParams or
-// ArrayParams field that's currently invalid (ValidateParam) or a required
-// field left empty (RequiredFieldErrors' semantics) - the same checks
-// handleSubmit blocks a send on (see mode_normal.go/mode_loadtest.go) - so
-// a blocked send can jump focus straight to the field that caused it
-// instead of leaving the cursor wherever it happened to be with only the
-// ParseErrors list under the button to notice. The index matches
-// NormalMode/LoadTestMode's shared components() prefix: ServerSelector,
-// MethodSelector, URLInput, NameInput, then PathParams (4 fixed fields
-// before BodyParams/ArrayParams start) - both modes' components() must
-// keep that same prefix for this to stay correct. ok is false when nothing
-// in BodyParams/ArrayParams has a problem - e.g. the block came from a
-// malformed Headers line instead, which has no single field to jump to.
+// firstErrorFocusIndex returns the focus index of the first PathParams,
+// BodyParams, or ArrayParams field that's currently invalid (ValidateParam)
+// or a required field left empty (RequiredFieldErrors' semantics) - the
+// same checks handleSubmit blocks a send on (see mode_normal.go/
+// mode_loadtest.go) - so a blocked send can jump focus straight to the
+// field that caused it instead of leaving the cursor wherever it happened
+// to be with only the ParseErrors list under the button to notice. The
+// index matches NormalMode/LoadTestMode's shared components() prefix:
+// ServerSelector (only for a grouped request - see ShowServerSelector),
+// MethodSelector, URLInput, NameInput, then PathParams start - both
+// modes' components() must keep that same prefix for this to stay
+// correct. ok is false when nothing in PathParams/BodyParams/ArrayParams
+// has a problem - e.g. the block came from a malformed Headers line
+// instead, which has no single field to jump to.
 func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
-	const focusPrefixLen = 4 // ServerSelector, MethodSelector, URLInput, NameInput
+	focusPrefixLen := 3 // MethodSelector, URLInput, NameInput
+	if m.ShowServerSelector() {
+		focusPrefixLen++
+	}
 	fieldInvalid := func(p Param) bool {
 		if _, ok := ValidateParam(p); !ok {
 			return true
@@ -160,7 +210,13 @@ func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
 		return p.Required && p.Value() == ""
 	}
 
-	idx := focusPrefixLen + len(m.PathParams)
+	idx := focusPrefixLen
+	for _, p := range m.PathParams {
+		if fieldInvalid(p) {
+			return idx, true
+		}
+		idx++
+	}
 	for _, p := range m.BodyParams {
 		if fieldInvalid(p) {
 			return idx, true
@@ -189,21 +245,37 @@ func newParamInput() textinput.Model {
 	})
 }
 
-// rebuildParams derives a fresh param slice from names, reusing existing
-// inputs (and their typed values) for names that are still present.
-func rebuildParams(existing []Param, names []string) []Param {
-	byName := make(map[string]textinput.Model, len(existing))
+// rebuildParams derives a fresh param slice from names, reusing each
+// existing param's current value (whether typed into Input or picked via
+// Enum) for names that are still present, so re-deriving this on every URL
+// keystroke (see syncPathParams) doesn't reset what's already been filled
+// in. schema, keyed by name, gives each param its type/enum/min-max/
+// required constraints (see http.Request.PathParamSchema) via
+// paramFromFieldSchema - the same constructor BodyParams use, so a path
+// param behaves identically to a body field of the same schema shape
+// (free text, a fixed-choice picker, a boolean switch, live validation).
+// A name absent from schema (nil for a request saved before this existed,
+// or a placeholder the spec declared no schema for) gets an unconstrained
+// text field, same as before this existed at all.
+func rebuildParams(existing []Param, names []string, schema map[string]http.BodyFieldSchema) []Param {
+	byName := make(map[string]string, len(existing))
 	for _, p := range existing {
-		byName[p.Name] = p.Input
+		byName[p.Name] = p.Value()
 	}
 
 	params := make([]Param, len(names))
 	for i, name := range names {
-		input, ok := byName[name]
-		if !ok {
-			input = newParamInput()
+		s := schema[name]
+		// Overriding Default with the currently-held value (rather than
+		// setting it directly on the resulting Param after the fact) lets
+		// paramFromFieldSchema's own Enum/boolean/Input construction pick
+		// it up exactly the way it already handles a schema default - one
+		// code path for both "start on the schema's default" and "resume
+		// what was already typed/selected".
+		if val, ok := byName[name]; ok && val != "" {
+			s.Default = val
 		}
-		params[i] = Param{Name: name, Input: input}
+		params[i] = paramFromFieldSchema(name, s)
 	}
 	return params
 }

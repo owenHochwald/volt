@@ -64,6 +64,19 @@ func (e *EnumSelector) Value() string {
 	return e.options[e.index]
 }
 
+// SetValue selects whichever option equals value, the write counterpart
+// of Value() - used to restore a previously saved choice (see
+// requestpane.RequestPane.ApplySnapshot). Leaves the selector unchanged if
+// no option matches (e.g. the schema changed since the value was saved).
+func (e *EnumSelector) SetValue(value string) {
+	for i, o := range e.options {
+		if o == value {
+			e.index = i
+			return
+		}
+	}
+}
+
 func (e *EnumSelector) Next() {
 	if len(e.options) == 0 {
 		return

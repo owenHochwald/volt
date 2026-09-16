@@ -85,8 +85,10 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 
 		m.syncRequest()
 
-		errs := ValidateParams(m.BodyParams)
+		errs := ValidateParams(m.PathParams)
+		errs = append(errs, ValidateParams(m.BodyParams)...)
 		errs = append(errs, ValidateArrayParams(m.ArrayParams)...)
+		errs = append(errs, RequiredFieldErrors(m.PathParams)...)
 		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
 		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
 		if len(errs) > 0 {
@@ -103,19 +105,31 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 		m.Stopwatch.Reset()
 		stopwatchCmd := m.Stopwatch.Start()
 
-		return m, tea.Batch(stopwatchCmd, sendRequestCmd(m.Client, m.resolvedRequest()))
+		cmds := []tea.Cmd{stopwatchCmd, sendRequestCmd(m.Client, m.resolvedRequest())}
+		// Persisted only once a send actually goes out (validation has
+		// already passed above), never for a request that's merely being
+		// edited - see ApplySnapshot for where this gets restored.
+		if m.DB != nil {
+			cmds = append(cmds, ui.SaveLastSentRequestCmd(m.DB, m.Snapshot()))
+		}
+		return m, tea.Batch(cmds...)
 	}
 	return m, nil
 }
 
 // components lists this mode's focusable fields in tab order. This must
-// match fieldsContent()'s render order in view.go (server, method+URL, name,
-// path params, body params, array params, headers, submit) - otherwise tab
+// match fieldsContent()'s render order in view.go (server - only for a
+// grouped request, see ShowServerSelector - method+URL, name, path
+// params, body params, array params, headers, submit) - otherwise tab
 // visits fields in a different order than they're drawn in, and the cursor
 // appears to jump up and down the screen instead of moving straight
 // through it.
 func (nm *NormalMode) components(m *RequestPane) []ui.Focusable {
-	components := []ui.Focusable{m.ServerSelector, m.MethodSelector, m.URLInput, m.NameInput}
+	var components []ui.Focusable
+	if m.ShowServerSelector() {
+		components = append(components, m.ServerSelector)
+	}
+	components = append(components, m.MethodSelector, m.URLInput, m.NameInput)
 	components = append(components, paramFocusables(m.PathParams)...)
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)

@@ -82,8 +82,10 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 
 		m.syncRequest()
 
-		errs := ValidateParams(m.BodyParams)
+		errs := ValidateParams(m.PathParams)
+		errs = append(errs, ValidateParams(m.BodyParams)...)
 		errs = append(errs, ValidateArrayParams(m.ArrayParams)...)
+		errs = append(errs, RequiredFieldErrors(m.PathParams)...)
 		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
 		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
 		if len(errs) > 0 {
@@ -109,13 +111,18 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 }
 
 // components lists this mode's focusable fields in tab order. This must
-// match fieldsContent()'s render order in view.go (server, method+URL, name,
-// path params, body params, headers, load-test config, submit) - otherwise
+// match fieldsContent()'s render order in view.go (server - only for a
+// grouped request, see ShowServerSelector - method+URL, name, path
+// params, body params, headers, load-test config, submit) - otherwise
 // tab visits fields in a different order than they're drawn in, and the
 // cursor appears to jump up and down the screen instead of moving straight
 // through it.
 func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
-	components := []ui.Focusable{m.ServerSelector, m.MethodSelector, m.URLInput, m.NameInput}
+	var components []ui.Focusable
+	if m.ShowServerSelector() {
+		components = append(components, m.ServerSelector)
+	}
+	components = append(components, m.MethodSelector, m.URLInput, m.NameInput)
 	components = append(components, paramFocusables(m.PathParams)...)
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)

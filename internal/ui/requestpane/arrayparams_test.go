@@ -2,6 +2,7 @@ package requestpane
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -156,8 +157,9 @@ func TestRequestPane_ArrayCountControl_CyclesViaFocusManager(t *testing.T) {
 	pane.reinitRequestPane(req)
 	pane.PanelFocused = true
 
-	// Tab order: ServerSelector, Method, URL, Name -> ArrayCountControl.
-	for i := 0; i < 4; i++ {
+	// Tab order (this request has no group, so no ServerSelector - see
+	// ShowServerSelector): Method, URL, Name -> ArrayCountControl.
+	for i := 0; i < 3; i++ {
 		pane.FocusManager.Next()
 	}
 	if _, ok := pane.FocusManager.Current().(*ArrayCountControl); !ok {
@@ -198,5 +200,208 @@ func TestRequestPane_ArrayCountControl_CyclesViaFocusManager(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected the newly added item's first field to be reachable via the focus cycle")
+	}
+}
+
+// TestNewSimpleArrayParam_StartsWithOnePrePopulatedUnnamedItem verifies a
+// "simple" array (its items have no object structure - see
+// http.BodyFieldSchema.ItemType, e.g. create_host's real-world
+// "ipv4_pool: {items: {type: number}, type: array}") builds one item with
+// exactly one unnamed field of that type, not an Enum picker and not a
+// named sub-field group like a "complex" array gets.
+func TestNewSimpleArrayParam_StartsWithOnePrePopulatedUnnamedItem(t *testing.T) {
+	a := newSimpleArrayParam("ipv4_pool", "number")
+
+	if !a.IsSimple() {
+		t.Fatal("expected IsSimple() to be true for a simple array")
+	}
+	if len(a.Items) != 1 {
+		t.Fatalf("expected 1 pre-populated item, got %d", len(a.Items))
+	}
+	if len(a.Items[0].Fields) != 1 {
+		t.Fatalf("expected exactly 1 unnamed field, got %+v", a.Items[0].Fields)
+	}
+	f := a.Items[0].Fields[0]
+	if f.Name != simpleArrayItemName {
+		t.Errorf("expected the item field to be unnamed, got %q", f.Name)
+	}
+	if f.Type != "number" {
+		t.Errorf("expected the item field's type to be %q, got %q", "number", f.Type)
+	}
+	if f.Enum != nil {
+		t.Error("expected a plain Input, not an Enum picker")
+	}
+	if a.itemLabel() != "number" {
+		t.Errorf("expected itemLabel to fall back to the item type %q, got %q", "number", a.itemLabel())
+	}
+}
+
+// TestRequestPane_SimpleArrayField_BuildsFlatJSONArray is an end-to-end
+// regression test for the real bug report against create_host's
+// ipv4_pool field: a "simple" array used to fall through to a single plain
+// text field with no way to actually express "an array of values" at all.
+// It should now be a repeatable list (add/remove items, one independent
+// input per item - avoiding any delimiter/escaping question for values
+// that might contain a comma or quote) that serializes to a real flat JSON
+// array of the declared item type.
+func TestRequestPane_SimpleArrayField_BuildsFlatJSONArray(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"ipv4_pool": {Type: "array", ItemType: "number"},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/host", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	if len(pane.ArrayParams) != 1 {
+		t.Fatalf("expected 1 array param, got BodyParams=%+v ArrayParams=%+v", pane.BodyParams, pane.ArrayParams)
+	}
+	a := &pane.ArrayParams[0]
+	if !a.IsSimple() {
+		t.Fatal("expected ipv4_pool to become a simple ArrayParam")
+	}
+
+	a.Items[0].Fields[0].Input.SetValue("10")
+	a.AddItem()
+	a.Items[1].Fields[0].Input.SetValue("20")
+	a.AddItem()
+	a.Items[2].Fields[0].Input.SetValue("30")
+
+	resolved := pane.resolvedRequest()
+	var got map[string][]float64
+	if err := json.Unmarshal([]byte(resolved.Body), &got); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+	want := []float64{10, 20, 30}
+	if len(got["ipv4_pool"]) != len(want) {
+		t.Fatalf("expected ipv4_pool=%v, got %v", want, got["ipv4_pool"])
+	}
+	for i := range want {
+		if got["ipv4_pool"][i] != want[i] {
+			t.Errorf("expected ipv4_pool[%d]=%v, got %v", i, want[i], got["ipv4_pool"][i])
+		}
+	}
+}
+
+// TestRequestPane_SimpleArrayField_CommaAndQuoteNeedNoEscaping verifies a
+// string item containing a comma and a double quote - the two characters
+// that would need escaping (or be ambiguous with the delimiter) in a
+// comma-separated single-field format - round-trips byte-for-byte, since
+// each item is its own independent input with no delimiter involved at
+// all; the quote is auto-escaped only at the JSON-encoding step (see
+// rawJSONStringValue), never something the user has to do by hand.
+func TestRequestPane_SimpleArrayField_CommaAndQuoteNeedNoEscaping(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"labels": {Type: "array", ItemType: "string"},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/host", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	a := &pane.ArrayParams[0]
+	a.Items[0].Fields[0].Input.SetValue(`a,b"c`)
+
+	resolved := pane.resolvedRequest()
+	var got map[string][]string
+	if err := json.Unmarshal([]byte(resolved.Body), &got); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+	want := `a,b"c`
+	if len(got["labels"]) != 1 || got["labels"][0] != want {
+		t.Errorf("expected labels=[%q], got %v", want, got["labels"])
+	}
+}
+
+// TestRequestPane_StringField_ValidEscapeSequencePassesThroughUnescaped
+// verifies typing a real JSON escape sequence directly into a string field
+// (e.g. "\n", the two characters backslash+n) reaches the server as that
+// escape sequence - a genuine newline once *the server* parses the JSON -
+// rather than being re-escaped into the literal four characters "\\n"
+// (which a server would parse back as text "\n", not an actual line
+// break). This is what a downstream JSON parser (here, encoding/json
+// standing in for "the server") sees once it decodes our request body.
+func TestRequestPane_StringField_ValidEscapeSequencePassesThroughUnescaped(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{"note": {Type: "string"}})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.BodyParams[0].Input.SetValue(`line1\nline2`)
+
+	if msg, ok := ValidateParam(pane.BodyParams[0]); !ok {
+		t.Fatalf("expected a valid \\n escape sequence to pass validation, got %q", msg)
+	}
+
+	resolved := pane.resolvedRequest()
+	var got map[string]string
+	if err := json.Unmarshal([]byte(resolved.Body), &got); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+	want := "line1\nline2" // an actual newline, not the two characters \ and n
+	if got["note"] != want {
+		t.Errorf("expected note=%q (with a real newline), got %q", want, got["note"])
+	}
+}
+
+// TestRequestPane_StringField_InvalidEscapeSequenceBlocksSend verifies a
+// backslash that isn't part of a valid JSON escape (e.g. a Windows path
+// like "C:\Users") is caught by validation and blocks sending, rather than
+// reaching BuildRequestBody and silently corrupting the *entire* request
+// body into "{}" (its defensive fallback on a JSON marshal error).
+func TestRequestPane_StringField_InvalidEscapeSequenceBlocksSend(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{"note": {Type: "string"}})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.BodyParams[0].Input.SetValue(`C:\Users\name`)
+
+	if _, ok := ValidateParam(pane.BodyParams[0]); ok {
+		t.Error("expected a bare backslash with no valid JSON escape after it to fail validation")
+	}
+}
+
+// TestRequestPane_SimpleArrayField_OmitsUntouchedItems verifies an item
+// added but never typed into is left out of the sent JSON, same "no
+// value, don't send it" rule a top-level param follows (see
+// BuildRequestBody).
+func TestRequestPane_SimpleArrayField_OmitsUntouchedItems(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"ipv4_pool": {Type: "array", ItemType: "number"},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/host", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	a := &pane.ArrayParams[0]
+	a.Items[0].Fields[0].Input.SetValue("10")
+	a.AddItem() // left empty on purpose
+
+	resolved := pane.resolvedRequest()
+	var got map[string][]float64
+	if err := json.Unmarshal([]byte(resolved.Body), &got); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+	if len(got["ipv4_pool"]) != 1 || got["ipv4_pool"][0] != 10 {
+		t.Errorf("expected the untouched second item to be omitted, got %v", got["ipv4_pool"])
+	}
+}
+
+// TestValidateArrayParams_SimpleArray_FlagsBadEntryWithoutDanglingDot
+// verifies an invalid entry in a simple array's item produces an error
+// message naming "name[index]" rather than "name[index]." with a
+// dangling, meaningless empty field name (see arrayItemErrorPrefix).
+func TestValidateArrayParams_SimpleArray_FlagsBadEntryWithoutDanglingDot(t *testing.T) {
+	a := newSimpleArrayParam("ipv4_pool", "number")
+	a.Items[0].Fields[0].Input.SetValue("not-a-number")
+
+	errs := ValidateArrayParams([]ArrayParam{a})
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 validation error, got %v", errs)
+	}
+	if got := errs[0]; !strings.HasPrefix(got, "ipv4_pool[0]:") {
+		t.Errorf("expected an error prefixed %q (no dangling dot), got %q", "ipv4_pool[0]:", got)
 	}
 }

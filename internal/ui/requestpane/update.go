@@ -32,6 +32,17 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncRequest()
 			return m, ui.SaveRequestCmd(m.DB, m.Request)
 		}
+		if keybindings.Matches(msg, m.keys.ResetRequest) {
+			m.resetToBlank()
+			// Also clears whatever was persisted as "the last sent
+			// request" (see ui.SaveLastSentRequestCmd) - otherwise a
+			// reset pane would come right back on the next app start,
+			// defeating the point of resetting it now.
+			if m.DB != nil {
+				return m, ui.ClearLastSentRequestCmd(m.DB)
+			}
+			return m, nil
+		}
 		if keybindings.Matches(msg, m.keys.NextField) {
 			m.FocusManager.Next()
 			m.scrollToFocused()
@@ -94,6 +105,20 @@ func (m *RequestPane) toggleLoadTestMode() {
 
 	// Create new focus manager, preserving index (clamped to valid range)
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, currentIndex)
+}
+
+// resetToBlank discards whatever request is currently loaded/being
+// edited - including every typed field value - and returns the pane to
+// the exact same blank, unsaved-request state SetupRequestPane starts the
+// app on (see http.NewDefaultRequest). Also drops back to normal mode:
+// like a fresh app start, there's no reason a reset request should stay
+// in load-test mode.
+func (m *RequestPane) resetToBlank() {
+	m.LoadTestMode = false
+	m.currentMode = &NormalMode{}
+	m.RequestInProgress = false
+	m.ParseErrors = nil
+	m.reinitRequestPane(http.NewDefaultRequest())
 }
 
 // reinitRequestPane reinits the request pane with a new request

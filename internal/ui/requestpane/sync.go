@@ -3,12 +3,35 @@ package requestpane
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
+
+// contentTypeHeader is the canonical header name BuildRequestBody's JSON
+// output is advertised under (see resolvedRequest) - matches the casing
+// net/http.Header.Set would itself canonicalize any spelling to once the
+// request actually goes out (see client.go's makeCustomRequest).
+const contentTypeHeader = "Content-Type"
+
+// hasHeader reports whether headers already has an entry for name,
+// compared case-insensitively - HTTP header names aren't case-sensitive
+// (a user-typed "content-type" is the same header as "Content-Type" once
+// sent - see makeCustomRequest's http.Header.Set, which canonicalizes
+// whatever casing it's given), so a plain exact-key map lookup could miss
+// a header that's actually already there and add a second, differently
+// cased entry alongside it.
+func hasHeader(headers map[string]string, name string) bool {
+	for k := range headers {
+		if strings.EqualFold(k, name) {
+			return true
+		}
+	}
+	return false
+}
 
 // syncRequest synchronizes the UI state with the request model
 func (m *RequestPane) syncRequest() {
@@ -76,11 +99,32 @@ func (m *RequestPane) syncRequest() {
 func (m *RequestPane) resolvedRequest() *http.Request {
 	resolvedReq := *m.Request
 	resolvedReq.URL = SubstitutePathParams(m.Request.URL, m.PathParams)
+	headersChanged := false
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		resolvedReq.Body = BuildRequestBody(m.BodyParams, m.ArrayParams)
+
+		// A schema-driven body (see BuildRequestBody/paramJSONValue) is
+		// always JSON, but nothing was actually telling the server that -
+		// only if the user hadn't already set their own Content-Type
+		// (case-insensitively - see hasHeader), which is left alone as a
+		// deliberate override. resolvedReq.Headers still aliases
+		// m.Request.Headers at this point (resolvedReq is a shallow copy
+		// of *m.Request, and map fields copy by reference) - mutating it
+		// in place would corrupt the stored template requests are saved
+		// from, so a fresh map is built instead, same as
+		// Server.MergeHeaders already does below for the same reason.
+		if !hasHeader(resolvedReq.Headers, contentTypeHeader) {
+			headers := make(map[string]string, len(resolvedReq.Headers)+1)
+			for k, v := range resolvedReq.Headers {
+				headers[k] = v
+			}
+			headers[contentTypeHeader] = "application/json"
+			resolvedReq.Headers = headers
+			headersChanged = true
+		}
 	}
 
-	changed := resolvedReq.URL != m.Request.URL || resolvedReq.Body != m.Request.Body
+	changed := resolvedReq.URL != m.Request.URL || resolvedReq.Body != m.Request.Body || headersChanged
 
 	if m.DB != nil && (m.Request.ServerID != nil || m.Request.GroupID != nil) {
 		if server, err := m.DB.ResolveEffectiveServer(&resolvedReq); err == nil && server != nil {

@@ -65,6 +65,30 @@ func TestNewEnumSelector_NoDefault_PrevWrapsBothDirections(t *testing.T) {
 	}
 }
 
+// TestParam_DisplayType_ShowsEnumNotUnderlyingType verifies a genuine
+// schema-declared enum field's label shows "enum" instead of its
+// underlying declared type (usually "string", read as free text even
+// though it's actually a fixed choice) - while a boolean, which is also
+// rendered as a picker (see paramFromFieldSchema), keeps "boolean" since
+// that's already accurate and unambiguous, and a plain non-enum field's
+// declared type is left untouched.
+func TestParam_DisplayType_ShowsEnumNotUnderlyingType(t *testing.T) {
+	enumField := Param{Type: "string", Enum: NewEnumSelector([]string{"a", "b"}, "a")}
+	if got := enumField.DisplayType(); got != "enum" {
+		t.Errorf("expected a schema enum field to display as %q, got %q", "enum", got)
+	}
+
+	boolField := Param{Type: "boolean", Enum: NewEnumSelector([]string{"true", "false"}, "true")}
+	if got := boolField.DisplayType(); got != "boolean" {
+		t.Errorf("expected a boolean picker to keep displaying as %q, got %q", "boolean", got)
+	}
+
+	plainField := Param{Type: "integer"}
+	if got := plainField.DisplayType(); got != "integer" {
+		t.Errorf("expected a plain field's declared type to pass through unchanged, got %q", got)
+	}
+}
+
 // TestEnumSelector_View_ShowsPlaceholderWhenUnset verifies the unset state
 // renders something readable rather than a blank "‹ ›", so it's visually
 // distinguishable from a field that has an actual empty-string value.

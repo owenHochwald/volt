@@ -44,6 +44,13 @@ type BodyFieldSchema struct {
 	// from "#/components/schemas/Tag"), shown as a label for the array's
 	// item block so it reads as "array of Tag" rather than just "array".
 	ItemsRefName string `json:"itemsRefName,omitempty"`
+	// ItemType is a "simple" array's item type (e.g. "number", "string") -
+	// the counterpart to Items for a "complex" one: items with no object
+	// structure to compose still declare a scalar type worth keeping, so a
+	// simple array is editable as one comma-separated field of that type
+	// (see requestpane.paramJSONValue) instead of silently discarding what
+	// its entries are supposed to be and falling back to plain text.
+	ItemType string `json:"itemType,omitempty"`
 
 	// Required mirrors whether this field's name appeared in its parent
 	// object schema's "required" list. An empty required field blocks

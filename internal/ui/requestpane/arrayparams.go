@@ -21,21 +21,34 @@ type ArrayItem struct {
 	Fields []Param
 }
 
-// ArrayParam is a body param whose schema declared "type: array" with an
-// object item schema (its "items" was a $ref to an object - see
-// cli.extractFieldSchema) - a repeatable list of ArrayItem, each edited as
-// its own little group of fields and composed into a JSON array of objects
-// when the request is built (see BuildRequestBody).
+// ArrayParam is a body param whose schema declared "type: array" - a
+// repeatable list of ArrayItem, composed into a JSON array when the
+// request is built (see BuildRequestBody). Covers two schema shapes:
+//
+//   - "complex" (its "items" was a $ref to an object - see
+//     cli.extractFieldSchema): itemSchema is set, each ArrayItem holds one
+//     Param per named property, and the array serializes to a JSON array
+//     of objects.
+//   - "simple" (its items had no object structure to compose - e.g.
+//     items: {type: number}, see http.BodyFieldSchema.ItemType): ItemType
+//     is set instead of itemSchema, each ArrayItem holds exactly one
+//     unnamed Param (its own independent single-line input - no
+//     delimiter, so no escaping question for commas/quotes/etc. within a
+//     value), and the array serializes to a flat JSON array of scalars.
 type ArrayParam struct {
 	Name string
 	// ItemsRefName is the referenced schema's component name (e.g. "Tag"),
 	// shown as a label for the item block so it reads as "array of Tag"
-	// rather than just "array".
+	// rather than just "array". Only ever set for a "complex" array.
 	ItemsRefName string
 	// itemSchema is the template every new item is built from (see
-	// newArrayItem) - the item schema's own properties, by name.
+	// newArrayItem) - the item schema's own properties, by name. Nil for a
+	// "simple" array (see ItemType below).
 	itemSchema map[string]http.BodyFieldSchema
-	Items      []ArrayItem
+	// ItemType marks this as a "simple" array and gives each item's lone
+	// field its type (e.g. "number") - mutually exclusive with itemSchema.
+	ItemType string
+	Items    []ArrayItem
 	// CountControl is this array's "how many items" field - wired up by
 	// the caller (see syncBodyParams) to point back at this exact
 	// ArrayParam once it's in its final resting slice, not at a
@@ -43,10 +56,31 @@ type ArrayParam struct {
 	CountControl *ArrayCountControl
 }
 
+// IsSimple reports whether this is a "simple" array (see ArrayParam) -
+// each item is one unnamed scalar field rather than a named group of
+// sub-fields.
+func (a *ArrayParam) IsSimple() bool {
+	return a.ItemType != ""
+}
+
+// simpleArrayItemName is the single field name new{Array,}Item gives a
+// "simple" array's lone item field - it has no real property name (it's
+// not a named object property, just "the value"), and both
+// renderArrayParamSection (view.go) and ValidateArrayParams/
+// RequiredArrayFieldErrors below special-case this exact name to skip
+// showing/reporting a name that isn't meaningful.
+const simpleArrayItemName = ""
+
 // newArrayItem builds one item's fields from schema, in a stable
 // (alphabetical) order, taking each field's schema default the same way a
-// top-level body param does (see paramFromFieldSchema).
-func newArrayItem(schema map[string]http.BodyFieldSchema) ArrayItem {
+// top-level body param does (see paramFromFieldSchema). For a "simple"
+// array (schema is nil, itemType is set), the item is instead a single
+// unnamed field of that type.
+func newArrayItem(schema map[string]http.BodyFieldSchema, itemType string) ArrayItem {
+	if itemType != "" {
+		return ArrayItem{Fields: []Param{paramFromFieldSchema(simpleArrayItemName, http.BodyFieldSchema{Type: itemType})}}
+	}
+
 	names := make([]string, 0, len(schema))
 	for name := range schema {
 		names = append(names, name)
@@ -60,9 +94,9 @@ func newArrayItem(schema map[string]http.BodyFieldSchema) ArrayItem {
 	return ArrayItem{Fields: fields}
 }
 
-// newArrayParam builds an ArrayParam over itemSchema, starting with a
-// single pre-populated item - most APIs expect at least one entry, and
-// starting empty would hide the item's fields entirely until the user
+// newArrayParam builds a "complex" ArrayParam over itemSchema, starting
+// with a single pre-populated item - most APIs expect at least one entry,
+// and starting empty would hide the item's fields entirely until the user
 // finds the count control. CountControl is left nil; the caller wires it
 // up once this ArrayParam is in its final resting slice (see
 // syncBodyParams).
@@ -71,7 +105,18 @@ func newArrayParam(name, itemsRefName string, itemSchema map[string]http.BodyFie
 		Name:         name,
 		ItemsRefName: itemsRefName,
 		itemSchema:   itemSchema,
-		Items:        []ArrayItem{newArrayItem(itemSchema)},
+		Items:        []ArrayItem{newArrayItem(itemSchema, "")},
+	}
+}
+
+// newSimpleArrayParam builds a "simple" ArrayParam (see ArrayParam) over
+// itemType, starting with one pre-populated (empty) item, same rationale
+// as newArrayParam.
+func newSimpleArrayParam(name, itemType string) ArrayParam {
+	return ArrayParam{
+		Name:     name,
+		ItemType: itemType,
+		Items:    []ArrayItem{newArrayItem(nil, itemType)},
 	}
 }
 
@@ -80,7 +125,7 @@ func (a *ArrayParam) AddItem() {
 	if len(a.Items) >= maxArrayItems {
 		return
 	}
-	a.Items = append(a.Items, newArrayItem(a.itemSchema))
+	a.Items = append(a.Items, newArrayItem(a.itemSchema, a.ItemType))
 }
 
 // RemoveLastItem removes the most recently added item, if any remain.
@@ -95,10 +140,14 @@ func (a *ArrayParam) RemoveLastItem() {
 }
 
 // itemLabel names what one item is, for display - the referenced schema's
-// name if known (e.g. "Tag"), else the field's own name.
+// name if known (e.g. "Tag"), the item type for a "simple" array (e.g.
+// "number"), else the field's own name.
 func (a *ArrayParam) itemLabel() string {
 	if a.ItemsRefName != "" {
 		return a.ItemsRefName
+	}
+	if a.ItemType != "" {
+		return a.ItemType
 	}
 	return a.Name
 }
@@ -159,18 +208,31 @@ func arrayParamFocusables(arrays []ArrayParam) []ui.Focusable {
 	return focusables
 }
 
+// arrayItemErrorPrefix names one item field for an error message - "name
+// [index].field" for a "complex" array's named sub-field, or plain
+// "name[index]" for a "simple" array's single unnamed field (see
+// simpleArrayItemName) - dropping the dangling "." a blank field name
+// would otherwise leave behind.
+func arrayItemErrorPrefix(arrayName string, index int, fieldName string) string {
+	if fieldName == simpleArrayItemName {
+		return fmt.Sprintf("%s[%d]", arrayName, index)
+	}
+	return fmt.Sprintf("%s[%d].%s", arrayName, index, fieldName)
+}
+
 // ValidateArrayParams checks every item field of every array param with
 // ValidateParam, returning one "name[index].field: reason" message per
-// violation, or nil if everything's within bounds - the array counterpart
-// of ValidateParams, called alongside it before a request is actually sent
-// (see mode_normal.go and mode_loadtest.go's handleSubmit).
+// violation (see arrayItemErrorPrefix), or nil if everything's within
+// bounds - the array counterpart of ValidateParams, called alongside it
+// before a request is actually sent (see mode_normal.go and
+// mode_loadtest.go's handleSubmit).
 func ValidateArrayParams(arrays []ArrayParam) []string {
 	var errs []string
 	for _, a := range arrays {
 		for i, item := range a.Items {
 			for _, f := range item.Fields {
 				if msg, ok := ValidateParam(f); !ok {
-					errs = append(errs, fmt.Sprintf("%s[%d].%s: %s", a.Name, i, f.Name, msg))
+					errs = append(errs, fmt.Sprintf("%s: %s", arrayItemErrorPrefix(a.Name, i, f.Name), msg))
 				}
 			}
 		}
@@ -187,7 +249,7 @@ func RequiredArrayFieldErrors(arrays []ArrayParam) []string {
 		for i, item := range a.Items {
 			for _, f := range item.Fields {
 				if f.Required && f.Value() == "" {
-					errs = append(errs, fmt.Sprintf("%s[%d].%s: required", a.Name, i, f.Name))
+					errs = append(errs, fmt.Sprintf("%s: required", arrayItemErrorPrefix(a.Name, i, f.Name)))
 				}
 			}
 		}

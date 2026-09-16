@@ -7,16 +7,36 @@ import "github.com/owenHochwald/Volt/internal/http"
 // group.
 const noServerOption = "(none)"
 
+// ShowServerSelector reports whether this request's ServerSelector field
+// is meaningful at all: only a request that belongs to a group has a
+// restricted, sensible set of servers to pick from (see
+// rebuildServerSelector) - an ungrouped ("clean") request has no group to
+// scope a choice by, and typically addresses its server directly via its
+// own absolute URL anyway, so there's nothing useful for the field to
+// offer. Checked by fieldsContent (whether to render/focus it at all) and
+// firstErrorFocusIndex (the focus-index prefix it accounts for).
+func (m *RequestPane) ShowServerSelector() bool {
+	return m.Request != nil && m.Request.GroupID != nil
+}
+
 // rebuildServerSelector refreshes Servers from the database and rebuilds
 // ServerSelector over it, so servers added/renamed/removed via the Groups &
 // Servers modal show up next time a request is loaded, preserving
 // m.Request's current ServerID (if any) as the selector's starting value.
 // Called from reinitRequestPane (loading a request) and SetupRequestPane
 // (initial construction).
+//
+// A request that belongs to a group only ever offers *that group's*
+// allowed servers (see storage.ListGroupServers/AddGroupServer) - not
+// every server in the database - so a request can't accidentally resolve
+// against a server that belongs to a different API entirely. An ungrouped
+// request has no group to scope by, and its ServerSelector isn't even
+// shown (see ShowServerSelector), so there's no list worth building for
+// it either.
 func (m *RequestPane) rebuildServerSelector() {
 	var servers []http.Server
-	if m.DB != nil {
-		servers, _ = m.DB.ListServers()
+	if m.DB != nil && m.ShowServerSelector() {
+		servers, _ = m.DB.ListGroupServers(*m.Request.GroupID)
 	}
 	m.Servers = servers
 

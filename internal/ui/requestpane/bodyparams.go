@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/owenHochwald/Volt/internal/http"
 )
@@ -18,12 +19,16 @@ type bodySpec struct {
 	MaxLength *int
 	Minimum   *float64
 	Maximum   *float64
-	// Items/ItemsRefName mirror http.BodyFieldSchema's fields of the same
-	// name. When Type is "array" and Items is non-empty (a "complex" array
-	// - its schema's "items" was a $ref to an object), this spec becomes an
-	// ArrayParam instead of a scalar Param - see syncBodyParams.
+	// Items/ItemsRefName/ItemType mirror http.BodyFieldSchema's fields of
+	// the same name. When Type is "array" and Items is non-empty (a
+	// "complex" array - its schema's "items" was a $ref to an object),
+	// this spec becomes a "complex" ArrayParam; when Type is "array" and
+	// Items is empty but ItemType isn't (a "simple" array - its items had
+	// no object structure to compose), it becomes a "simple" ArrayParam
+	// instead - see syncBodyParams and ArrayParam.IsSimple.
 	Items        map[string]http.BodyFieldSchema
 	ItemsRefName string
+	ItemType     string
 	Required     bool
 }
 
@@ -69,6 +74,7 @@ func extractBodySpecs(body string) []bodySpec {
 			Maximum:      f.Maximum,
 			Items:        f.Items,
 			ItemsRefName: f.ItemsRefName,
+			ItemType:     f.ItemType,
 			Required:     f.Required,
 		}
 	}
@@ -106,15 +112,34 @@ func BuildRequestBody(params []Param, arrays []ArrayParam) string {
 	return string(data)
 }
 
-// arrayJSONValue builds the JSON array of objects an ArrayParam represents,
-// e.g. [{"key":"a","value":"1"},{"key":"b","value":"2"}] - always a
-// (possibly empty) array, never null, so removing every item still sends
-// "[]" rather than dropping the field's JSON type. Each item's own fields
-// follow the same "empty and no default is left out" rule as top-level
-// params (see BuildRequestBody) - an item the user added but didn't
-// (fully) fill in only sends whichever of its fields actually have a
-// value, not every field in its schema.
-func arrayJSONValue(a ArrayParam) []map[string]interface{} {
+// arrayJSONValue builds the JSON array an ArrayParam represents - an array
+// of objects for a "complex" array, e.g.
+// [{"key":"a","value":"1"},{"key":"b","value":"2"}], or a flat array of
+// scalars for a "simple" one (see ArrayParam.IsSimple), e.g. [10,20,30] -
+// always a (possibly empty) array, never null, so removing every item
+// still sends "[]" rather than dropping the field's JSON type.
+func arrayJSONValue(a ArrayParam) interface{} {
+	if a.IsSimple() {
+		// Each item holds exactly one unnamed field (see
+		// simpleArrayItemName) - an item left empty (added but never typed
+		// into) is skipped, same "no value, don't send it" rule as a
+		// top-level param (see BuildRequestBody), rather than sending a
+		// zero-value placeholder entry.
+		items := make([]interface{}, 0, len(a.Items))
+		for _, item := range a.Items {
+			f := item.Fields[0]
+			if f.Value() == "" {
+				continue
+			}
+			items = append(items, paramJSONValue(f))
+		}
+		return items
+	}
+
+	// Each item's own fields follow the same "empty and no default is left
+	// out" rule as top-level params (see BuildRequestBody) - an item the
+	// user added but didn't (fully) fill in only sends whichever of its
+	// fields actually have a value, not every field in its schema.
 	items := make([]map[string]interface{}, len(a.Items))
 	for i, item := range a.Items {
 		obj := make(map[string]interface{}, len(item.Fields))
@@ -131,9 +156,9 @@ func arrayJSONValue(a ArrayParam) []map[string]interface{} {
 
 // paramJSONValue converts a param's current text value to the JSON type its
 // schema declared. A value that doesn't actually parse as that type (still
-// being typed, or invalid - see ValidateParam) falls back to a plain
-// string, so it round-trips as typed instead of being silently dropped or
-// zeroed.
+// being typed, or invalid - see ValidateParam) falls back to a raw JSON
+// string (see rawJSONStringValue), so it round-trips as typed instead of
+// being silently dropped or zeroed.
 func paramJSONValue(p Param) interface{} {
 	val := p.Value()
 	switch p.Type {
@@ -150,7 +175,27 @@ func paramJSONValue(p Param) interface{} {
 			return f
 		}
 	}
-	return val
+	return rawJSONStringValue(val)
+}
+
+// rawJSONStringValue builds a JSON string from val, escaping only a
+// literal `"` (to `\"`, so it doesn't prematurely end the JSON string) -
+// deliberately not the full JSON string escaping json.Marshal would apply
+// to a plain Go string (which would also escape a literal backslash).
+// That distinction matters for someone typing a real JSON escape sequence
+// directly into a string field - e.g. "\n" as the two characters
+// backslash+n - who wants it to reach the server as that escape sequence
+// (a genuine newline once the server parses the JSON body), not
+// re-escaped into the literal four-character sequence "\\n" that would
+// show up as backslash-n text once parsed. The tradeoff is explicit and
+// intentional: a backslash that isn't part of a valid JSON escape (e.g. a
+// Windows path "C:\Users") produces invalid JSON - typing a raw escape
+// sequence is presumed deliberate here, the same way the freeform Body
+// textarea (for a request with no known schema) already sends whatever's
+// typed close to verbatim.
+func rawJSONStringValue(val string) json.RawMessage {
+	escaped := strings.ReplaceAll(val, `"`, `\"`)
+	return json.RawMessage(`"` + escaped + `"`)
 }
 
 // paramFromFieldSchema builds one editable Param field from a name +
@@ -231,13 +276,19 @@ func (m *RequestPane) syncBodyParams() {
 	var arrayParams []ArrayParam
 	for _, s := range specs {
 		// A "complex" array (its schema's "items" was a $ref to an object)
-		// becomes an ArrayParam - a repeatable set of sub-fields - instead
-		// of a scalar Param; a "simple" array (Items unset - e.g. items:
-		// {type: string}, with no per-property structure to compose) falls
-		// through to the plain text field paramFromFieldSchema already
-		// gives any other array.
+		// becomes an ArrayParam with one Param per named sub-field per
+		// item; a "simple" array (Items unset but ItemType is - e.g.
+		// items: {type: number}, with no per-property structure to
+		// compose) becomes an ArrayParam too, but with each item holding
+		// one unnamed scalar field instead (see ArrayParam.IsSimple) -
+		// either way, editable as a repeatable list rather than a single
+		// opaque text field.
 		if s.Type == "array" && len(s.Items) > 0 {
 			arrayParams = append(arrayParams, newArrayParam(s.Name, s.ItemsRefName, s.Items))
+			continue
+		}
+		if s.Type == "array" && s.ItemType != "" {
+			arrayParams = append(arrayParams, newSimpleArrayParam(s.Name, s.ItemType))
 			continue
 		}
 		bodyParams = append(bodyParams, paramFromFieldSchema(s.Name, http.BodyFieldSchema{

@@ -53,6 +53,29 @@ func SaveRequestCmd(db *storage.SQLiteStorage, request *http.Request) tea.Cmd {
 	}
 }
 
+// SaveLastSentRequestCmd persists snapshot as the request to restore on
+// the app's next start (see storage.SaveLastSentRequest) - fire-and-forget
+// (no result Msg): a failure here only means the *next* restart won't have
+// something to restore, not something the user sending a request right
+// now needs to be interrupted about.
+func SaveLastSentRequestCmd(db *storage.SQLiteStorage, snapshot http.RequestSnapshot) tea.Cmd {
+	return func() tea.Msg {
+		_ = db.SaveLastSentRequest(&snapshot)
+		return nil
+	}
+}
+
+// ClearLastSentRequestCmd deletes whatever was saved by
+// SaveLastSentRequestCmd (see storage.ClearLastSentRequest), so a reset
+// request pane doesn't come back on the next app start - fire-and-forget,
+// same rationale as SaveLastSentRequestCmd.
+func ClearLastSentRequestCmd(db *storage.SQLiteStorage) tea.Cmd {
+	return func() tea.Msg {
+		_ = db.ClearLastSentRequest()
+		return nil
+	}
+}
+
 func LoadRequestsCmd(db *storage.SQLiteStorage) tea.Cmd {
 	return func() tea.Msg {
 		requests, err := db.Load()

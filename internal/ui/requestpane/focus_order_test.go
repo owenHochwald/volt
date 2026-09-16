@@ -11,8 +11,10 @@ import (
 
 // TestNormalMode_ComponentsMatchRenderOrder locks in that tab order follows
 // the same top-to-bottom sequence fieldsContent() renders in view.go
-// (server, method+URL, name, path params, body params, headers, submit). The
-// two lists drifting apart previously made tab jump around the screen
+// (method+URL, name, path params, body params, headers, submit - no
+// server field here, since this request has no group - see
+// ShowServerSelector/TestNormalMode_ComponentsMatchRenderOrder_Grouped).
+// The two lists drifting apart previously made tab jump around the screen
 // instead of moving straight down it.
 func TestNormalMode_ComponentsMatchRenderOrder(t *testing.T) {
 	pane, _ := setupTestPane(t)
@@ -35,13 +37,40 @@ func TestNormalMode_ComponentsMatchRenderOrder(t *testing.T) {
 	components := nm.components(&pane)
 
 	want := []ui.Focusable{
-		pane.ServerSelector,
 		pane.MethodSelector,
 		pane.URLInput,
 		pane.NameInput,
 		&pane.PathParams[0].Input,
 		&pane.BodyParams[0].Input,
 		&pane.BodyParams[1].Input,
+		pane.Headers,
+		pane.SubmitButton,
+	}
+	assertSameFocusOrder(t, components, want)
+}
+
+// TestNormalMode_ComponentsMatchRenderOrder_Grouped is the grouped
+// counterpart: a request that belongs to a group does get a server field,
+// as the very first one (see ShowServerSelector).
+func TestNormalMode_ComponentsMatchRenderOrder_Grouped(t *testing.T) {
+	pane, db := setupTestPane(t)
+
+	group, err := db.GetOrCreateGroup("petstore")
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	req := &http.Request{Method: http.GET, URL: "/items", Headers: map[string]string{}, GroupID: &group.ID}
+	pane.reinitRequestPane(req)
+
+	nm := &NormalMode{}
+	components := nm.components(&pane)
+
+	want := []ui.Focusable{
+		pane.ServerSelector,
+		pane.MethodSelector,
+		pane.URLInput,
+		pane.NameInput,
+		pane.Body,
 		pane.Headers,
 		pane.SubmitButton,
 	}
@@ -62,7 +91,6 @@ func TestLoadTestMode_ComponentsMatchRenderOrder(t *testing.T) {
 	components := ltm.components(&pane)
 
 	want := []ui.Focusable{
-		pane.ServerSelector,
 		pane.MethodSelector,
 		pane.URLInput,
 		pane.NameInput,
@@ -98,7 +126,6 @@ func TestNormalMode_ComponentsFallsBackToFreeformBody(t *testing.T) {
 	components := nm.components(&pane)
 
 	want := []ui.Focusable{
-		pane.ServerSelector,
 		pane.MethodSelector,
 		pane.URLInput,
 		pane.NameInput,

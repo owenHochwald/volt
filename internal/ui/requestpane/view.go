@@ -40,9 +40,6 @@ type fieldOffset struct {
 // The returned offsets locate every focusable field within that content
 // (see scrollToFocused).
 func (m RequestPane) fieldsContent() (string, []fieldOffset) {
-	serverLabel := ui.LabelStyle.Render("Server ")
-	serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
-
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
@@ -81,11 +78,30 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	// adding the running line count so far - lipgloss.Height() rather than
 	// a hardcoded line-count guess, so this can't silently drift out of
 	// sync if a block's own rendering ever changes shape.
-	elements := []string{"", serverLine, "", primaryLine, "", nameLine}
-	offsets := []fieldOffset{
-		{m.ServerSelector, 1},
-		{m.MethodSelector, 3},
-		{m.URLInput, 3},
+	// A request with no group (see ShowServerSelector) has no group to
+	// scope its choice of server by - and, per its own group_servers
+	// membership becoming the only allowed set for a grouped request (see
+	// rebuildServerSelector), there's nothing meaningful left for an
+	// ungrouped request to pick anyway - so the field is left out
+	// entirely rather than shown picking from every server in the
+	// database, unscoped.
+	var elements []string
+	var offsets []fieldOffset
+	if m.ShowServerSelector() {
+		serverLabel := ui.LabelStyle.Render("Server ")
+		serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
+		elements = []string{"", serverLine, "", primaryLine, "", nameLine}
+		offsets = []fieldOffset{
+			{m.ServerSelector, 1},
+			{m.MethodSelector, 3},
+			{m.URLInput, 3},
+		}
+	} else {
+		elements = []string{"", primaryLine, "", nameLine}
+		offsets = []fieldOffset{
+			{m.MethodSelector, 1},
+			{m.URLInput, 1},
+		}
 	}
 	lineCount := func() int { return lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, elements...)) }
 
@@ -316,7 +332,7 @@ func renderParamSection(title string, params []Param) (string, []fieldOffset) {
 	lines = append(lines, paramSectionTitleStyle.Render(title+":"))
 	offsets := make([]fieldOffset, len(params))
 	for i, p := range params {
-		label := "  " + paramLabel(p.Name, p.Type, p.Required)
+		label := "  " + paramLabel(p.Name, p.DisplayType(), p.Required)
 
 		var field, comment string
 		var focusable ui.Focusable
@@ -346,12 +362,17 @@ func renderParamSection(title string, params []Param) (string, []fieldOffset) {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...), offsets
 }
 
-// renderArrayParamSection renders one titled block per "array of objects"
-// body param (see ArrayParam): its count control (‹ N item(s) ›, cycled
-// with left/right), then each current item's fields indented under an
-// "Item N:" sub-heading, with the same inline red-highlight/comment
-// treatment invalid scalar fields get in renderParamSection. The returned
-// offsets are relative to this block's own first line (0).
+// renderArrayParamSection renders one titled block per array-typed body
+// param (see ArrayParam): its count control (‹ N item(s) ›, cycled with
+// left/right), then each current item indented under the block - a
+// "complex" array (its schema's "items" was a $ref to an object) gets an
+// "Item N:" sub-heading with one "name (type) [input]" line per named
+// sub-field below it; a "simple" array (see ArrayParam.IsSimple) skips
+// both - there's exactly one unnamed field per item, so "Item N: [input]"
+// on a single line says everything the "Item N:" heading and a "(type)"
+// label would otherwise say separately. Both cases get the same inline
+// red-highlight/comment treatment invalid fields get in renderParamSection.
+// The returned offsets are relative to this block's own first line (0).
 func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
 	if len(arrays) == 0 {
 		return "", nil
@@ -368,10 +389,33 @@ func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
 
 		line := 2
 		for ii, item := range a.Items {
+			if a.IsSimple() {
+				f := item.Fields[0]
+				label := ui.LabelStyle.Render(fmt.Sprintf("  Item %d: ", ii+1))
+
+				var field, comment string
+				var focusable ui.Focusable
+				if f.Enum != nil {
+					field = f.Enum.View()
+					focusable = f.Enum
+				} else {
+					if msg, ok := ValidateParam(f); !ok {
+						f.Input.TextStyle = errorTextStyle
+						comment = errorTextStyle.Render("  ! " + msg)
+					}
+					field = f.Input.View()
+					focusable = &a.Items[ii].Fields[0].Input
+				}
+				lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Left, label, field, comment))
+				offsets = append(offsets, fieldOffset{focusable, blockStart + line})
+				line++
+				continue
+			}
+
 			lines = append(lines, "", ui.LabelStyle.Render(fmt.Sprintf("  Item %d:", ii+1)))
 			line += 2
 			for fi, f := range item.Fields {
-				label := "    " + paramLabel(f.Name, f.Type, f.Required)
+				label := "    " + paramLabel(f.Name, f.DisplayType(), f.Required)
 
 				var field, comment string
 				var focusable ui.Focusable

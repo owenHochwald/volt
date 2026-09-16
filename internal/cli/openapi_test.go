@@ -617,6 +617,9 @@ func TestParseOpenAPIURLs_ArrayOfSimpleItems(t *testing.T) {
 	if labels.ItemsRefName != "" {
 		t.Errorf("expected a simple array's ItemsRefName to stay unset, got %q", labels.ItemsRefName)
 	}
+	if labels.ItemType != "string" {
+		t.Errorf("expected a simple array's own item type to be kept as ItemType=%q, got %q", "string", labels.ItemType)
+	}
 }
 
 // TestParseOpenAPIURLs_RequiredFields verifies a schema's top-level
@@ -687,5 +690,88 @@ func TestParseOpenAPIURLs_RequiredFields(t *testing.T) {
 	}
 	if tags.Items["value"].Required {
 		t.Error("expected the array item's 'value' field to not be required")
+	}
+}
+
+// TestParseOpenAPIURLs_PathParamSchema verifies "in: path" parameters are
+// captured into http.Request.PathParamSchema with their declared
+// type/constraints/enum, and that an operation-level parameter overrides a
+// path-item-level one of the same name (per the OpenAPI spec) rather than
+// both existing side by side.
+func TestParseOpenAPIURLs_PathParamSchema(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/hosts/{host_id}": {
+				"parameters": [
+					{"name": "host_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}}
+				],
+				"get": {
+					"operationId": "getHost"
+				},
+				"delete": {
+					"operationId": "deleteHost",
+					"parameters": [
+						{"name": "host_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 100}}
+					]
+				}
+			},
+			"/regions/{region}": {
+				"get": {
+					"operationId": "getRegion",
+					"parameters": [
+						{"name": "region", "in": "path", "required": true, "schema": {"type": "string", "enum": ["us", "eu"]}},
+						{"name": "verbose", "in": "query", "schema": {"type": "boolean"}}
+					]
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	byName := make(map[string]*http.Request, len(requests))
+	for _, r := range requests {
+		byName[r.Name] = r
+	}
+
+	getHost := byName["getHost"]
+	if getHost == nil {
+		t.Fatal("expected a getHost request")
+	}
+	hostSchema := getHost.PathParamSchema["host_id"]
+	if hostSchema.Type != "integer" {
+		t.Errorf("expected host_id.Type=integer (inherited from path-item level), got %q", hostSchema.Type)
+	}
+	if !hostSchema.Required {
+		t.Error("expected host_id to be Required")
+	}
+	if hostSchema.Minimum == nil || *hostSchema.Minimum != 1 {
+		t.Errorf("expected host_id.Minimum=1 (path-item level), got %v", hostSchema.Minimum)
+	}
+
+	deleteHost := byName["deleteHost"]
+	if deleteHost == nil {
+		t.Fatal("expected a deleteHost request")
+	}
+	deleteHostSchema := deleteHost.PathParamSchema["host_id"]
+	if deleteHostSchema.Minimum == nil || *deleteHostSchema.Minimum != 100 {
+		t.Errorf("expected the operation-level host_id (minimum=100) to override the path-item-level one (minimum=1), got %v", deleteHostSchema.Minimum)
+	}
+
+	getRegion := byName["getRegion"]
+	if getRegion == nil {
+		t.Fatal("expected a getRegion request")
+	}
+	regionSchema := getRegion.PathParamSchema["region"]
+	if len(regionSchema.Enum) != 2 || regionSchema.Enum[0] != "us" || regionSchema.Enum[1] != "eu" {
+		t.Errorf("expected region.Enum=[us eu], got %v", regionSchema.Enum)
+	}
+	if _, ok := getRegion.PathParamSchema["verbose"]; ok {
+		t.Error("expected the 'in: query' parameter to be excluded from PathParamSchema")
 	}
 }

@@ -109,6 +109,157 @@ func TestSQLiteStorage_GroupCRUD(t *testing.T) {
 	assert.Error(t, err, "deleting an already-gone group must fail")
 }
 
+// TestSQLiteStorage_GroupServers_AddListRemove verifies the many-to-many
+// group<->server membership (see AddGroupServer/ListGroupServers/
+// RemoveGroupServer) - a group's "allowed servers" set, independent of
+// (though related to) its single *default* server (SetGroupServer).
+func TestSQLiteStorage_GroupServers_AddListRemove(t *testing.T) {
+	db := setupTestDB(t)
+
+	_, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("dev", "http://localhost:3000")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+
+	// Nothing allowed yet.
+	group, err := db.GetGroupByName("petstore")
+	assert.NoError(t, err)
+	allowed, err := db.ListGroupServers(group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(allowed))
+
+	assert.NoError(t, db.AddGroupServer("petstore", "dev"))
+	assert.NoError(t, db.AddGroupServer("petstore", "prod"))
+
+	allowed, err = db.ListGroupServers(group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(allowed))
+	names := map[string]bool{}
+	for _, s := range allowed {
+		names[s.Name] = true
+	}
+	assert.True(t, names["dev"] && names["prod"])
+
+	// Adding an already-member server is a no-op, not an error.
+	assert.NoError(t, db.AddGroupServer("petstore", "dev"))
+	allowed, err = db.ListGroupServers(group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(allowed), "re-adding an existing member must not duplicate it")
+
+	assert.NoError(t, db.RemoveGroupServer("petstore", "dev"))
+	allowed, err = db.ListGroupServers(group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(allowed))
+	assert.Equal(t, "prod", allowed[0].Name)
+
+	// Removing a non-member is an error, not silently ignored.
+	assert.Error(t, db.RemoveGroupServer("petstore", "dev"))
+
+	// Unknown group/server names are also errors.
+	assert.Error(t, db.AddGroupServer("nope", "prod"))
+	assert.Error(t, db.AddGroupServer("petstore", "nope"))
+}
+
+// TestSQLiteStorage_SetGroupServer_AlsoGrantsMembership verifies setting a
+// group's default server (SetGroupServer) implicitly adds it to the
+// group's allowed set too - a group's own default obviously has to be one
+// of its own allowed servers.
+func TestSQLiteStorage_SetGroupServer_AlsoGrantsMembership(t *testing.T) {
+	db := setupTestDB(t)
+
+	group, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+
+	assert.NoError(t, db.SetGroupServer("petstore", "prod"))
+
+	allowed, err := db.ListGroupServers(group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(allowed))
+	assert.Equal(t, "prod", allowed[0].Name)
+}
+
+// TestSQLiteStorage_RemoveGroupServer_ClearsDefaultIfRemoved verifies
+// removing a group's *default* server from its allowed set also clears
+// the default - it must always point at an actually-allowed server, never
+// a silently-stale reference to one that's just been disallowed.
+func TestSQLiteStorage_RemoveGroupServer_ClearsDefaultIfRemoved(t *testing.T) {
+	db := setupTestDB(t)
+
+	_, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.SetGroupServer("petstore", "prod"))
+
+	found, err := db.GetGroupByName("petstore")
+	assert.NoError(t, err)
+	assert.NotZero(t, found.ServerID)
+
+	assert.NoError(t, db.RemoveGroupServer("petstore", "prod"))
+
+	found, err = db.GetGroupByName("petstore")
+	assert.NoError(t, err)
+	assert.Zero(t, found.ServerID, "expected the default to be cleared once its server is no longer allowed")
+}
+
+// TestSQLiteStorage_DeleteServer_RemovesItFromEveryGroup verifies deleting
+// a server also cleans up its group_servers membership rows (SQLite
+// foreign keys aren't enforced here - see DeleteServer's own comment),
+// rather than leaving orphaned rows a later ListGroupServers would still
+// try to join against.
+func TestSQLiteStorage_DeleteServer_RemovesItFromEveryGroup(t *testing.T) {
+	db := setupTestDB(t)
+
+	groupA, err := db.GetOrCreateGroup("a")
+	assert.NoError(t, err)
+	groupB, err := db.GetOrCreateGroup("b")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("shared", "https://api.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.AddGroupServer("a", "shared"))
+	assert.NoError(t, db.AddGroupServer("b", "shared"))
+
+	assert.NoError(t, db.DeleteServer("shared"))
+
+	allowedA, err := db.ListGroupServers(groupA.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(allowedA))
+	allowedB, err := db.ListGroupServers(groupB.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(allowedB))
+}
+
+// TestSQLiteStorage_DeleteGroup_RemovesGroupServersRows verifies deleting
+// a group also cleans up its group_servers rows, not just the group row
+// itself (same rationale as DeleteServer's cleanup).
+func TestSQLiteStorage_DeleteGroup_RemovesGroupServersRows(t *testing.T) {
+	db := setupTestDB(t)
+
+	_, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.AddGroupServer("petstore", "prod"))
+
+	_, err = db.DeleteGroup("petstore")
+	assert.NoError(t, err)
+
+	// Recreating a group with the same name must not "inherit" the
+	// deleted group's old server_id row's allowed servers by accident
+	// (different id, so a stale group_servers row for the old id - if it
+	// existed - would just be dead weight, never joined against; this
+	// mainly guards against a literal row leak).
+	newGroup, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	allowed, err := db.ListGroupServers(newGroup.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(allowed))
+}
+
 func TestSQLiteStorage_DeleteGroup_CascadesToItsRequests(t *testing.T) {
 	db := setupTestDB(t)
 

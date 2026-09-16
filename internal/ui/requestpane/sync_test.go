@@ -141,9 +141,12 @@ func TestRequestPane_ResolvedRequest_ServerIDOverridesGroup(t *testing.T) {
 	}
 }
 
-// TestRequestPane_ServerSelector_SyncsRequestServerID covers the ServerSelector
-// field itself: cycling to a server name and syncing must set the request's
-// ServerID, and cycling back to "(none)" must clear it.
+// TestRequestPane_ServerSelector_SyncsRequestServerID covers the
+// ServerSelector field itself: cycling to a server name and syncing must
+// set the request's ServerID, and cycling back to "(none)" must clear it.
+// Uses a grouped request - the field is only shown/populated for one (see
+// ShowServerSelector); an ungrouped ("clean") request has no server field
+// at all, see TestRebuildServerSelector_UngroupedRequestHasNoServerField.
 func TestRequestPane_ServerSelector_SyncsRequestServerID(t *testing.T) {
 	pane, db := setupTestPane(t)
 
@@ -151,8 +154,15 @@ func TestRequestPane_ServerSelector_SyncsRequestServerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
+	group, err := db.GetOrCreateGroup("petstore")
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if err := db.AddGroupServer("petstore", "prod"); err != nil {
+		t.Fatalf("failed to add group server: %v", err)
+	}
 
-	req := &http.Request{Method: http.GET, URL: "http://example.com"}
+	req := &http.Request{Method: http.GET, URL: "/pets", GroupID: &group.ID}
 	pane.reinitRequestPane(req)
 
 	if pane.ServerSelector.Value() != noServerOption {
@@ -180,8 +190,8 @@ func TestRequestPane_ServerSelector_SyncsRequestServerID(t *testing.T) {
 }
 
 // TestRequestPane_ReinitRequestPane_ServerSelectorReflectsServerID covers
-// loading a request that already has a ServerID: the selector must start on
-// that server's name, not "(none)".
+// loading a (grouped) request that already has a ServerID: the selector
+// must start on that server's name, not "(none)".
 func TestRequestPane_ReinitRequestPane_ServerSelectorReflectsServerID(t *testing.T) {
 	pane, db := setupTestPane(t)
 
@@ -189,8 +199,15 @@ func TestRequestPane_ReinitRequestPane_ServerSelectorReflectsServerID(t *testing
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
+	group, err := db.GetOrCreateGroup("petstore")
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if err := db.AddGroupServer("petstore", "prod"); err != nil {
+		t.Fatalf("failed to add group server: %v", err)
+	}
 
-	req := &http.Request{Method: http.GET, URL: "/pets", ServerID: &prod.ID}
+	req := &http.Request{Method: http.GET, URL: "/pets", ServerID: &prod.ID, GroupID: &group.ID}
 	pane.reinitRequestPane(req)
 
 	if pane.ServerSelector.Value() != "prod" {
@@ -212,10 +229,18 @@ func TestRequestPane_ServerSelector_CyclesViaFocusManager(t *testing.T) {
 	if _, err := db.UpsertServer("prod", "https://api.example.com"); err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
+	group, err := db.GetOrCreateGroup("petstore")
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if err := db.AddGroupServer("petstore", "prod"); err != nil {
+		t.Fatalf("failed to add group server: %v", err)
+	}
 
-	// A request with no path params and no body schema - both
+	// A (grouped, so it gets a server field - see ShowServerSelector)
+	// request with no path params and no body schema - both
 	// syncPathParams and syncBodyParams are no-ops for it.
-	req := &http.Request{Method: http.GET, URL: "http://example.com", Headers: map[string]string{}}
+	req := &http.Request{Method: http.GET, URL: "/pets", Headers: map[string]string{}, GroupID: &group.ID}
 	pane.reinitRequestPane(req)
 	pane.PanelFocused = true
 
@@ -267,5 +292,71 @@ func TestRequestPane_SyncRequest_ArrayOnlyBodyDoesNotReparseHiddenTextarea(t *te
 	}
 	if pane.Request.Body != req.Body {
 		t.Errorf("expected the stored body template to survive a sync tick untouched, got %q", pane.Request.Body)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_AddsContentTypeForSchemaBody is a
+// regression test for a real feature request: a request built from an
+// imported JSON body schema (BodyParams/ArrayParams populated) went out
+// with no Content-Type header at all, leaving the server to guess how to
+// parse a body that's always actually JSON (see BuildRequestBody).
+func TestRequestPane_ResolvedRequest_AddsContentTypeForSchemaBody(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{"name": {Type: "string"}})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.BodyParams[0].Input.SetValue("widget-1")
+
+	resolved := pane.resolvedRequest()
+
+	if got := resolved.Headers["Content-Type"]; got != "application/json" {
+		t.Errorf("expected Content-Type=application/json, got %q (headers=%v)", got, resolved.Headers)
+	}
+	if _, ok := pane.Request.Headers["Content-Type"]; ok {
+		t.Error("expected the stored request template to stay untouched, not gain Content-Type")
+	}
+}
+
+// TestRequestPane_ResolvedRequest_NeverOverridesExplicitContentType
+// verifies a Content-Type the user already set (any casing) is left
+// alone - auto-adding one is only a default for when nothing was said,
+// never an override of a deliberate choice.
+func TestRequestPane_ResolvedRequest_NeverOverridesExplicitContentType(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{"name": {Type: "string"}})
+	req := &http.Request{
+		Method:  http.POST,
+		URL:     "https://api.example.com/widgets",
+		Body:    body,
+		Headers: map[string]string{"content-type": "application/vnd.custom+json"},
+	}
+	pane.reinitRequestPane(req)
+	pane.BodyParams[0].Input.SetValue("widget-1")
+
+	resolved := pane.resolvedRequest()
+
+	if len(resolved.Headers) != 1 {
+		t.Fatalf("expected exactly 1 header (no duplicate differently-cased Content-Type), got %v", resolved.Headers)
+	}
+	if got := resolved.Headers["content-type"]; got != "application/vnd.custom+json" {
+		t.Errorf("expected the user's own content-type to survive untouched, got %q", got)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_NoContentTypeForFreeformBody verifies
+// the auto-added Content-Type is scoped to a schema-driven body
+// (BodyParams/ArrayParams) - a request with no known schema (the freeform
+// Body textarea) is left exactly as before, since Volt can't actually
+// tell what content type free-typed text is meant to be.
+func TestRequestPane_ResolvedRequest_NoContentTypeForFreeformBody(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.Request = &http.Request{Method: http.POST, URL: "http://example.com/x", Headers: map[string]string{}}
+
+	resolved := pane.resolvedRequest()
+
+	if _, ok := resolved.Headers["Content-Type"]; ok {
+		t.Errorf("expected no auto-added Content-Type for a freeform-body request, got %v", resolved.Headers)
 	}
 }

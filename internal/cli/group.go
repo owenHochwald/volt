@@ -1,11 +1,14 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // RunGroupCLI dispatches `volt group <subcommand> ...`.
 func RunGroupCLI(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: volt group <create|list|rename|set-server|delete> ...")
+		return fmt.Errorf("usage: volt group <create|list|rename|set-server|add-server|remove-server|servers|delete> ...")
 	}
 
 	db, closeDB, err := openDefaultDB()
@@ -44,13 +47,25 @@ func RunGroupCLI(args []string) error {
 			serverNames[s.ID] = s.Name
 		}
 		for _, g := range groups {
-			server := "(none)"
+			defaultServer := "(none)"
 			if g.ServerID != nil {
 				if name, ok := serverNames[*g.ServerID]; ok {
-					server = name
+					defaultServer = name
 				}
 			}
-			fmt.Printf("  %-20s server: %s\n", g.Name, server)
+			allowed, err := db.ListGroupServers(g.ID)
+			if err != nil {
+				return err
+			}
+			allowedNames := make([]string, len(allowed))
+			for i, s := range allowed {
+				allowedNames[i] = s.Name
+			}
+			allowedStr := "(none)"
+			if len(allowedNames) > 0 {
+				allowedStr = strings.Join(allowedNames, ", ")
+			}
+			fmt.Printf("  %-20s default: %-15s allowed servers: %s\n", g.Name, defaultServer, allowedStr)
 		}
 		return nil
 
@@ -71,7 +86,55 @@ func RunGroupCLI(args []string) error {
 		if err := db.SetGroupServer(args[1], args[2]); err != nil {
 			return err
 		}
-		fmt.Printf("Group %q now points at server %q\n", args[1], args[2])
+		fmt.Printf("Group %q now defaults to server %q (also added to its allowed servers)\n", args[1], args[2])
+		return nil
+
+	case "add-server":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: volt group add-server <group> <server>")
+		}
+		if err := db.AddGroupServer(args[1], args[2]); err != nil {
+			return err
+		}
+		fmt.Printf("Server %q added to group %q's allowed servers\n", args[2], args[1])
+		return nil
+
+	case "remove-server":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: volt group remove-server <group> <server>")
+		}
+		if err := db.RemoveGroupServer(args[1], args[2]); err != nil {
+			return err
+		}
+		fmt.Printf("Server %q removed from group %q's allowed servers\n", args[2], args[1])
+		return nil
+
+	case "servers":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: volt group servers <group>")
+		}
+		group, err := db.GetGroupByName(args[1])
+		if err != nil {
+			return err
+		}
+		if group == nil {
+			return fmt.Errorf("group not found: %s", args[1])
+		}
+		allowed, err := db.ListGroupServers(group.ID)
+		if err != nil {
+			return err
+		}
+		if len(allowed) == 0 {
+			fmt.Printf("Group %q has no allowed servers yet. Add one with: volt group add-server %s <server>\n", args[1], args[1])
+			return nil
+		}
+		for _, s := range allowed {
+			marker := ""
+			if group.ServerID != nil && s.ID == *group.ServerID {
+				marker = " (default)"
+			}
+			fmt.Printf("  %-20s %s%s\n", s.Name, s.BaseURL, marker)
+		}
 		return nil
 
 	case "delete":

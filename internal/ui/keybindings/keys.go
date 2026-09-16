@@ -36,6 +36,7 @@ type KeyMap struct {
 	// Request Pane
 	SendRequest      key.Binding
 	SaveRequest      key.Binding
+	ResetRequest     key.Binding
 	ToggleLoadTest   key.Binding
 	NextField        key.Binding
 	PrevField        key.Binding
@@ -131,6 +132,16 @@ func DefaultKeyMap() KeyMap {
 		SaveRequest: key.NewBinding(
 			key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "save request"),
+		),
+		// ResetRequest clears the pane back to a brand-new, unsaved
+		// request - the same blank state the app starts on - so a request
+		// that's been loaded and edited (typed-over field values, a
+		// different method, etc.) can be discarded without reloading the
+		// app or re-selecting a different request first just to lose the
+		// current one's state.
+		ResetRequest: key.NewBinding(
+			key.WithKeys("ctrl+r"),
+			key.WithHelp("ctrl+r", "reset request"),
 		),
 		ToggleLoadTest: key.NewBinding(
 			key.WithKeys("ctrl+l"),
