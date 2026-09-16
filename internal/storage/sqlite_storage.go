@@ -112,6 +112,23 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	return nil
 }
 
+// UpdateRequestSchema overwrites an existing request's name, headers, and
+// body - used by `volt import -force` to refresh a previously imported
+// request from a changed OpenAPI spec without touching its group/server
+// association or its identity (method/url, which is what matched it to the
+// existing row in the first place - see cli.dedupKey). Deliberately leaves
+// group_id/server_id/method/url alone: those are either the match key
+// itself or a user-controlled association unrelated to the spec's content.
+func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string) error {
+	headerString, err := serializeHeaders(headers)
+	if err != nil {
+		return err
+	}
+	q := `UPDATE requests SET name = ?, headers = ?, body = ? WHERE id = ?`
+	_, err = s.db.Exec(q, name, headerString, body, id)
+	return err
+}
+
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
 	q := `SELECT id, name, method, url, headers, body, group_id, server_id FROM requests`
 	rows, err := s.db.Query(q)

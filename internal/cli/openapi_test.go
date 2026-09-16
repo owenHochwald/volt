@@ -487,3 +487,205 @@ func TestParseOpenAPIURLs_RequestBodySchemaLimits(t *testing.T) {
 		t.Errorf("expected note to have no constraints, got %+v", note)
 	}
 }
+
+// TestParseOpenAPIURLs_ArrayOfRefObject verifies a "type: array" property
+// whose "items" is a $ref to an object schema resolves that object's own
+// properties into Items, with ItemsRefName naming the referenced schema -
+// so the array can be composed as a repeatable set of sub-fields in the
+// TUI instead of being left as opaque text.
+func TestParseOpenAPIURLs_ArrayOfRefObject(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"components": {
+			"schemas": {
+				"Tag": {
+					"type": "object",
+					"properties": {
+						"key": {"type": "string"},
+						"value": {"type": "string"}
+					}
+				}
+			}
+		},
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"name": {"type": "string"},
+										"tags": {
+											"type": "array",
+											"items": {"$ref": "#/components/schemas/Tag"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	schema := requestBodySchema(t, requests[0])
+
+	tags, ok := schema["tags"]
+	if !ok {
+		t.Fatalf("expected a 'tags' field, got %+v", schema)
+	}
+	if tags.Type != "array" {
+		t.Errorf("expected tags.Type=array, got %q", tags.Type)
+	}
+	if tags.ItemsRefName != "Tag" {
+		t.Errorf("expected tags.ItemsRefName=Tag, got %q", tags.ItemsRefName)
+	}
+	if len(tags.Items) != 2 {
+		t.Fatalf("expected 2 item fields (key, value), got %+v", tags.Items)
+	}
+	if tags.Items["key"].Type != "string" {
+		t.Errorf("expected tags.Items[key].Type=string, got %+v", tags.Items["key"])
+	}
+	if tags.Items["value"].Type != "string" {
+		t.Errorf("expected tags.Items[value].Type=string, got %+v", tags.Items["value"])
+	}
+
+	// A plain scalar field alongside the array must be unaffected.
+	if schema["name"].Type != "string" || schema["name"].Items != nil {
+		t.Errorf("expected name to be a plain string with no Items, got %+v", schema["name"])
+	}
+}
+
+// TestParseOpenAPIURLs_ArrayOfSimpleItems verifies a "type: array" property
+// whose items are NOT an object (e.g. items: {type: string}) leaves
+// Items/ItemsRefName unset - there's no per-property structure to compose,
+// so it stays a "simple" array.
+func TestParseOpenAPIURLs_ArrayOfSimpleItems(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"labels": {
+											"type": "array",
+											"items": {"type": "string"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	schema := requestBodySchema(t, requests[0])
+
+	labels := schema["labels"]
+	if labels.Type != "array" {
+		t.Errorf("expected labels.Type=array, got %q", labels.Type)
+	}
+	if labels.Items != nil {
+		t.Errorf("expected a simple array's Items to stay unset, got %+v", labels.Items)
+	}
+	if labels.ItemsRefName != "" {
+		t.Errorf("expected a simple array's ItemsRefName to stay unset, got %q", labels.ItemsRefName)
+	}
+}
+
+// TestParseOpenAPIURLs_RequiredFields verifies a schema's top-level
+// "required" list marks the matching fields Required, and that an
+// array-of-objects field's *item* schema's own "required" list is read
+// separately for its sub-fields.
+func TestParseOpenAPIURLs_RequiredFields(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"components": {
+			"schemas": {
+				"Tag": {
+					"type": "object",
+					"required": ["key"],
+					"properties": {
+						"key": {"type": "string"},
+						"value": {"type": "string"}
+					}
+				}
+			}
+		},
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["name"],
+									"properties": {
+										"name": {"type": "string"},
+										"note": {"type": "string"},
+										"tags": {
+											"type": "array",
+											"items": {"$ref": "#/components/schemas/Tag"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	schema := requestBodySchema(t, requests[0])
+
+	if !schema["name"].Required {
+		t.Error("expected 'name' to be required")
+	}
+	if schema["note"].Required {
+		t.Error("expected 'note' to not be required")
+	}
+	tags := schema["tags"]
+	if tags.Required {
+		t.Error("expected 'tags' itself to not be required (not in the top-level required list)")
+	}
+	if !tags.Items["key"].Required {
+		t.Error("expected the array item's 'key' field to be required (per Tag's own required list)")
+	}
+	if tags.Items["value"].Required {
+		t.Error("expected the array item's 'value' field to not be required")
+	}
+}

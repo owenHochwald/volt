@@ -233,3 +233,39 @@ func TestRequestPane_ServerSelector_CyclesViaFocusManager(t *testing.T) {
 		t.Errorf("expected cycling via the real input path to change the selector actually rendered, got %q", result.ServerSelector.Value())
 	}
 }
+
+// TestRequestPane_SyncRequest_ArrayOnlyBodyDoesNotReparseHiddenTextarea is a
+// regression test for a real bug found against an actual OpenAPI spec: a
+// body schema with *only* an array-of-objects field (no plain scalar
+// properties) left BodyParams empty while ArrayParams held the array -
+// syncRequest checked "len(BodyParams) == 0" alone to decide whether the
+// freeform Body textarea was in play, so it wrongly reparsed the *hidden*
+// Body textarea's raw schema-template JSON as bogus "key=value" pairs on
+// every send attempt (surfacing as several nonsense "Invalid key-value
+// pair" errors that never went away no matter what was typed into the
+// array's actual fields, since nothing was editing that hidden textarea).
+func TestRequestPane_SyncRequest_ArrayOnlyBodyDoesNotReparseHiddenTextarea(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"tags": {Type: "array", ItemsRefName: "Tag", Items: tagItemSchema()},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	if len(pane.BodyParams) != 0 {
+		t.Fatalf("expected no scalar body params, got %+v", pane.BodyParams)
+	}
+	if len(pane.ArrayParams) != 1 {
+		t.Fatalf("expected 1 array param, got %+v", pane.ArrayParams)
+	}
+
+	pane.syncRequest()
+
+	if len(pane.ParseErrors) != 0 {
+		t.Errorf("expected no spurious parse errors from the hidden Body textarea, got %v", pane.ParseErrors)
+	}
+	if pane.Request.Body != req.Body {
+		t.Errorf("expected the stored body template to survive a sync tick untouched, got %q", pane.Request.Body)
+	}
+}

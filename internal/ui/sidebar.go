@@ -75,18 +75,72 @@ type SidebarPane struct {
 // regardless of group" - always groupOptions[0].
 const allGroupsOption = "All groups"
 
-// helpHintLines is how many rows View()'s "Press ? for help" hint occupies
-// (HelpStyle's Margin(1, 2) adds a blank line above and below the text
-// itself), reserved out of the list's height so the two together fit
-// within the space SetSize was given instead of overflowing it.
-const helpHintLines = 3
+// contentWidth is the width available for the sidebar's own single-line
+// content (the group filter line, and the help hint/delete-confirmation
+// line below the list) - used to explicitly *cap* that text to the
+// sidebar's actual rendered width via MaxWidth (which truncates - unlike
+// Width, which wraps to multiple lines). Without this, these lines
+// rendered at their natural (untruncated) length - fine as long as they
+// happened to be short, but the help hint is long enough to definitely
+// overflow at the sidebar's minimum width (20). Left unconstrained here,
+// that overflow still got resolved eventually, just one layer up, when
+// app/view.go's outer SidebarStyle.Width(...) call *wrapped* the too-wide
+// content to multiple lines - at a width listHeight()'s line-count math
+// knew nothing about, so the extra wrapped lines silently pushed the
+// sidebar's total rendered height past what SetSize had reserved for it,
+// overflowing its box (and, since nothing then constrained *that*,
+// sometimes the whole terminal).
+func (s *SidebarPane) contentWidth() int {
+	return max(s.width-4, 1) // matches HelpStyle's Margin(1, 2) - 2 cols each side
+}
 
-// groupFilterLines is how many rows the group filter line at the top of
-// View() occupies, reserved the same way as helpHintLines.
-const groupFilterLines = 1
+// listWidth returns the width to hand to the requests list itself
+// (list.New / SetSize), compensating for a quirk in bubbles' own
+// list.Model.titleView(): it truncates the title bar's content to
+// m.width-spinnerWidth (spinnerWidth==1, reserved even when the spinner is
+// hidden), then wraps that in TitleBar's style, which adds 2 cols of left
+// padding back - so the title bar's true rendered width ends up m.width+1,
+// one column wider than requested. Left uncompensated, the outer box (which
+// *is* constrained to s.width) re-wraps that one line to a second line,
+// inflating the sidebar's total rendered height past what listHeight()
+// reserved for it. Passing s.width-1 here cancels that out exactly.
+func (s *SidebarPane) listWidth() int {
+	return max(s.width-1, 1)
+}
 
+// renderGroupLine renders the group filter's "[/] ‹ current ›" line,
+// capped to contentWidth (groupFilterStyle carries no margin of its own,
+// unlike HelpStyle, so no extra adjustment needed there) so it can never
+// silently grow past the single line listHeight() reserves for it.
+func (s *SidebarPane) renderGroupLine() string {
+	current := allGroupsOption
+	if s.groupFilterIndex >= 0 && s.groupFilterIndex < len(s.groupOptions) {
+		current = s.groupOptions[s.groupFilterIndex]
+	}
+	return groupFilterStyle.MaxWidth(s.width).Render(fmt.Sprintf("[/] ‹ %s ›", current))
+}
+
+// renderHelpText renders the sidebar's pinned bottom line - the normal
+// search/filter hint, or (while a delete is pending) the y/n confirmation
+// prompt - capped to contentWidth for the same reason as renderGroupLine.
+func (s *SidebarPane) renderHelpText() string {
+	if s.pendingDelete != nil {
+		return HelpStyle.MaxWidth(s.width).Render(
+			lipgloss.NewStyle().Foreground(lipgloss.Color("196")).MaxWidth(s.contentWidth()).
+				Render(fmt.Sprintf("Delete %q? y/enter=yes, any other key=no", s.pendingDelete.title)),
+		)
+	}
+	return HelpStyle.MaxWidth(s.width).Render("/ to search • [/]: group filter • ? for help")
+}
+
+// listHeight returns the height available for the request list itself,
+// reserving exactly as many rows as renderGroupLine/renderHelpText
+// actually render to at the sidebar's current width (see contentWidth) -
+// not a fixed guess - so the three together always add up to s.height
+// exactly, regardless of how narrow the sidebar gets.
 func (s *SidebarPane) listHeight() int {
-	return max(s.height-helpHintLines-groupFilterLines, 0)
+	reserved := lipgloss.Height(s.renderGroupLine()) + lipgloss.Height(s.renderHelpText())
+	return max(s.height-reserved, 0)
 }
 
 // currentGroupFilter returns the selected group's name, or "" when
@@ -168,7 +222,7 @@ func (s *SidebarPane) describeURL(url, groupLabel string) string {
 }
 
 func (s *SidebarPane) SetRequests(items []list.Item) {
-	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.width, s.listHeight())
+	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.listWidth(), s.listHeight())
 	s.requestsList.SetShowHelp(false)
 }
 
@@ -342,29 +396,15 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 var groupFilterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
 
 func (s *SidebarPane) View() string {
-	helpText := HelpStyle.Render("/ to search • [/]: group filter • ? for help")
-	if s.pendingDelete != nil {
-		helpText = HelpStyle.Render(
-			lipgloss.NewStyle().Foreground(lipgloss.Color("196")).
-				Render(fmt.Sprintf("Delete %q? y/enter=yes, any other key=no", s.pendingDelete.title)),
-		)
-	}
-
-	current := allGroupsOption
-	if s.groupFilterIndex >= 0 && s.groupFilterIndex < len(s.groupOptions) {
-		current = s.groupOptions[s.groupFilterIndex]
-	}
 	// "[" / "]" work no matter where the list cursor is - there's no
 	// separate "focus" to move back to - but that's not obvious from the
-	// brackets alone, so the hint is spelled out right here too, not just
-	// in the footer below (which can be easy to miss).
-	groupLine := groupFilterStyle.Render(fmt.Sprintf("[/] ‹ %s ›", current))
-
+	// brackets alone, so the hint is spelled out in renderHelpText too, not
+	// just in the group line itself (which can be easy to miss).
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		groupLine,
+		s.renderGroupLine(),
 		s.requestsList.View(),
-		helpText,
+		s.renderHelpText(),
 	)
 }
 
@@ -380,7 +420,7 @@ func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 func (s *SidebarPane) SetSize(width, height int) {
 	s.width = width
 	s.height = height
-	s.requestsList.SetSize(width, s.listHeight())
+	s.requestsList.SetSize(s.listWidth(), s.listHeight())
 }
 
 func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {

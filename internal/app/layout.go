@@ -37,6 +37,23 @@ func (m Model) mainHeight() int {
 	return contentHeight - 2
 }
 
+// boxBorderLines is how many extra lines a lipgloss bordered box (request/
+// response's RoundedBorder) renders on top of the content height passed to
+// .Height() - one for the top border, one for the bottom.
+const boxBorderLines = 2
+
+// rightColumnHeight is the total rendered height (borders included) the
+// request and response boxes together must add up to, so the right column
+// ends at the same row as the sidebar instead of falling short and leaving
+// blank space beneath it. Mirrors what the sidebar box itself actually
+// renders to: view.go's sidebarView is given mainHeight directly and
+// renders a content height of mainHeight-4 (matching sidebarContentHeight,
+// used for the list's own internal sizing) plus 2 border lines, i.e.
+// mainHeight-2 total.
+func (m Model) rightColumnHeight() int {
+	return m.mainHeight() - 2
+}
+
 // requestHeight/requestWidth are the box dimensions view.go actually
 // renders the request pane into. update.go's WindowSizeMsg handler must
 // call m.requestPane.SetHeight/SetWidth with these same values (not just
@@ -45,9 +62,26 @@ func (m Model) mainHeight() int {
 // sees a FieldsViewport sized to match what's actually on screen, rather
 // than the zero value.
 func (m Model) requestHeight() int {
-	return int(float64(m.mainHeight())/2.2) - 10
+	// ~35% of the right column's content height goes to the request editor;
+	// responseHeight takes what's left (not a fixed proportion of its own),
+	// so the two always sum to rightColumnHeight exactly - no leftover gap
+	// regardless of rounding.
+	content := m.rightColumnHeight() - 2*boxBorderLines
+	return content * 35 / 100
 }
 
 func (m Model) requestWidth() int {
+	return m.mainWidth() - 10
+}
+
+// responseHeight/responseWidth are the box dimensions view.go renders the
+// response pane into - see requestHeight for why this is "whatever's left"
+// rather than its own independent proportion.
+func (m Model) responseHeight() int {
+	content := m.rightColumnHeight() - 2*boxBorderLines
+	return content - m.requestHeight()
+}
+
+func (m Model) responseWidth() int {
 	return m.mainWidth() - 10
 }

@@ -163,9 +163,9 @@ type bodyField struct {
 	Name string
 	// Type is the schema's declared "type" (string, integer, number,
 	// boolean, array, object), or "" if the schema doesn't say. Every
-	// field is still edited as plain text in the TUI regardless of Type -
-	// it's shown only as a hint - so an array/object type isn't resolved
-	// any further.
+	// scalar field is still edited as plain text in the TUI regardless of
+	// Type - it's shown only as a hint - except "array", which is resolved
+	// further (see Items) when it's an array of objects.
 	Type string
 	// Default is the schema's "default" value, stringified regardless of
 	// its JSON type (a deliberate simplification - see stringifyJSONValue),
@@ -180,6 +180,13 @@ type bodyField struct {
 	MaxLength *int
 	Minimum   *float64
 	Maximum   *float64
+	// Items/ItemsRefName mirror http.BodyFieldSchema's fields of the same
+	// name - see extractFieldSchema for how they're derived.
+	Items        map[string]http.BodyFieldSchema
+	ItemsRefName string
+	// Required mirrors whether this field's name appeared in the parent
+	// object schema's "required" list - see requiredSet.
+	Required bool
 }
 
 // jsonRequestBodyFields returns the top-level properties of an operation's
@@ -217,43 +224,130 @@ func jsonRequestBodyFields(doc, op map[string]interface{}) []bodyField {
 	}
 	sort.Strings(names)
 
+	required := requiredSet(schema)
 	fields := make([]bodyField, len(names))
 	for i, name := range names {
-		field := bodyField{Name: name}
+		field := bodyField{Name: name, Required: required[name]}
 		if prop, ok := properties[name].(map[string]interface{}); ok {
-			field.Type, _ = prop["type"].(string)
-			if def, ok := prop["default"]; ok {
-				field.Default = stringifyJSONValue(def)
-			}
-			if enumRaw, ok := prop["enum"].([]interface{}); ok {
-				for _, e := range enumRaw {
-					field.Enum = append(field.Enum, stringifyJSONValue(e))
-				}
-			}
-			if v, ok := prop["minLength"].(float64); ok {
-				n := int(v)
-				field.MinLength = &n
-			}
-			if v, ok := prop["maxLength"].(float64); ok {
-				n := int(v)
-				field.MaxLength = &n
-			}
-			if v, ok := prop["minimum"].(float64); ok {
-				field.Minimum = &v
-			}
-			if v, ok := prop["maximum"].(float64); ok {
-				field.Maximum = &v
-			}
+			schema := extractFieldSchema(doc, prop, 0)
+			field.Type = schema.Type
+			field.Default = schema.Default
+			field.Enum = schema.Enum
+			field.MinLength = schema.MinLength
+			field.MaxLength = schema.MaxLength
+			field.Minimum = schema.Minimum
+			field.Maximum = schema.Maximum
+			field.Items = schema.Items
+			field.ItemsRefName = schema.ItemsRefName
 		}
 		fields[i] = field
 	}
 	return fields
 }
 
-// stringifyJSONValue renders a decoded JSON value (string/float64/bool/nil,
-// per encoding/json's default map[string]interface{} unmarshal) as plain
-// text, for a schema's "default"/"enum" entries - Volt's body params are
-// always edited as strings regardless of the schema's declared type.
+// requiredSet turns a schema's "required" array (a sibling of its
+// "properties" map, per the OpenAPI/JSON Schema convention) into a set of
+// property names, for marking which of them must be filled in before a
+// request built from this schema can be sent. Returns nil (not an empty,
+// non-nil map) when the schema declares no required properties, so a
+// simple `required[name]` lookup on a nil map correctly reads false.
+func requiredSet(schema map[string]interface{}) map[string]bool {
+	raw, _ := schema["required"].([]interface{})
+	if len(raw) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(raw))
+	for _, r := range raw {
+		if name, ok := r.(string); ok {
+			set[name] = true
+		}
+	}
+	return set
+}
+
+// maxArrayItemDepth caps how many levels deep an array-of-objects' own
+// object properties are resolved (an item schema that's itself an array of
+// objects, and so on) - besides bounding pathological specs, this protects
+// against a circular $ref chain between object schemas spinning forever.
+const maxArrayItemDepth = 3
+
+// extractFieldSchema converts one OpenAPI property schema into the shape
+// Volt's body-params UI understands. For a "type: array" property whose
+// "items" is a (possibly $ref'd) object schema, it also recurses into that
+// object's own properties (up to maxArrayItemDepth levels) so the array can
+// be composed as a repeatable set of sub-fields in the TUI (see
+// requestpane.ArrayParam) instead of being left as opaque text - a "simple"
+// array (items with no object structure) is left with Items/ItemsRefName
+// unset, editable as a whole via other means.
+func extractFieldSchema(doc, prop map[string]interface{}, depth int) http.BodyFieldSchema {
+	var field http.BodyFieldSchema
+	field.Type, _ = prop["type"].(string)
+	if def, ok := prop["default"]; ok {
+		field.Default = stringifyJSONValue(def)
+	}
+	if enumRaw, ok := prop["enum"].([]interface{}); ok {
+		for _, e := range enumRaw {
+			field.Enum = append(field.Enum, stringifyJSONValue(e))
+		}
+	}
+	if v, ok := asFloat64(prop["minLength"]); ok {
+		n := int(v)
+		field.MinLength = &n
+	}
+	if v, ok := asFloat64(prop["maxLength"]); ok {
+		n := int(v)
+		field.MaxLength = &n
+	}
+	if v, ok := asFloat64(prop["minimum"]); ok {
+		field.Minimum = &v
+	}
+	if v, ok := asFloat64(prop["maximum"]); ok {
+		field.Maximum = &v
+	}
+
+	if field.Type != "array" || depth >= maxArrayItemDepth {
+		return field
+	}
+	itemsRaw, ok := prop["items"].(map[string]interface{})
+	if !ok {
+		return field
+	}
+	if ref, ok := itemsRaw["$ref"].(string); ok {
+		field.ItemsRefName = schemaRefName(ref)
+	}
+	resolvedItems := resolveSchemaRef(doc, itemsRaw)
+	itemProperties, _ := resolvedItems["properties"].(map[string]interface{})
+	if len(itemProperties) == 0 {
+		return field
+	}
+	itemRequired := requiredSet(resolvedItems)
+	field.Items = make(map[string]http.BodyFieldSchema, len(itemProperties))
+	for name, raw := range itemProperties {
+		if itemProp, ok := raw.(map[string]interface{}); ok {
+			itemField := extractFieldSchema(doc, itemProp, depth+1)
+			itemField.Required = itemRequired[name]
+			field.Items[name] = itemField
+		}
+	}
+	return field
+}
+
+// schemaRefName extracts the component name from a local schema $ref (e.g.
+// "#/components/schemas/Tag" -> "Tag"), or "" for any other ref shape.
+func schemaRefName(ref string) string {
+	const prefix = "#/components/schemas/"
+	if strings.HasPrefix(ref, prefix) {
+		return strings.TrimPrefix(ref, prefix)
+	}
+	return ""
+}
+
+// stringifyJSONValue renders a decoded scalar value as plain text, for a
+// schema's "default"/"enum" entries - Volt's body params are always edited
+// as strings regardless of the schema's declared type. Handles both
+// encoding/json's decoding (numbers always float64) and gopkg.in/yaml.v3's
+// (a whole-number scalar decodes as int, only float64 when it has a
+// decimal point - see also asFloat64).
 func stringifyJSONValue(v interface{}) string {
 	switch val := v.(type) {
 	case string:
@@ -263,6 +357,10 @@ func stringifyJSONValue(v interface{}) string {
 			return strconv.FormatInt(int64(val), 10)
 		}
 		return strconv.FormatFloat(val, 'g', -1, 64)
+	case int:
+		return strconv.Itoa(val)
+	case int64:
+		return strconv.FormatInt(val, 10)
 	case bool:
 		return strconv.FormatBool(val)
 	case nil:
@@ -270,6 +368,25 @@ func stringifyJSONValue(v interface{}) string {
 	default:
 		return fmt.Sprint(val)
 	}
+}
+
+// asFloat64 extracts a schema constraint's numeric value regardless of
+// whether the containing document was parsed as JSON (encoding/json always
+// decodes numbers as float64) or YAML (gopkg.in/yaml.v3 decodes a
+// whole-number scalar as int, only using float64 when it has a decimal
+// point) - without this, minLength/maxLength (always whole numbers) would
+// silently fail to extract from any YAML spec, since the type assertion to
+// float64 would never match.
+func asFloat64(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	}
+	return 0, false
 }
 
 // maxSchemaRefDepth caps how many "$ref": "#/components/schemas/Name"
@@ -315,13 +432,16 @@ func requestBodyTemplate(fields []bodyField) string {
 	schema := make(map[string]http.BodyFieldSchema, len(fields))
 	for _, f := range fields {
 		schema[f.Name] = http.BodyFieldSchema{
-			Type:      f.Type,
-			Default:   f.Default,
-			Enum:      f.Enum,
-			MinLength: f.MinLength,
-			MaxLength: f.MaxLength,
-			Minimum:   f.Minimum,
-			Maximum:   f.Maximum,
+			Type:         f.Type,
+			Default:      f.Default,
+			Enum:         f.Enum,
+			MinLength:    f.MinLength,
+			MaxLength:    f.MaxLength,
+			Minimum:      f.Minimum,
+			Maximum:      f.Maximum,
+			Items:        f.Items,
+			ItemsRefName: f.ItemsRefName,
+			Required:     f.Required,
 		}
 	}
 	wrapper := map[string]interface{}{http.BodySchemaKey: schema}

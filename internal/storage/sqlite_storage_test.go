@@ -58,6 +58,44 @@ func TestSQLiteStorage_SaveLoadDelete(t *testing.T) {
 	assert.Equal(t, 0, len(requests))
 }
 
+// TestSQLiteStorage_UpdateRequestSchema verifies UpdateRequestSchema (used
+// by `volt import -force`) refreshes name/headers/body in place - same row
+// id, no new row created - and leaves method/url/group_id/server_id alone,
+// since those are either the match identity or a user-controlled
+// association unrelated to a spec's content.
+func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
+	db := setupTestDB(t)
+
+	groupID := int64(7)
+	req := &http.Request{
+		Name:    "old name",
+		Method:  "GET",
+		URL:     "http://localhost:8080/widgets",
+		Headers: map[string]string{"X-Old": "1"},
+		Body:    "old body",
+		GroupID: &groupID,
+	}
+	assert.NoError(t, db.Save(req))
+	originalID := req.ID
+
+	err := db.UpdateRequestSchema(originalID, "new name", map[string]string{"X-New": "2"}, "new body")
+	assert.NoError(t, err)
+
+	requests, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(requests), "update must not create a new row")
+
+	updated := requests[0]
+	assert.Equal(t, originalID, updated.ID)
+	assert.Equal(t, "new name", updated.Name)
+	assert.Equal(t, "new body", updated.Body)
+	assert.Equal(t, map[string]string{"X-New": "2"}, updated.Headers)
+	// Untouched by design.
+	assert.Equal(t, "GET", updated.Method)
+	assert.Equal(t, "http://localhost:8080/widgets", updated.URL)
+	assert.Equal(t, groupID, *updated.GroupID)
+}
+
 func TestSQLiteStorage_SaveAndLoad(t *testing.T) {
 	db := setupTestDB(t)
 

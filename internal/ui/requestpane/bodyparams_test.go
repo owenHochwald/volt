@@ -201,13 +201,17 @@ func TestRequestPane_ResolvedRequest_BuildsBodyFromParams(t *testing.T) {
 }
 
 // TestRequestPane_ResolvedRequest_BuildsBodyFromEnum verifies an enum
-// picker's current selection ends up in the JSON body actually sent.
+// picker's current selection ends up in the JSON body actually sent. This
+// schema declares no default, so the picker starts unset (see
+// EnumSelector.allowUnset) - Next() once reaches the first real option
+// ("active"), Next() again reaches "inactive".
 func TestRequestPane_ResolvedRequest_BuildsBodyFromEnum(t *testing.T) {
 	pane, _ := setupTestPane(t)
 
 	body := schemaBody(t, map[string]http.BodyFieldSchema{"status": {Enum: []string{"active", "inactive"}}})
 	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
 	pane.reinitRequestPane(req)
+	pane.BodyParams[0].Enum.Next()
 	pane.BodyParams[0].Enum.Next()
 
 	resolved := pane.resolvedRequest()
@@ -362,7 +366,7 @@ func TestBuildRequestBody_RespectsDeclaredTypes(t *testing.T) {
 	pane, _ := setupTestPane(t)
 
 	body := schemaBody(t, map[string]http.BodyFieldSchema{
-		"active": {Type: "boolean"},
+		"active": {Type: "boolean", Default: "true"},
 		"count":  {Type: "integer"},
 		"price":  {Type: "number"},
 		"name":   {Type: "string"},
@@ -380,7 +384,9 @@ func TestBuildRequestBody_RespectsDeclaredTypes(t *testing.T) {
 			pane.BodyParams[i].Input.SetValue("widget")
 		}
 	}
-	// "active" is left on its schema default (Enum, starts at "false").
+	// "active" is left on its schema default (Enum, starts at "true" - a
+	// boolean with no declared default starts unset instead and is omitted
+	// from the body entirely, see TestBuildRequestBody_OmitsUntouchedOptionalFields).
 
 	resolved := pane.resolvedRequest()
 
@@ -399,5 +405,98 @@ func TestBuildRequestBody_RespectsDeclaredTypes(t *testing.T) {
 	}
 	if s, ok := got["name"].(string); !ok || s != "widget" {
 		t.Errorf("expected name to stay a JSON string, got %T (%v)", got["name"], got["name"])
+	}
+}
+
+// TestBuildRequestBody_OmitsUntouchedOptionalFields is a regression test
+// for a real bug report: filling in only a form's required fields still
+// sent every other declared field too - empty strings/zero values for
+// anything left blank - because BuildRequestBody included every BodyParam
+// unconditionally. Only a field the user actually filled in, or that
+// started pre-filled from the schema's own default, should reach the
+// server; a field with neither should be left out of the JSON entirely.
+// This now also covers Enum/boolean pickers: one with a schema default
+// behaves like before (always has a real value, always included), but one
+// with *no* declared default starts on no value at all (see
+// EnumSelector.allowUnset) and is omitted too, unless actually cycled to a
+// real choice.
+func TestBuildRequestBody_OmitsUntouchedOptionalFields(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"name":       {Type: "string", Required: true},                                   // required, filled in below
+		"email":      {Type: "string"},                                                   // optional text, left untouched - must be omitted
+		"nickname":   {Type: "string", Default: "anon"},                                  // optional text with a schema default - must be included
+		"role":       {Type: "string", Enum: []string{"user", "admin"}, Default: "user"}, // enum with a default - must be included
+		"permission": {Type: "string", Enum: []string{"read", "write"}},                  // enum with NO default - untouched, must be omitted
+		"active":     {Type: "boolean", Default: "true"},                                 // boolean with a default - must be included
+		"subscribed": {Type: "boolean"},                                                  // boolean with NO default - untouched, must be omitted
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/accounts", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	if len(pane.BodyParams) != 7 {
+		t.Fatalf("expected 7 body params, got %+v", pane.BodyParams)
+	}
+	var subscribed *Param
+	for i := range pane.BodyParams {
+		switch pane.BodyParams[i].Name {
+		case "name":
+			pane.BodyParams[i].Input.SetValue("acme")
+		case "subscribed":
+			subscribed = &pane.BodyParams[i]
+		}
+	}
+	if subscribed == nil {
+		t.Fatal("test setup error: no \"subscribed\" body param found")
+	}
+	if got := subscribed.Value(); got != "" {
+		t.Fatalf("expected an untouched boolean with no schema default to start unset, got %q", got)
+	}
+	// "email"/"permission" left blank on purpose too - the fields with
+	// neither a value nor a default.
+
+	resolved := pane.resolvedRequest()
+	var got map[string]interface{}
+	if err := json.Unmarshal([]byte(resolved.Body), &got); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+
+	for _, wantPresent := range []string{"name", "nickname", "role", "active"} {
+		if _, ok := got[wantPresent]; !ok {
+			t.Errorf("expected %q to be present in the sent body, got %v", wantPresent, got)
+		}
+	}
+	for _, wantAbsent := range []string{"email", "permission", "subscribed"} {
+		if _, ok := got[wantAbsent]; ok {
+			t.Errorf("expected untouched field %q (no value, no default) to be omitted, got %v", wantAbsent, got)
+		}
+	}
+	if got["name"] != "acme" {
+		t.Errorf("expected name=%q, got %v", "acme", got["name"])
+	}
+	if got["nickname"] != "anon" {
+		t.Errorf("expected nickname to keep its schema default %q, got %v", "anon", got["nickname"])
+	}
+	if got["role"] != "user" {
+		t.Errorf("expected role to keep its enum default %q, got %v", "user", got["role"])
+	}
+	if b, ok := got["active"].(bool); !ok || !b {
+		t.Errorf("expected active to keep its boolean default true, got %T (%v)", got["active"], got["active"])
+	}
+
+	// Actually cycling the untouched picker to a real value must then
+	// include it.
+	subscribed.Enum.Next()
+	if got := subscribed.Value(); got == "" {
+		t.Fatal("expected Next() to move off the unset state")
+	}
+	resolved = pane.resolvedRequest()
+	var gotAfter map[string]interface{}
+	if err := json.Unmarshal([]byte(resolved.Body), &gotAfter); err != nil {
+		t.Fatalf("resolved body isn't valid JSON: %v (body=%q)", err, resolved.Body)
+	}
+	if _, ok := gotAfter["subscribed"].(bool); !ok {
+		t.Errorf("expected subscribed to be included as a JSON boolean once explicitly set, got %T (%v)", gotAfter["subscribed"], gotAfter["subscribed"])
 	}
 }

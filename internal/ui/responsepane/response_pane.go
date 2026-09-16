@@ -38,22 +38,19 @@ func (m *ResponsePane) SetFocused(focused bool) {
 }
 
 // SetResponse updates the response pane with a new HTTP response and the
-// request that produced it (see SentRequest).
+// request that produced it (see SentRequest). Deliberately leaves activeTab
+// as-is (re-sending a request while on the Headers tab, say, stays there)
+// rather than forcing it back to Body - updateViewportForActiveTab fills
+// the viewport with whatever that tab actually shows, so the two can never
+// drift out of sync the way duplicating Body's own content-selection logic
+// here once did (see updateViewportForActiveTab's TabRequest case, added
+// after Body/Headers/Timing/Request all started needing the same handling
+// once every tab became scrollable - see renderActiveTabContent).
 func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Request) {
 	m.Response = response
 	m.SentRequest = sentRequest
 	m.isLoadTest = false
-
-	if m.Response != nil {
-		if m.Response.Error != "" {
-			m.viewport.SetContent(m.Response.Error)
-			return
-		}
-
-		contentType := m.Response.ParseContentType()
-		content := formatContentByType(m.Response.Body, contentType)
-		m.viewport.SetContent(content)
-	}
+	m.updateViewportForActiveTab()
 }
 
 // SetLoadTestStats updates the response pane with load test statistics

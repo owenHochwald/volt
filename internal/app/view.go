@@ -8,16 +8,22 @@ import (
 
 func (m Model) View() string {
 	sidebarWidth := m.sidebarWidth()
-	mainWidth := m.mainWidth()
 	mainHeight := m.mainHeight()
 
 	requestHeight := m.requestHeight()
 	requestWidth := m.requestWidth()
-	responseHeight := int(float64(mainHeight)/2.2) - 2
+	responseHeight := m.responseHeight()
+	responseWidth := m.responseWidth()
 
 	sidebar := m.sidebarView(mainHeight, sidebarWidth)
 
-	// Conditional rendering for custom request pane border color
+	// Conditional rendering for custom request pane border color. Both
+	// branches use the same requestHeight/responseHeight (see layout.go) -
+	// previously the load-test branch also subtracted an extra, undocumented
+	// 3 lines from the response box, which (combined with the two boxes'
+	// heights never actually summing to the space available beside the
+	// sidebar - see rightColumnHeight) was part of why the right column
+	// visibly fell short of the sidebar, leaving blank space beneath it.
 	var request string
 	var response string
 	if m.requestPane.LoadTestMode {
@@ -25,16 +31,16 @@ func (m Model) View() string {
 		request = ui.LoadTestBorderStyle.Width(requestWidth).
 			Height(requestHeight).
 			Render(m.requestView(requestHeight, requestWidth))
-		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(mainWidth - 10).
-			Height(responseHeight - 3).
-			Render(m.responseView(responseHeight, mainWidth-10))
+		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(responseWidth).
+			Height(responseHeight).
+			Render(m.responseView(responseHeight, responseWidth))
 	} else {
 		request = ui.ApplyFocus(ui.RequestStyle, m.focusedPanel == 1).Width(requestWidth).
 			Height(requestHeight).
 			Render(m.requestView(requestHeight, requestWidth))
-		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(mainWidth - 10).
+		response = ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(responseWidth).
 			Height(responseHeight).
-			Render(m.responseView(responseHeight, mainWidth-10))
+			Render(m.responseView(responseHeight, responseWidth))
 	}
 
 	rightSide := lipgloss.JoinVertical(lipgloss.Right, request, response)

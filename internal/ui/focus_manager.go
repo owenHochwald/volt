@@ -31,6 +31,20 @@ func (f *FocusManager) CurrentIndex() int {
 	return f.currentIndex
 }
 
+// FocusIndex moves focus directly to the component at idx, blurring
+// whatever's currently focused first - for jumping straight to a specific
+// field (e.g. the first one that failed validation on a blocked send)
+// rather than stepping through it via Next/Prev. A no-op if idx is out of
+// range or already current.
+func (f *FocusManager) FocusIndex(idx int) {
+	if idx < 0 || idx >= len(f.components) || idx == f.currentIndex {
+		return
+	}
+	f.components[f.currentIndex].Blur()
+	f.currentIndex = idx
+	f.components[f.currentIndex].Focus()
+}
+
 func (f *FocusManager) Current() Focusable {
 	return f.components[f.currentIndex]
 }

@@ -18,6 +18,16 @@ var footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 // footer, distinct from the plain help hint below it.
 var errorTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 
+// fieldOffset pairs a focusable with the 0-based line it starts on within
+// fieldsContent()'s rendered output - used to auto-scroll FieldsViewport so
+// whatever's currently focused (e.g. a field of a just-added array item,
+// several screens down) stays visible instead of receiving keystrokes
+// off-screen. See RequestPane.scrollToFocused.
+type fieldOffset struct {
+	focusable ui.Focusable
+	line      int
+}
+
 // fieldsContent renders everything FieldsViewport scrolls: method+URL,
 // name, path params, body params, headers, and (in load-test mode) the
 // load-test config fields. Pulled out of View() so it can also be called
@@ -27,14 +37,16 @@ var errorTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 // left solely to View(), the persisted FieldsViewport a later Update()
 // scrolls would still have the empty content it was constructed with, so
 // maxYOffset() would always read 0 and pgdown would silently do nothing.
-func (m RequestPane) fieldsContent() string {
+// The returned offsets locate every focusable field within that content
+// (see scrollToFocused).
+func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	serverLabel := ui.LabelStyle.Render("Server ")
 	serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
 
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
-	pathParamsBlock := renderParamSection("Path Params", m.PathParams)
+	pathParamsBlock, pathOffsets := renderParamSection("Path Params", m.PathParams)
 
 	nameLabel := ui.LabelStyle.Render("Name ")
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Left, nameLabel, m.NameInput.View())
@@ -44,25 +56,62 @@ func (m RequestPane) fieldsContent() string {
 
 	// An imported request with a known JSON body schema gets structured,
 	// individually-fillable fields (like path params) instead of the
-	// freeform body textarea.
+	// freeform body textarea. An "array of objects" field (see ArrayParam)
+	// is rendered separately below, since it's a repeatable group of
+	// sub-fields rather than a single value - bodyBlock stays empty when
+	// there are no scalar BodyParams to show alongside it.
 	var bodyBlock string
+	var bodyOffsets []fieldOffset
 	if len(m.BodyParams) > 0 {
-		bodyBlock = renderParamSection("Body Params", m.BodyParams)
-	} else {
+		bodyBlock, bodyOffsets = renderParamSection("Body Params", m.BodyParams)
+	} else if len(m.ArrayParams) == 0 {
 		bodyLabel := ui.LabelStyle.Render("Body    ")
 		bodyBlock = lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 	}
+	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.ArrayParams)
 
 	// Field order: server, method+URL, name, path params, body params,
-	// headers, then mode-specific content (load-test config fields, or
-	// nothing). Each present block is separated from the next by a blank
-	// line; pathParamsBlock is skipped entirely (no double blank line) when
-	// the URL has no {params}.
+	// array params, headers, then mode-specific content (load-test config
+	// fields, or nothing). Each present block is separated from the next by
+	// a blank line; pathParamsBlock/bodyBlock/arrayParamsBlock are each
+	// skipped entirely (no double blank line) when there's nothing to show.
+	//
+	// offsets is built alongside elements, converting each block's own
+	// (relative to its own first line) offsets to absolute line numbers by
+	// adding the running line count so far - lipgloss.Height() rather than
+	// a hardcoded line-count guess, so this can't silently drift out of
+	// sync if a block's own rendering ever changes shape.
 	elements := []string{"", serverLine, "", primaryLine, "", nameLine}
-	if pathParamsBlock != "" {
-		elements = append(elements, "", pathParamsBlock)
+	offsets := []fieldOffset{
+		{m.ServerSelector, 1},
+		{m.MethodSelector, 3},
+		{m.URLInput, 3},
 	}
-	elements = append(elements, "", bodyBlock, "", headersLine)
+	lineCount := func() int { return lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, elements...)) }
+
+	if pathParamsBlock != "" {
+		base := lineCount()
+		elements = append(elements, "", pathParamsBlock)
+		for _, o := range pathOffsets {
+			offsets = append(offsets, fieldOffset{o.focusable, base + 1 + o.line})
+		}
+	}
+	if bodyBlock != "" {
+		base := lineCount()
+		elements = append(elements, "", bodyBlock)
+		for _, o := range bodyOffsets {
+			offsets = append(offsets, fieldOffset{o.focusable, base + 1 + o.line})
+		}
+	}
+	if arrayParamsBlock != "" {
+		base := lineCount()
+		elements = append(elements, "", arrayParamsBlock)
+		for _, o := range arrayOffsets {
+			offsets = append(offsets, fieldOffset{o.focusable, base + 1 + o.line})
+		}
+	}
+	offsets = append(offsets, fieldOffset{m.Headers, lineCount() + 1})
+	elements = append(elements, "", headersLine)
 
 	if m.LoadTestMode {
 		ltConcurrencyLabel := ui.LabelStyle.Render("Concurrency:    ")
@@ -81,6 +130,14 @@ func (m RequestPane) fieldsContent() string {
 		ltTimeoutLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltTimeoutLabel, m.LoadTestTimeout.View())
 
+		base := lineCount()
+		offsets = append(offsets,
+			fieldOffset{m.LoadTestConcurrency, base + 2},
+			fieldOffset{m.LoadTestTotalReqs, base + 3},
+			fieldOffset{m.LoadTestQPS, base + 4},
+			fieldOffset{m.LoadTestTimeout, base + 5},
+		)
+
 		elements = append(elements,
 			"",
 			lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("Load Test Configuration:"),
@@ -91,11 +148,62 @@ func (m RequestPane) fieldsContent() string {
 		)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, elements...)
+	return lipgloss.JoinVertical(lipgloss.Left, elements...), offsets
 }
 
-// View renders the request pane
-func (m RequestPane) View() string {
+// scrollToFocused scrolls FieldsViewport so the currently focused field is
+// visible, if it isn't already - called after anything that moves focus or
+// changes the field layout (NextField/PrevField, and adding/removing an
+// array item via its count control). Without this, tabbing to a field
+// below the viewport's current scroll position - or one that only exists
+// after adding an array item - left it receiving keystrokes while
+// completely invisible, the only sign of trouble being pgdn revealing it
+// afterward.
+func (m *RequestPane) scrollToFocused() {
+	if m.FocusManager == nil {
+		return
+	}
+	content, offsets := m.fieldsContent()
+	m.FieldsViewport.SetContent(content)
+	// Recomputed exactly (matching View()'s own math) rather than trusting
+	// SetHeight's approximation - that approximation is fine for
+	// pgup/pgdown's jump size, but ensureLineVisible below needs the real
+	// height or it can scroll one line short, clipping exactly the field
+	// this is trying to reveal.
+	m.FieldsViewport.Height = max(m.Height-lipgloss.Height(m.renderFooter()), 1)
+
+	current := m.FocusManager.Current()
+	for _, o := range offsets {
+		if o.focusable == current {
+			m.ensureLineVisible(o.line)
+			return
+		}
+	}
+}
+
+// ensureLineVisible scrolls just enough to bring line within the viewport's
+// visible window, without otherwise disturbing the current scroll position.
+func (m *RequestPane) ensureLineVisible(line int) {
+	height := m.FieldsViewport.Height
+	if height <= 0 {
+		return
+	}
+	if line < m.FieldsViewport.YOffset {
+		m.FieldsViewport.SetYOffset(line)
+	} else if line >= m.FieldsViewport.YOffset+height {
+		m.FieldsViewport.SetYOffset(line - height + 1)
+	}
+}
+
+// renderFooter renders the pinned button/stopwatch/errors/help-hint block
+// below FieldsViewport. Pulled out of View() so its height can also be
+// computed exactly from Update() (see refreshViewportHeight) instead of
+// only approximated there - the footer's height varies with
+// RequestInProgress/LoadTestMode/ParseErrors, so a fixed guess (see the old
+// approxFooterLines) drifts from what's actually rendered whenever any of
+// those change, which used to only blur pgup/pgdown's jump size but now
+// would also throw off scrollToFocused's exact positioning.
+func (m RequestPane) renderFooter() string {
 	// Render button based on state
 	var button string
 	var stopwatchCount string
@@ -117,40 +225,54 @@ func (m RequestPane) View() string {
 		button = ui.UnfocusedButton.Render("→ Send")
 	}
 
-	// Render mode-specific help hint
+	// Render mode-specific help hint, capped to m.Width via MaxWidth (which
+	// truncates - unlike Width, which wraps to a second line). Without this,
+	// the hint's natural length (well over 100 chars) exceeded m.Width on
+	// anything but a very wide terminal, and got silently *wrapped* one
+	// layer up when view.go's outer box applied its own Width() - adding a
+	// line the box's Height() calculation (see layout.go's requestHeight)
+	// knew nothing about, so the request/response column overshot the
+	// height reserved for it and fell out of alignment with the sidebar.
+	footerWidth := max(m.Width, 1)
 	var helpText string
 	if m.LoadTestMode {
-		helpText = footerHelpStyle.Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
 	} else {
-		helpText = footerHelpStyle.Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • enter/→: accept URL • ctrl+s: save")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • enter/→: accept URL • ctrl+s: save")
 	}
 
 	// A blocked send (a body param outside its schema's min/maxLength or
 	// minimum/maximum - see ValidateParams) leaves its reasons in
-	// ParseErrors; show them so "nothing happened" has a visible cause.
+	// ParseErrors; show them so "nothing happened" has a visible cause -
+	// each capped to footerWidth for the same reason as helpText above.
 	var errorsBlock string
 	if len(m.ParseErrors) > 0 {
 		lines := make([]string, len(m.ParseErrors))
 		for i, e := range m.ParseErrors {
-			lines[i] = errorTextStyle.Render("! " + e)
+			lines[i] = errorTextStyle.MaxWidth(footerWidth).Render("! " + e)
 		}
 		errorsBlock = "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...)
 	}
 
-	// Size the viewport from the footer's *actual* rendered height (it
-	// varies with RequestInProgress/stopwatch/ParseErrors) rather than a
-	// guessed constant, so it never over- or under-reserves space - and
-	// clip defensively with MaxHeight in case content is ever taller than
-	// m.Height regardless (e.g. m.Height not set yet). FieldsViewport can
-	// be taller than the pane's box with enough fields (a wide imported
+	return lipgloss.JoinVertical(lipgloss.Left, "", button, stopwatchCount, errorsBlock, helpText)
+}
+
+// View renders the request pane
+func (m RequestPane) View() string {
+	// Size the viewport from the footer's *actual* rendered height rather
+	// than a guessed constant, so it never over- or under-reserves space -
+	// and clip defensively with MaxHeight in case content is ever taller
+	// than m.Height regardless (e.g. m.Height not set yet). FieldsViewport
+	// can be taller than the pane's box with enough fields (a wide imported
 	// body schema, many path params) - unlike a plain lipgloss.Height()
 	// (which only pads, never truncates, and would corrupt the rest of
 	// the app's layout once content overflowed it), the viewport always
 	// clips to exactly its Height and can be scrolled (pgup/pgdown) to
 	// reach whatever doesn't fit.
-	footer := lipgloss.JoinVertical(lipgloss.Left, "", button, stopwatchCount, errorsBlock, helpText)
+	footer := m.renderFooter()
 	m.FieldsViewport.Height = max(m.Height-lipgloss.Height(footer), 1)
-	m.FieldsViewport.SetContent(m.fieldsContent())
+	content, _ := m.fieldsContent()
+	m.FieldsViewport.SetContent(content)
 
 	return lipgloss.NewStyle().MaxHeight(max(m.Height, 1)).Render(
 		lipgloss.JoinVertical(lipgloss.Left, m.FieldsViewport.View(), footer),
@@ -159,37 +281,129 @@ func (m RequestPane) View() string {
 
 var paramSectionTitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("140")).Bold(true)
 
+// requiredFieldStyle marks a required field's label - shown this way at all
+// times as a hint regardless of whether it's currently empty (unlike
+// errorTextStyle, which only appears once something's actually wrong).
+var requiredFieldStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
+
+// paramLabel renders a param's "name (type)" label, in requiredFieldStyle
+// when the field is required so it's always visually distinct from an
+// optional one - not just once it's flagged empty at send time (see
+// RequiredFieldErrors).
+func paramLabel(name, fieldType string, required bool) string {
+	text := name
+	if fieldType != "" {
+		text += " (" + fieldType + ")"
+	}
+	if required {
+		return requiredFieldStyle.Render(text + " ")
+	}
+	return ui.LabelStyle.Render(text + " ")
+}
+
 // renderParamSection renders a titled block with one "name [input]" line
 // per param - used for both Path Params (from the URL) and Body Params
 // (from an imported JSON schema). The title makes the two sections, and
-// the plain fields around them, visually distinct from each other.
-func renderParamSection(title string, params []Param) string {
+// the plain fields around them, visually distinct from each other. The
+// returned offsets are relative to this block's own first line (0), for
+// the caller to translate into absolute lines within the full fieldsContent
+// (see fieldsContent).
+func renderParamSection(title string, params []Param) (string, []fieldOffset) {
 	if len(params) == 0 {
-		return ""
+		return "", nil
 	}
 	lines := make([]string, 0, len(params)+1)
 	lines = append(lines, paramSectionTitleStyle.Render(title+":"))
-	for _, p := range params {
-		text := "  " + p.Name
-		if p.Type != "" {
-			text += " (" + p.Type + ")"
-		}
-		label := ui.LabelStyle.Render(text + " ")
+	offsets := make([]fieldOffset, len(params))
+	for i, p := range params {
+		label := "  " + paramLabel(p.Name, p.Type, p.Required)
 
 		var field, comment string
+		var focusable ui.Focusable
 		if p.Enum != nil {
 			// A fixed-choice picker (including a boolean's true/false
 			// switch) can't produce an invalid value, so it never needs
 			// the red-highlight/comment treatment below.
 			field = p.Enum.View()
+			focusable = p.Enum
 		} else {
+			// p is a loop copy (ranging by value), so setting TextStyle
+			// here only affects this render pass, same as before this
+			// function also started returning offsets - but the pointer
+			// recorded for scrollToFocused must be the *real* one
+			// paramFocusables hands the focus cycle (&params[i].Input),
+			// not &p.Input (a copy's address, matching nothing).
 			if msg, ok := ValidateParam(p); !ok {
 				p.Input.TextStyle = errorTextStyle
 				comment = errorTextStyle.Render("  ! " + msg)
 			}
 			field = p.Input.View()
+			focusable = &params[i].Input
 		}
 		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Left, label, field, comment))
+		offsets[i] = fieldOffset{focusable, i + 1}
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return lipgloss.JoinVertical(lipgloss.Left, lines...), offsets
+}
+
+// renderArrayParamSection renders one titled block per "array of objects"
+// body param (see ArrayParam): its count control (‹ N item(s) ›, cycled
+// with left/right), then each current item's fields indented under an
+// "Item N:" sub-heading, with the same inline red-highlight/comment
+// treatment invalid scalar fields get in renderParamSection. The returned
+// offsets are relative to this block's own first line (0).
+func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
+	if len(arrays) == 0 {
+		return "", nil
+	}
+	blocks := make([]string, len(arrays))
+	var offsets []fieldOffset
+	blockStart := 0
+	for ai := range arrays {
+		a := &arrays[ai]
+		lines := make([]string, 0, 2+len(a.Items)*3)
+		lines = append(lines, paramSectionTitleStyle.Render(fmt.Sprintf("%s (array of %s):", a.Name, a.itemLabel())))
+		lines = append(lines, "  "+a.CountControl.View())
+		offsets = append(offsets, fieldOffset{a.CountControl, blockStart + 1})
+
+		line := 2
+		for ii, item := range a.Items {
+			lines = append(lines, "", ui.LabelStyle.Render(fmt.Sprintf("  Item %d:", ii+1)))
+			line += 2
+			for fi, f := range item.Fields {
+				label := "    " + paramLabel(f.Name, f.Type, f.Required)
+
+				var field, comment string
+				var focusable ui.Focusable
+				if f.Enum != nil {
+					field = f.Enum.View()
+					focusable = f.Enum
+				} else {
+					if msg, ok := ValidateParam(f); !ok {
+						f.Input.TextStyle = errorTextStyle
+						comment = errorTextStyle.Render("  ! " + msg)
+					}
+					field = f.Input.View()
+					focusable = &a.Items[ii].Fields[fi].Input
+				}
+				lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Left, label, field, comment))
+				offsets = append(offsets, fieldOffset{focusable, blockStart + line})
+				line++
+			}
+		}
+		blocks[ai] = lipgloss.JoinVertical(lipgloss.Left, lines...)
+		blockStart += line
+		if ai < len(arrays)-1 {
+			blockStart++ // blank line between array blocks, added below
+		}
+	}
+
+	elements := make([]string, 0, len(blocks)*2)
+	for i, b := range blocks {
+		if i > 0 {
+			elements = append(elements, "")
+		}
+		elements = append(elements, b)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, elements...), offsets
 }

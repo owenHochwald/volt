@@ -15,6 +15,9 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 			Name: "Global",
 			Bindings: []key.Binding{
 				km.ShowHelp,
+				km.FocusSidebar,
+				km.FocusRequest,
+				km.FocusResponse,
 				km.CyclePanel,
 				km.OpenGroups,
 				km.OpenImport,

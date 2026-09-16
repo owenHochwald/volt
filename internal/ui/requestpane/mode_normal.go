@@ -47,6 +47,21 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model, te
 		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
 			c.Prev()
 		}
+	case *ArrayCountControl:
+		// Unlike MethodSelector/EnumSelector, cycling this changes the
+		// number of focusable fields (an item's worth), so the focus cycle
+		// needs rebuilding right after - same as PathParams/BodyParams
+		// changing shape elsewhere.
+		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+			c.Next()
+			m.rebuildFocusManager()
+			m.scrollToFocused()
+		}
+		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+			c.Prev()
+			m.rebuildFocusManager()
+			m.scrollToFocused()
+		}
 	case *textinput.Model:
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
@@ -70,8 +85,16 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 
 		m.syncRequest()
 
-		if errs := ValidateParams(m.BodyParams); len(errs) > 0 {
+		errs := ValidateParams(m.BodyParams)
+		errs = append(errs, ValidateArrayParams(m.ArrayParams)...)
+		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
+		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
+		if len(errs) > 0 {
 			m.ParseErrors = append(m.ParseErrors, errs...)
+			if idx, ok := m.firstErrorFocusIndex(); ok {
+				m.FocusManager.FocusIndex(idx)
+				m.scrollToFocused()
+			}
 			return m, nil
 		}
 
@@ -87,14 +110,16 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model, t
 
 // components lists this mode's focusable fields in tab order. This must
 // match fieldsContent()'s render order in view.go (server, method+URL, name,
-// path params, body params, headers, submit) - otherwise tab visits fields
-// in a different order than they're drawn in, and the cursor appears to
-// jump up and down the screen instead of moving straight through it.
+// path params, body params, array params, headers, submit) - otherwise tab
+// visits fields in a different order than they're drawn in, and the cursor
+// appears to jump up and down the screen instead of moving straight
+// through it.
 func (nm *NormalMode) components(m *RequestPane) []ui.Focusable {
 	components := []ui.Focusable{m.ServerSelector, m.MethodSelector, m.URLInput, m.NameInput}
 	components = append(components, paramFocusables(m.PathParams)...)
-	if len(m.BodyParams) > 0 {
+	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
+		components = append(components, arrayParamFocusables(m.ArrayParams)...)
 	} else {
 		components = append(components, m.Body)
 	}

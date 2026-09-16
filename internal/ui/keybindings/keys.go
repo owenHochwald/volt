@@ -11,6 +11,21 @@ type KeyMap struct {
 	EscapePanel key.Binding
 	OpenGroups  key.Binding
 	OpenImport  key.Binding
+	// FocusSidebar/FocusRequest/FocusResponse jump directly to a panel
+	// (f1/f2/f3) regardless of what's currently focused or being typed into
+	// - CyclePanel (shift+tab) can't reliably fill that role since the
+	// request pane also binds shift+tab to its own PrevField. Two other
+	// options were tried and ruled out first: ctrl+1/2/3 isn't a real,
+	// distinguishable key combination over classic terminal input (most
+	// terminals don't send a separate code for it at all, and ctrl+3 is
+	// indistinguishable from plain Escape); alt+1/2/3 IS distinguishable,
+	// but most terminal emulators grab alt+digit themselves for their own
+	// tab switching before the keystroke ever reaches the app. F-keys are
+	// what terminal TUIs (e.g. htop) conventionally use instead, and
+	// they're essentially never intercepted by the terminal itself.
+	FocusSidebar  key.Binding
+	FocusRequest  key.Binding
+	FocusResponse key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
@@ -65,6 +80,18 @@ func DefaultKeyMap() KeyMap {
 		CyclePanel: key.NewBinding(
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "cycle panels"),
+		),
+		FocusSidebar: key.NewBinding(
+			key.WithKeys("f1"),
+			key.WithHelp("f1", "focus sidebar"),
+		),
+		FocusRequest: key.NewBinding(
+			key.WithKeys("f2"),
+			key.WithHelp("f2", "focus request"),
+		),
+		FocusResponse: key.NewBinding(
+			key.WithKeys("f3"),
+			key.WithHelp("f3", "focus response"),
 		),
 		EscapePanel: key.NewBinding(
 			key.WithKeys("esc"),

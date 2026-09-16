@@ -118,6 +118,17 @@ func (m ResponsePane) renderTiming() string {
 	b.WriteString("Request Timing\n")
 	b.WriteString(strings.Repeat("─", 60) + "\n\n")
 
+	// A request that failed before a response came back (e.g. a dial
+	// error - "connection refused", a DNS failure, a timeout) never
+	// completes a round trip, so Duration stays at its zero value - not a
+	// real "0s" measurement. Showing that as if it were a normal
+	// (suspiciously instant) timing was misleading; say plainly that
+	// there's nothing to measure instead.
+	if m.Response.Error != "" {
+		b.WriteString(errorTextStyle.Render("Request failed before a response was received - no timing data available."))
+		return b.String()
+	}
+
 	// Total duration
 	b.WriteString(responseLabelStyle.Render("Total Duration"))
 	b.WriteString(": ")

@@ -32,11 +32,17 @@ func (m *RequestPane) syncRequest() {
 	m.Request.Headers = headerMap
 	m.ParseErrors = headerErrors
 
-	// When BodyParams is populated (an imported request with a known JSON
-	// schema), the structured fields drive the body instead - see
-	// resolvedRequest - so the freeform Body textarea is hidden and must
-	// not overwrite the schema's field set here.
-	if len(m.BodyParams) == 0 {
+	// When BodyParams or ArrayParams is populated (an imported request with
+	// a known JSON schema), the structured fields drive the body instead -
+	// see resolvedRequest - so the freeform Body textarea is hidden and
+	// must not overwrite the schema's field set here. A body schema with
+	// only an array-of-objects field (no scalar properties) has an empty
+	// BodyParams but a non-empty ArrayParams - checking BodyParams alone
+	// missed that case, silently reparsing the hidden Body textarea's raw
+	// schema-template JSON as bogus "key=value" pairs (and overwriting
+	// Request.Body with the garbage result) on every send attempt,
+	// regardless of what was actually typed into the array's fields.
+	if len(m.BodyParams) == 0 && len(m.ArrayParams) == 0 {
 		bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
 		jsonData, err := json.Marshal(bodyMap)
 		if err != nil {
@@ -60,18 +66,18 @@ func (m *RequestPane) syncRequest() {
 }
 
 // resolvedRequest returns a copy of m.Request with any {name} path
-// placeholders filled in from PathParams, its body rebuilt from BodyParams
-// (when present), and, if the request resolves against a server (directly
-// via ServerID, or via its group's server) and stores a relative path (e.g.
-// "/pets"), its URL resolved against that server's base URL and that
-// server's default headers merged in underneath its own. The stored request
-// itself is left untouched, so editing and saving keep operating on the raw
-// URL/body/header template as saved.
+// placeholders filled in from PathParams, its body rebuilt from
+// BodyParams/ArrayParams (when present), and, if the request resolves
+// against a server (directly via ServerID, or via its group's server) and
+// stores a relative path (e.g. "/pets"), its URL resolved against that
+// server's base URL and that server's default headers merged in underneath
+// its own. The stored request itself is left untouched, so editing and
+// saving keep operating on the raw URL/body/header template as saved.
 func (m *RequestPane) resolvedRequest() *http.Request {
 	resolvedReq := *m.Request
 	resolvedReq.URL = SubstitutePathParams(m.Request.URL, m.PathParams)
-	if len(m.BodyParams) > 0 {
-		resolvedReq.Body = BuildRequestBody(m.BodyParams)
+	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
+		resolvedReq.Body = BuildRequestBody(m.BodyParams, m.ArrayParams)
 	}
 
 	changed := resolvedReq.URL != m.Request.URL || resolvedReq.Body != m.Request.Body

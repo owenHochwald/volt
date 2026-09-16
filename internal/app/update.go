@@ -69,9 +69,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Global key handling (only when modal is closed)
-		if keybindings.Matches(msg, m.keys.CyclePanel) {
+		// Global key handling (only when modal is closed). CyclePanel is
+		// bound to shift+tab, which the request pane also binds to its own
+		// PrevField - without this exclusion, shift+tab inside the request
+		// pane always cycled the app's panel focus instead of ever reaching
+		// PrevField, so shift-tabbing backward through its fields silently
+		// did nothing (moving focus away entirely, not just skipping a
+		// field).
+		if keybindings.Matches(msg, m.keys.CyclePanel) && m.focusedPanel != utils.RequestPanel {
 			m.focusedPanel = (m.focusedPanel + 1) % 3
+			return m, nil
+		}
+		// f1/f2/f3 jump directly to a panel from anywhere, including
+		// mid-edit in the request pane - unlike CyclePanel (shift+tab),
+		// which the request pane also needs for its own PrevField and so
+		// can't reliably reach a panel switch from there.
+		if keybindings.Matches(msg, m.keys.FocusSidebar) && noModalOpen {
+			m.focusedPanel = utils.SidebarPanel
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.FocusRequest) && noModalOpen {
+			m.focusedPanel = utils.RequestPanel
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.FocusResponse) && noModalOpen {
+			m.focusedPanel = utils.ResponsePanel
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.Quit) {

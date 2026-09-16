@@ -48,6 +48,17 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model,
 		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
 			c.Prev()
 		}
+	case *ArrayCountControl:
+		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+			c.Next()
+			m.rebuildFocusManager()
+			m.scrollToFocused()
+		}
+		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+			c.Prev()
+			m.rebuildFocusManager()
+			m.scrollToFocused()
+		}
 	case *textinput.Model:
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
@@ -71,8 +82,16 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 
 		m.syncRequest()
 
-		if errs := ValidateParams(m.BodyParams); len(errs) > 0 {
+		errs := ValidateParams(m.BodyParams)
+		errs = append(errs, ValidateArrayParams(m.ArrayParams)...)
+		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
+		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
+		if len(errs) > 0 {
 			m.ParseErrors = append(m.ParseErrors, errs...)
+			if idx, ok := m.firstErrorFocusIndex(); ok {
+				m.FocusManager.FocusIndex(idx)
+				m.scrollToFocused()
+			}
 			return m, nil
 		}
 
@@ -98,8 +117,9 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
 	components := []ui.Focusable{m.ServerSelector, m.MethodSelector, m.URLInput, m.NameInput}
 	components = append(components, paramFocusables(m.PathParams)...)
-	if len(m.BodyParams) > 0 {
+	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
+		components = append(components, arrayParamFocusables(m.ArrayParams)...)
 	} else {
 		components = append(components, m.Body)
 	}

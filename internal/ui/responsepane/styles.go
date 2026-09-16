@@ -38,4 +38,14 @@ var (
 				Padding(0, 1)
 
 	faintStyle = lipgloss.NewStyle().Faint(true)
+
+	// errorTextStyle renders a plain-text error explanation (e.g. the
+	// Timing tab's "request failed" note) - unlike errorStyle above, which
+	// is a filled badge meant for a short status word like "ERROR", not a
+	// full sentence.
+	errorTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	// scrollIndicatorStyle renders the "more above/below" hint shown when a
+	// tab's content overflows the viewport - see ResponsePane.scrollIndicator.
+	scrollIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Italic(true)
 )

@@ -69,3 +69,60 @@ func TestRequestPane_ScrollFieldsDown_RevealsFieldsBeyondTheBox(t *testing.T) {
 		t.Errorf("expected pgup to return to the top, got YOffset=%d", back.FieldsViewport.YOffset)
 	}
 }
+
+// TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem is a
+// regression test for a real bug reported while using an actual OpenAPI
+// spec: adding a second item to an array-of-objects body param (see
+// ArrayParam) placed its fields below the box, but nothing scrolled to
+// reveal them - the item existed and accepted keystrokes, but was
+// completely invisible until manually paging down by the right amount.
+func TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"tags": {Type: "array", ItemsRefName: "Tag", Items: tagItemSchema()},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.SetWidth(150)
+	// Short enough that item 2's fields don't fit alongside item 1's.
+	pane.SetHeight(14)
+	pane.PanelFocused = true
+
+	// Tab order: ServerSelector, Method, URL, Name, ArrayCountControl.
+	for i := 0; i < 4; i++ {
+		pane.FocusManager.Next()
+	}
+	if _, ok := pane.FocusManager.Current().(*ArrayCountControl); !ok {
+		t.Fatalf("expected the array count control to be focused, got %T", pane.FocusManager.Current())
+	}
+
+	// Add a second item, then tab into its first field - exactly what a
+	// user filling it in would do.
+	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyRight})
+	result, ok := model.(*RequestPane)
+	if !ok {
+		t.Fatalf("expected *RequestPane, got %T", model)
+	}
+	if len(result.ArrayParams[0].Items) != 2 {
+		t.Fatalf("expected 2 items after adding one, got %d", len(result.ArrayParams[0].Items))
+	}
+
+	model2, _ := result.Update(tea.KeyMsg{Type: tea.KeyTab})               // -> item1.key
+	model3, _ := model2.(RequestPane).Update(tea.KeyMsg{Type: tea.KeyTab}) // -> item1.value
+	model4, _ := model3.(RequestPane).Update(tea.KeyMsg{Type: tea.KeyTab}) // -> item2.key
+	final, ok := model4.(RequestPane)
+	if !ok {
+		t.Fatalf("expected RequestPane, got %T", model4)
+	}
+
+	focused := final.FocusManager.Current()
+	if focused != &final.ArrayParams[0].Items[1].Fields[0].Input {
+		t.Fatalf("expected item 2's key field to be focused, got %T", focused)
+	}
+
+	rendered := final.View()
+	if !strings.Contains(rendered, "Item 2:") {
+		t.Errorf("expected scrolling to have brought item 2 into view, got:\n%s", rendered)
+	}
+}

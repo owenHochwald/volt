@@ -55,7 +55,13 @@ type RequestPane struct {
 	// request body (populated by `volt import` from the OpenAPI
 	// requestBody schema), kept in sync with Body by syncBodyParams. When
 	// non-empty, they're shown instead of the freeform Body textarea.
-	BodyParams   []Param
+	BodyParams []Param
+	// ArrayParams holds one repeatable item-group per top-level "array of
+	// objects" property (its schema's "items" was a $ref to an object),
+	// also kept in sync with Body by syncBodyParams - a "simple" array
+	// (items with no object structure) stays a plain BodyParams text field
+	// instead.
+	ArrayParams  []ArrayParam
 	Body         *textarea.Model
 	SubmitButton *ui.SubmitButton
 
@@ -152,6 +158,11 @@ func (m *RequestPane) SetWidth(width int) {
 	}
 	resizeParams(m.PathParams)
 	resizeParams(m.BodyParams)
+	for i := range m.ArrayParams {
+		for j := range m.ArrayParams[i].Items {
+			resizeParams(m.ArrayParams[i].Items[j].Fields)
+		}
+	}
 }
 
 // GetCurrentMethod returns the currently selected HTTP method

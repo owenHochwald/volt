@@ -13,6 +13,10 @@ import (
 // ImportSummary reports the outcome of an OpenAPI import.
 type ImportSummary struct {
 	Imported int
+	// Updated counts requests that already existed (same group+method+url -
+	// see dedupKey) and were overwritten in place because force was set;
+	// always 0 without force, where a match is Skipped instead.
+	Updated  int
 	Skipped  int
 	Warnings []string
 }
@@ -43,11 +47,12 @@ func RunImportCLI(args []string) error {
 	fs := flag.NewFlagSet("import", flag.ExitOnError)
 	baseURL := fs.String("base-url", "", "Set/override the target group's server URL (or, ungrouped, save it as the \"default\" server)")
 	group := fs.String("group", "", "Import into this request group (created if missing)")
+	force := fs.Bool("force", false, "Overwrite already-saved requests (same group+method+url) with the spec's current name/headers/body instead of skipping them")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: volt import [-group <name>] [-base-url <url>] <openapi-file>")
+		return fmt.Errorf("usage: volt import [-group <name>] [-base-url <url>] [-force] <openapi-file>")
 	}
 	specPath := fs.Arg(0)
 
@@ -57,12 +62,12 @@ func RunImportCLI(args []string) error {
 	}
 	defer closeDB()
 
-	summary, err := RunImport(specPath, *baseURL, *group, db)
+	summary, err := RunImport(specPath, *baseURL, *group, *force, db)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Imported %d request(s), skipped %d already saved.\n", summary.Imported, summary.Skipped)
+	fmt.Printf("Imported %d request(s), updated %d, skipped %d unchanged.\n", summary.Imported, summary.Updated, summary.Skipped)
 	for _, w := range summary.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
@@ -71,7 +76,12 @@ func RunImportCLI(args []string) error {
 
 // RunImport reads an OpenAPI spec from specPath and saves one Request per
 // supported operation into db, skipping any group+method+URL combination
-// already stored.
+// already stored - or, with force set, overwriting that existing request's
+// name/headers/body with what the spec currently says instead of skipping
+// it (see UpdateRequestSchema). A forced update never touches the
+// request's group/server association, and never creates a duplicate row -
+// it's the same group+method+url match (see dedupKey) that decides Skipped
+// vs Imported without force, just resolved differently.
 //
 // When groupName is non-empty, requests are tagged with that group
 // (created if it doesn't exist yet) and stored as bare paths rather than
@@ -85,7 +95,7 @@ func RunImportCLI(args []string) error {
 // baseURLOverride was explicitly passed, it's also saved to the servers
 // table (as defaultServerName) rather than used once and discarded, so it
 // shows up in `volt server list` and can be assigned to a group later.
-func RunImport(specPath, baseURLOverride, groupName string, db *storage.SQLiteStorage) (*ImportSummary, error) {
+func RunImport(specPath, baseURLOverride, groupName string, force bool, db *storage.SQLiteStorage) (*ImportSummary, error) {
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", specPath, err)
@@ -132,24 +142,35 @@ func RunImport(specPath, baseURLOverride, groupName string, db *storage.SQLiteSt
 	if err != nil {
 		return nil, fmt.Errorf("failed to read existing requests: %w", err)
 	}
-	seen := make(map[string]bool, len(existing))
+	// existingIDs maps a request's identity (see dedupKey) to its row ID,
+	// so a force update knows exactly which row to overwrite - a plain
+	// seen-or-not set (as before force existed) isn't enough for that.
+	existingIDs := make(map[string]int64, len(existing))
 	for _, r := range existing {
-		seen[dedupKey(r.GroupID, r.Method, r.URL)] = true
+		existingIDs[dedupKey(r.GroupID, r.Method, r.URL)] = r.ID
 	}
 
 	summary := &ImportSummary{Warnings: warnings}
 	for _, req := range requests {
 		req.GroupID = groupID
 		key := dedupKey(req.GroupID, req.Method, req.URL)
-		if seen[key] {
-			summary.Skipped++
+		if id, ok := existingIDs[key]; ok {
+			if !force {
+				summary.Skipped++
+				continue
+			}
+			if err := db.UpdateRequestSchema(id, req.Name, req.Headers, req.Body); err != nil {
+				summary.Warnings = append(summary.Warnings, fmt.Sprintf("failed to update %s: %v", key, err))
+				continue
+			}
+			summary.Updated++
 			continue
 		}
 		if err := db.Save(req); err != nil {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("failed to save %s: %v", key, err))
 			continue
 		}
-		seen[key] = true
+		existingIDs[key] = req.ID
 		summary.Imported++
 	}
 

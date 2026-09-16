@@ -34,10 +34,12 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keybindings.Matches(msg, m.keys.NextField) {
 			m.FocusManager.Next()
+			m.scrollToFocused()
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.PrevField) {
 			m.FocusManager.Prev()
+			m.scrollToFocused()
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.ScrollFieldsUp) {
@@ -46,12 +48,14 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// here), so without this refresh every scroll would see empty
 			// content, read maxYOffset()==0, and PageUp/PageDown would be
 			// a permanent no-op.
-			m.FieldsViewport.SetContent(m.fieldsContent())
+			content, _ := m.fieldsContent()
+			m.FieldsViewport.SetContent(content)
 			m.FieldsViewport.PageUp()
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.ScrollFieldsDown) {
-			m.FieldsViewport.SetContent(m.fieldsContent())
+			content, _ := m.fieldsContent()
+			m.FieldsViewport.SetContent(content)
 			m.FieldsViewport.PageDown()
 			return m, nil
 		}
@@ -108,6 +112,7 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// keep values as you type.
 	m.PathParams = nil
 	m.BodyParams = nil
+	m.ArrayParams = nil
 	m.rebuildServerSelector()
 	m.syncPathParams()
 	m.syncBodyParams()
@@ -119,6 +124,12 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// the *previous*, now-orphaned ServerSelector instead of the new one,
 	// and cycling it (h/l) would silently do nothing.
 	m.rebuildFocusManager()
+	// FieldsViewport is a persistent field, not rebuilt per request - without
+	// this, loading a short request after scrolling deep into a long one
+	// left FieldsViewport still scrolled to that old position, hiding the
+	// new request's fields (e.g. Name) above the fold until manually
+	// scrolled back up.
+	m.FieldsViewport.GotoTop()
 }
 
 // bodyInnerContent strips the outer braces from a request body stored as a

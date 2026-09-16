@@ -33,6 +33,14 @@ type Param struct {
 	MaxLength *int
 	Minimum   *float64
 	Maximum   *float64
+	// Required mirrors whether the schema listed this field's name under
+	// its parent object's "required" (only ever set for BodyParams/array
+	// item fields). Its label is always shown in requiredFieldStyle as a
+	// hint, regardless of whether it's currently empty; an empty value only
+	// blocks sending - see RequiredFieldErrors - it isn't live-flagged the
+	// way ValidateParam's checks are, since being empty is a normal,
+	// unremarkable state while a form is still being filled in.
+	Required bool
 }
 
 // Value returns the field's current value regardless of whether it's
@@ -111,6 +119,66 @@ func ValidateParams(params []Param) []string {
 		}
 	}
 	return errs
+}
+
+// RequiredFieldErrors checks every required param for an empty value,
+// returning one "name: required" message per one still missing, or nil if
+// all are filled in. Deliberately separate from ValidateParam/ValidateParams
+// (which drive the live inline red-highlight on every render): required-ness
+// is only ever checked here, at send time, so an empty required field isn't
+// flagged as wrong while a form is still being filled in - only blocking the
+// send itself once actually attempted.
+func RequiredFieldErrors(params []Param) []string {
+	var errs []string
+	for _, p := range params {
+		if p.Required && p.Value() == "" {
+			errs = append(errs, fmt.Sprintf("%s: required", p.Name))
+		}
+	}
+	return errs
+}
+
+// firstErrorFocusIndex returns the focus index of the first BodyParams or
+// ArrayParams field that's currently invalid (ValidateParam) or a required
+// field left empty (RequiredFieldErrors' semantics) - the same checks
+// handleSubmit blocks a send on (see mode_normal.go/mode_loadtest.go) - so
+// a blocked send can jump focus straight to the field that caused it
+// instead of leaving the cursor wherever it happened to be with only the
+// ParseErrors list under the button to notice. The index matches
+// NormalMode/LoadTestMode's shared components() prefix: ServerSelector,
+// MethodSelector, URLInput, NameInput, then PathParams (4 fixed fields
+// before BodyParams/ArrayParams start) - both modes' components() must
+// keep that same prefix for this to stay correct. ok is false when nothing
+// in BodyParams/ArrayParams has a problem - e.g. the block came from a
+// malformed Headers line instead, which has no single field to jump to.
+func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
+	const focusPrefixLen = 4 // ServerSelector, MethodSelector, URLInput, NameInput
+	fieldInvalid := func(p Param) bool {
+		if _, ok := ValidateParam(p); !ok {
+			return true
+		}
+		return p.Required && p.Value() == ""
+	}
+
+	idx := focusPrefixLen + len(m.PathParams)
+	for _, p := range m.BodyParams {
+		if fieldInvalid(p) {
+			return idx, true
+		}
+		idx++
+	}
+	for i := range m.ArrayParams {
+		idx++ // this array's CountControl
+		for _, item := range m.ArrayParams[i].Items {
+			for _, f := range item.Fields {
+				if fieldInvalid(f) {
+					return idx, true
+				}
+				idx++
+			}
+		}
+	}
+	return 0, false
 }
 
 func newParamInput() textinput.Model {
