@@ -108,8 +108,17 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// keep values as you type.
 	m.PathParams = nil
 	m.BodyParams = nil
+	m.rebuildServerSelector()
 	m.syncPathParams()
 	m.syncBodyParams()
+	// rebuildServerSelector always replaces m.ServerSelector with a fresh
+	// instance, but syncPathParams/syncBodyParams only rebuild the focus
+	// cycle when their own field set actually changed (e.g. a request with
+	// no path or body params is a no-op for both) - so without this,
+	// loading such a request would leave FocusManager still pointing at
+	// the *previous*, now-orphaned ServerSelector instead of the new one,
+	// and cycling it (h/l) would silently do nothing.
+	m.rebuildFocusManager()
 }
 
 // bodyInnerContent strips the outer braces from a request body stored as a

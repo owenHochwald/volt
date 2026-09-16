@@ -33,7 +33,7 @@ type KeyMap struct {
 	CopyResponse key.Binding
 	TabNavNext   key.Binding
 	TabNavPrev   key.Binding
-	DirectTab    key.Binding // 1,2,3
+	DirectTab    key.Binding // 1,2,3,4
 	ScrollUp     key.Binding
 	ScrollDown   key.Binding
 
@@ -148,8 +148,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("h/←", "previous tab"),
 		),
 		DirectTab: key.NewBinding(
-			key.WithKeys("1", "2", "3"),
-			key.WithHelp("1-3", "jump to tab"),
+			key.WithKeys("1", "2", "3", "4"),
+			key.WithHelp("1-4", "jump to tab"),
 		),
 		ScrollUp: key.NewBinding(
 			key.WithKeys("k", "up"),

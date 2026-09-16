@@ -11,10 +11,13 @@ import (
 )
 
 func main() {
+	args, verbose := extractVerboseFlag(os.Args[1:])
+	storage.Verbose = verbose
+
 	// If any command line arguments are provided, use CLI mode
-	if len(os.Args) > 1 {
+	if len(args) > 0 {
 		// Special handling for help
-		if os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "--help" {
+		if args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 			cli.PrintHelp()
 			return
 		}
@@ -24,8 +27,8 @@ func main() {
 			"group":  cli.RunGroupCLI,
 			"server": cli.RunServerCLI,
 		}
-		if run, ok := subcommands[os.Args[1]]; ok {
-			if err := run(os.Args[2:]); err != nil {
+		if run, ok := subcommands[args[0]]; ok {
+			if err := run(args[1:]); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -34,12 +37,12 @@ func main() {
 
 		// All other args go to bench mode
 		// Support both "volt bench ..." and "volt ..." (with bench implied)
-		args := os.Args[1:]
-		if os.Args[1] == "bench" {
-			args = os.Args[2:]
+		benchArgs := args
+		if args[0] == "bench" {
+			benchArgs = args[1:]
 		}
 
-		config, err := cli.ParseBenchFlags(args)
+		config, err := cli.ParseBenchFlags(benchArgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 			os.Exit(1)
@@ -72,4 +75,24 @@ func main() {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
+}
+
+// extractVerboseFlag pulls a -v/--debug flag out of args, wherever it
+// appears (before or after a subcommand), returning the remaining args and
+// whether it was present. Internal logging (currently just goose's
+// migration output - see storage.Verbose) is off by default so it doesn't
+// clutter the TUI's terminal or a CLI subcommand's plain output; this flag
+// re-enables it for troubleshooting.
+func extractVerboseFlag(args []string) ([]string, bool) {
+	remaining := make([]string, 0, len(args))
+	verbose := false
+	for _, a := range args {
+		switch a {
+		case "-v", "--debug", "-debug":
+			verbose = true
+		default:
+			remaining = append(remaining, a)
+		}
+	}
+	return remaining, verbose
 }

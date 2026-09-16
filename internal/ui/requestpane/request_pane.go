@@ -34,6 +34,15 @@ type RequestPane struct {
 	// View() and SetHeight/SetWidth for how it's kept sized to match.
 	FieldsViewport viewport.Model
 
+	// ServerSelector picks which configured server (if any) this request
+	// resolves against directly - independent of any group assignment (see
+	// http.Request.ServerID) - cycled the same way as the method, and
+	// rebuilt from Servers whenever the pane loads a request (see
+	// rebuildServerSelector). It's the first field, ahead of even the
+	// method/URL, since it changes where every relative URL below it goes.
+	ServerSelector *EnumSelector
+	Servers        []http.Server
+
 	MethodSelector *ui.MethodSelector
 	URLInput       *textinput.Model
 	// PathParams holds one editable field per {name} placeholder in the
@@ -129,10 +138,16 @@ func (m *RequestPane) SetWidth(width int) {
 	m.Headers.SetWidth(textAreaWidth)
 	m.Body.SetWidth(textAreaWidth)
 
+	// maxParamInputWidth caps a path/body param's field instead of
+	// stretching it to fill the pane the way URL/Name do - a param value is
+	// typically short, and stretching it left no room for the inline
+	// validation comment renderParamSection (view.go) shows to its right
+	// for an invalid value.
+	const maxParamInputWidth = 40
 	resizeParams := func(params []Param) {
 		for i := range params {
 			labelWidth := len(params[i].Name) + 1 // "name "
-			params[i].Input.Width = max(width-labelWidth-safetyMargin, minInputWidth)
+			params[i].Input.Width = min(max(width-labelWidth-safetyMargin, minInputWidth), maxParamInputWidth)
 		}
 	}
 	resizeParams(m.PathParams)

@@ -8,6 +8,10 @@ import (
 
 type ResultMsg struct {
 	Response *Response
+	// Request is the actual request that was sent to produce Response
+	// (path/body params substituted, server headers merged in, etc.), for
+	// display alongside the response - see responsepane's Request tab.
+	Request *Request
 }
 
 func (r *ResultMsg) String() string {

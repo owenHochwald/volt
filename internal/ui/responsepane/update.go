@@ -27,6 +27,15 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "3":
 				m.activeTab = int(TabTiming)
 				m.updateViewportForActiveTab()
+			case "4":
+				// Load test mode only has 3 tabs (Overview/Latency/Errors)
+				// - there's no load-test equivalent of "the request that
+				// was sent" to jump to (the JobConfig's request doesn't
+				// change per stats update).
+				if !m.isLoadTest {
+					m.activeTab = int(TabRequest)
+					m.updateViewportForActiveTab()
+				}
 			}
 		}
 
@@ -88,6 +97,8 @@ func (m *ResponsePane) updateViewportForActiveTab() {
 		content = m.renderHeaders()
 	case TabTiming:
 		content = m.renderTiming()
+	case TabRequest:
+		content = m.renderRequest()
 	}
 	m.viewport.SetContent(content)
 }

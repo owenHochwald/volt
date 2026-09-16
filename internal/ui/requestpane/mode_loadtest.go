@@ -30,9 +30,18 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyMsg) (tea.Model,
 	// position, since the number of fields (PathParams) varies with the
 	// URL. Every text input in this mode - URL, path params, name, and the
 	// load-test config fields - is a *textinput.Model, so one case covers
-	// them all.
+	// them all. A body param whose schema declared an enum is an
+	// *EnumSelector instead, cycled the same way as the method
+	// (left/right), not typed.
 	switch c := m.FocusManager.Current().(type) {
 	case *ui.MethodSelector:
+		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+			c.Next()
+		}
+		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+			c.Prev()
+		}
+	case *EnumSelector:
 		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
 			c.Next()
 		}
@@ -61,6 +70,12 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 		}
 
 		m.syncRequest()
+
+		if errs := ValidateParams(m.BodyParams); len(errs) > 0 {
+			m.ParseErrors = append(m.ParseErrors, errs...)
+			return m, nil
+		}
+
 		m.RequestInProgress = true
 
 		config, err := m.buildJobConfig()
@@ -74,20 +89,22 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 	return m, nil
 }
 
-// components lists this mode's focusable fields in tab order: method, URL,
-// any path params extracted from the URL, name, headers, then either the
-// body params (an imported request with a known JSON schema) or the
-// freeform body textarea, the load-test config fields, then submit.
+// components lists this mode's focusable fields in tab order. This must
+// match fieldsContent()'s render order in view.go (server, method+URL, name,
+// path params, body params, headers, load-test config, submit) - otherwise
+// tab visits fields in a different order than they're drawn in, and the
+// cursor appears to jump up and down the screen instead of moving straight
+// through it.
 func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
-	components := []ui.Focusable{m.MethodSelector, m.URLInput}
+	components := []ui.Focusable{m.ServerSelector, m.MethodSelector, m.URLInput, m.NameInput}
 	components = append(components, paramFocusables(m.PathParams)...)
-	components = append(components, m.NameInput, m.Headers)
 	if len(m.BodyParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
 	} else {
 		components = append(components, m.Body)
 	}
 	components = append(components,
+		m.Headers,
 		m.LoadTestConcurrency,
 		m.LoadTestTotalReqs,
 		m.LoadTestQPS,

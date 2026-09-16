@@ -148,17 +148,26 @@ func TestParseOpenAPIURLs_RejectsSwagger2(t *testing.T) {
 	}
 }
 
-func requestBodyKeys(t *testing.T, req *http.Request) []string {
+// requestBodySchema decodes a request's Body as the {"__volt_body_schema__":
+// {...}} wrapper `volt import` writes for a JSON request body schema, and
+// fails the test if it isn't that shape.
+func requestBodySchema(t *testing.T, req *http.Request) map[string]http.BodyFieldSchema {
 	t.Helper()
 	if req.Body == "" {
 		return nil
 	}
-	var m map[string]string
-	if err := json.Unmarshal([]byte(req.Body), &m); err != nil {
-		t.Fatalf("request body %q is not a flat JSON object: %v", req.Body, err)
+	var wrapper map[string]map[string]http.BodyFieldSchema
+	if err := json.Unmarshal([]byte(req.Body), &wrapper); err != nil {
+		t.Fatalf("request body %q isn't the body-schema wrapper shape: %v", req.Body, err)
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
+	return wrapper[http.BodySchemaKey]
+}
+
+func requestBodyKeys(t *testing.T, req *http.Request) []string {
+	t.Helper()
+	schema := requestBodySchema(t, req)
+	keys := make([]string, 0, len(schema))
+	for k := range schema {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -205,12 +214,9 @@ func TestParseOpenAPIURLs_InlineRequestBodySchema(t *testing.T) {
 		t.Errorf("expected body template keys %v, got %v (body=%q)", want, keys, requests[0].Body)
 	}
 
-	var body map[string]string
-	if err := json.Unmarshal([]byte(requests[0].Body), &body); err != nil {
-		t.Fatalf("body isn't valid JSON: %v", err)
-	}
-	if body["name"] != "<string>" || body["color"] != "<string>" {
-		t.Errorf("expected each field's declared type to be encoded as a <type> marker, got %v", body)
+	schema := requestBodySchema(t, requests[0])
+	if schema["name"].Type != "string" || schema["color"].Type != "string" {
+		t.Errorf("expected each field's declared type to carry through to the schema, got %+v", schema)
 	}
 }
 
@@ -364,5 +370,120 @@ func TestParseOpenAPIURLs_RequestBodySchemaViaChainedRef(t *testing.T) {
 	keys := requestBodyKeys(t, requests[0])
 	if len(keys) != 1 || keys[0] != "name" {
 		t.Errorf("expected body template key [name] resolved via a 2-hop $ref chain, got %v (body=%q)", keys, requests[0].Body)
+	}
+}
+
+func TestParseOpenAPIURLs_RequestBodySchemaDefaultAndEnum(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"status": {"type": "string", "enum": ["active", "inactive"], "default": "active"},
+										"count": {"type": "integer", "default": 1},
+										"name": {"type": "string"}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	schema := requestBodySchema(t, requests[0])
+
+	status := schema["status"]
+	if status.Default != "active" {
+		t.Errorf("expected status default %q, got %q", "active", status.Default)
+	}
+	if len(status.Enum) != 2 || status.Enum[0] != "active" || status.Enum[1] != "inactive" {
+		t.Errorf("expected status enum [active inactive], got %v", status.Enum)
+	}
+
+	count := schema["count"]
+	if count.Default != "1" {
+		t.Errorf("expected count's numeric default to stringify to %q, got %q", "1", count.Default)
+	}
+
+	name := schema["name"]
+	if name.Default != "" || len(name.Enum) != 0 {
+		t.Errorf("expected name to have no default/enum, got %+v", name)
+	}
+}
+
+func TestParseOpenAPIURLs_RequestBodySchemaLimits(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"name": {"type": "string", "minLength": 2, "maxLength": 50},
+										"quantity": {"type": "integer", "minimum": 1, "maximum": 100},
+										"note": {"type": "string"}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	schema := requestBodySchema(t, requests[0])
+
+	name := schema["name"]
+	if name.MinLength == nil || *name.MinLength != 2 {
+		t.Errorf("expected name.MinLength=2, got %v", name.MinLength)
+	}
+	if name.MaxLength == nil || *name.MaxLength != 50 {
+		t.Errorf("expected name.MaxLength=50, got %v", name.MaxLength)
+	}
+
+	quantity := schema["quantity"]
+	if quantity.Minimum == nil || *quantity.Minimum != 1 {
+		t.Errorf("expected quantity.Minimum=1, got %v", quantity.Minimum)
+	}
+	if quantity.Maximum == nil || *quantity.Maximum != 100 {
+		t.Errorf("expected quantity.Maximum=100, got %v", quantity.Maximum)
+	}
+
+	note := schema["note"]
+	if note.MinLength != nil || note.MaxLength != nil || note.Minimum != nil || note.Maximum != nil {
+		t.Errorf("expected note to have no constraints, got %+v", note)
 	}
 }

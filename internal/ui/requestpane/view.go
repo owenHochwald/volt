@@ -14,6 +14,10 @@ import (
 // FieldsViewport to show actual fields in.
 var footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
+// errorTextStyle renders a blocked-send reason (see ValidateParams) in the
+// footer, distinct from the plain help hint below it.
+var errorTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
 // fieldsContent renders everything FieldsViewport scrolls: method+URL,
 // name, path params, body params, headers, and (in load-test mode) the
 // load-test config fields. Pulled out of View() so it can also be called
@@ -24,6 +28,9 @@ var footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 // scrolls would still have the empty content it was constructed with, so
 // maxYOffset() would always read 0 and pgdown would silently do nothing.
 func (m RequestPane) fieldsContent() string {
+	serverLabel := ui.LabelStyle.Render("Server ")
+	serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
+
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
@@ -46,12 +53,12 @@ func (m RequestPane) fieldsContent() string {
 		bodyBlock = lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 	}
 
-	// Field order: method+URL, name, path params, body params, headers,
-	// then mode-specific content (load-test config fields, or nothing).
-	// Each present block is separated from the next by a blank line;
-	// pathParamsBlock is skipped entirely (no double blank line) when the
-	// URL has no {params}.
-	elements := []string{"", primaryLine, "", nameLine}
+	// Field order: server, method+URL, name, path params, body params,
+	// headers, then mode-specific content (load-test config fields, or
+	// nothing). Each present block is separated from the next by a blank
+	// line; pathParamsBlock is skipped entirely (no double blank line) when
+	// the URL has no {params}.
+	elements := []string{"", serverLine, "", primaryLine, "", nameLine}
 	if pathParamsBlock != "" {
 		elements = append(elements, "", pathParamsBlock)
 	}
@@ -118,10 +125,22 @@ func (m RequestPane) View() string {
 		helpText = footerHelpStyle.Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • enter/→: accept URL • ctrl+s: save")
 	}
 
+	// A blocked send (a body param outside its schema's min/maxLength or
+	// minimum/maximum - see ValidateParams) leaves its reasons in
+	// ParseErrors; show them so "nothing happened" has a visible cause.
+	var errorsBlock string
+	if len(m.ParseErrors) > 0 {
+		lines := make([]string, len(m.ParseErrors))
+		for i, e := range m.ParseErrors {
+			lines[i] = errorTextStyle.Render("! " + e)
+		}
+		errorsBlock = "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...)
+	}
+
 	// Size the viewport from the footer's *actual* rendered height (it
-	// varies with RequestInProgress/stopwatch) rather than a guessed
-	// constant, so it never over- or under-reserves space - and clip
-	// defensively with MaxHeight in case content is ever taller than
+	// varies with RequestInProgress/stopwatch/ParseErrors) rather than a
+	// guessed constant, so it never over- or under-reserves space - and
+	// clip defensively with MaxHeight in case content is ever taller than
 	// m.Height regardless (e.g. m.Height not set yet). FieldsViewport can
 	// be taller than the pane's box with enough fields (a wide imported
 	// body schema, many path params) - unlike a plain lipgloss.Height()
@@ -129,7 +148,7 @@ func (m RequestPane) View() string {
 	// the app's layout once content overflowed it), the viewport always
 	// clips to exactly its Height and can be scrolled (pgup/pgdown) to
 	// reach whatever doesn't fit.
-	footer := lipgloss.JoinVertical(lipgloss.Left, "", button, stopwatchCount, helpText)
+	footer := lipgloss.JoinVertical(lipgloss.Left, "", button, stopwatchCount, errorsBlock, helpText)
 	m.FieldsViewport.Height = max(m.Height-lipgloss.Height(footer), 1)
 	m.FieldsViewport.SetContent(m.fieldsContent())
 
@@ -156,7 +175,21 @@ func renderParamSection(title string, params []Param) string {
 			text += " (" + p.Type + ")"
 		}
 		label := ui.LabelStyle.Render(text + " ")
-		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Left, label, p.Input.View()))
+
+		var field, comment string
+		if p.Enum != nil {
+			// A fixed-choice picker (including a boolean's true/false
+			// switch) can't produce an invalid value, so it never needs
+			// the red-highlight/comment treatment below.
+			field = p.Enum.View()
+		} else {
+			if msg, ok := ValidateParam(p); !ok {
+				p.Input.TextStyle = errorTextStyle
+				comment = errorTextStyle.Render("  ! " + msg)
+			}
+			field = p.Input.View()
+		}
+		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Left, label, field, comment))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }

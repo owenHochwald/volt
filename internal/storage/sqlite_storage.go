@@ -17,6 +17,14 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
+// Verbose controls whether goose's migration logging (e.g. "goose: no
+// migrations to run") is shown. Off by default, so it doesn't clutter the
+// TUI's terminal (those lines print before/after the alt screen and are
+// otherwise the only thing left in scrollback once the program exits) or a
+// CLI subcommand's plain output; set from main before opening any storage,
+// via the -v/--debug flag.
+var Verbose bool
+
 type SQLiteStorage struct {
 	db *sql.DB
 }
@@ -38,6 +46,10 @@ func deserializeHeaders(jsonStr string) (map[string]string, error) {
 }
 
 func runMigrations(db *sql.DB) error {
+	if !Verbose {
+		goose.SetLogger(goose.NopLogger())
+	}
+
 	// Set the embedded filesystem for goose
 	goose.SetBaseFS(embedMigrations)
 
@@ -83,11 +95,12 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	if err != nil {
 		return err
 	}
-	q := `INSERT INTO requests (name, method, url, headers, body, group_id) VALUES (?, ?, ?, ?, ?, ?)`
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 	// database/sql's default converter turns a nil *int64 into SQL NULL and
-	// dereferences a non-nil one, so request.GroupID can be passed as-is.
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID)
+	// dereferences a non-nil one, so request.GroupID/ServerID can be passed
+	// as-is.
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID)
 	if err != nil {
 		return err
 	}
@@ -100,7 +113,7 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body, group_id FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id, server_id FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -111,16 +124,17 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 
 	for rows.Next() {
 		var (
-			id      int64
-			name    string
-			method  string
-			url     string
-			headers string
-			body    string
-			groupID sql.NullInt64
+			id       int64
+			name     string
+			method   string
+			url      string
+			headers  string
+			body     string
+			groupID  sql.NullInt64
+			serverID sql.NullInt64
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID); err != nil {
 			return nil, err
 
 		}
@@ -139,6 +153,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 		if groupID.Valid {
 			gid := groupID.Int64
 			request.GroupID = &gid
+		}
+		if serverID.Valid {
+			sid := serverID.Int64
+			request.ServerID = &sid
 		}
 		requests = append(requests, request)
 	}
@@ -197,8 +215,12 @@ func checkRowsAffected(res sql.Result, kind, identifier string) error {
 // redirected at a different host just by switching servers.
 
 func (s *SQLiteStorage) SaveServer(server *http.Server) error {
-	q := `INSERT INTO servers (name, base_url) VALUES (?, ?)`
-	res, err := s.db.Exec(q, server.Name, server.BaseURL)
+	headerString, err := serializeHeaders(server.Headers)
+	if err != nil {
+		return err
+	}
+	q := `INSERT INTO servers (name, base_url, headers) VALUES (?, ?, ?)`
+	res, err := s.db.Exec(q, server.Name, server.BaseURL, headerString)
 	if err != nil {
 		return err
 	}
@@ -211,20 +233,38 @@ func (s *SQLiteStorage) SaveServer(server *http.Server) error {
 }
 
 func (s *SQLiteStorage) GetServerByName(name string) (*http.Server, error) {
-	q := `SELECT id, name, base_url FROM servers WHERE name = ?`
+	q := `SELECT id, name, base_url, headers FROM servers WHERE name = ?`
+	return scanServer(s.db.QueryRow(q, name))
+}
+
+func (s *SQLiteStorage) GetServerByID(id int64) (*http.Server, error) {
+	q := `SELECT id, name, base_url, headers FROM servers WHERE id = ?`
+	return scanServer(s.db.QueryRow(q, id))
+}
+
+// scanServer reads one servers row (id, name, base_url, headers) from a
+// *sql.Row, shared by GetServerByName/GetServerByID so the headers
+// deserialization only lives in one place.
+func scanServer(row *sql.Row) (*http.Server, error) {
 	var server http.Server
-	err := s.db.QueryRow(q, name).Scan(&server.ID, &server.Name, &server.BaseURL)
+	var headerString string
+	err := row.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	headers, err := deserializeHeaders(headerString)
+	if err != nil {
+		return nil, err
+	}
+	server.Headers = headers
 	return &server, nil
 }
 
 func (s *SQLiteStorage) ListServers() ([]http.Server, error) {
-	q := `SELECT id, name, base_url FROM servers ORDER BY name`
+	q := `SELECT id, name, base_url, headers FROM servers ORDER BY name`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -234,12 +274,34 @@ func (s *SQLiteStorage) ListServers() ([]http.Server, error) {
 	var servers []http.Server
 	for rows.Next() {
 		var server http.Server
-		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL); err != nil {
+		var headerString string
+		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString); err != nil {
 			return nil, err
 		}
+		headers, err := deserializeHeaders(headerString)
+		if err != nil {
+			return nil, err
+		}
+		server.Headers = headers
 		servers = append(servers, server)
 	}
 	return servers, nil
+}
+
+// UpdateServerHeaders replaces the named server's default headers - the
+// ones merged into every request that resolves against it (see
+// http.Server.MergeHeaders).
+func (s *SQLiteStorage) UpdateServerHeaders(name string, headers map[string]string) error {
+	headerString, err := serializeHeaders(headers)
+	if err != nil {
+		return err
+	}
+	q := `UPDATE servers SET headers = ? WHERE name = ?`
+	res, err := s.db.Exec(q, headerString, name)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "server", name)
 }
 
 // UpsertServer creates a server with the given name and base URL, or
@@ -430,24 +492,39 @@ func (s *SQLiteStorage) DeleteGroup(name string) (int64, error) {
 	return deletedRequests, nil
 }
 
-// ResolveEffectiveURL returns request.URL unchanged if it's already
-// absolute or belongs to no group. Otherwise it looks up the request's
-// group and, if one is configured, joins the URL onto that server's base
-// URL. With no group or no server configured, the relative URL is
-// returned as-is.
-func (s *SQLiteStorage) ResolveEffectiveURL(request *http.Request) (string, error) {
-	if request.IsAbsoluteURL() || request.GroupID == nil {
-		return request.URL, nil
+// ResolveEffectiveServer returns the server a request's relative URL and
+// default headers resolve against: the request's own ServerID if set
+// (taking priority), otherwise its group's assigned server, or nil if
+// neither applies (or the assigned server no longer exists).
+func (s *SQLiteStorage) ResolveEffectiveServer(request *http.Request) (*http.Server, error) {
+	if request.ServerID != nil {
+		return s.GetServerByID(*request.ServerID)
+	}
+	if request.GroupID == nil {
+		return nil, nil
 	}
 
-	q := `SELECT s.base_url FROM request_groups g JOIN servers s ON s.id = g.server_id WHERE g.id = ?`
-	var baseURL string
-	err := s.db.QueryRow(q, *request.GroupID).Scan(&baseURL)
-	if errors.Is(err, sql.ErrNoRows) {
+	q := `SELECT s.id, s.name, s.base_url, s.headers FROM request_groups g JOIN servers s ON s.id = g.server_id WHERE g.id = ?`
+	server, err := scanServer(s.db.QueryRow(q, *request.GroupID))
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+// ResolveEffectiveURL returns request.URL unchanged if it's already
+// absolute or resolves against no server (directly, or via its group).
+// Otherwise it joins the URL onto that server's base URL.
+func (s *SQLiteStorage) ResolveEffectiveURL(request *http.Request) (string, error) {
+	if request.IsAbsoluteURL() {
 		return request.URL, nil
 	}
+	server, err := s.ResolveEffectiveServer(request)
 	if err != nil {
 		return "", err
 	}
-	return request.EffectiveURL(&http.Server{BaseURL: baseURL}), nil
+	if server == nil {
+		return request.URL, nil
+	}
+	return request.EffectiveURL(server), nil
 }

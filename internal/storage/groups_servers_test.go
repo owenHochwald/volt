@@ -186,6 +186,76 @@ func TestSQLiteStorage_ResolveEffectiveURL(t *testing.T) {
 	assert.Equal(t, "http://localhost:9000/pets", resolved)
 }
 
+func TestSQLiteStorage_ServerHeaders(t *testing.T) {
+	db := setupTestDB(t)
+
+	server := &http.Server{Name: "prod", BaseURL: "https://api.example.com"}
+	assert.NoError(t, db.SaveServer(server))
+
+	found, err := db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Zero(t, len(found.Headers), "a freshly created server has no default headers")
+
+	assert.NoError(t, db.UpdateServerHeaders("prod", map[string]string{"Authorization": "Bearer abc", "X-Env": "prod"}))
+
+	found, err = db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Equal(t, "Bearer abc", found.Headers["Authorization"])
+	assert.Equal(t, "prod", found.Headers["X-Env"])
+
+	byID, err := db.GetServerByID(found.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, found.Headers, byID.Headers)
+
+	// Replacing headers overwrites the whole set, not a merge.
+	assert.NoError(t, db.UpdateServerHeaders("prod", map[string]string{"X-Env": "staging"}))
+	found, err = db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(found.Headers))
+	assert.Equal(t, "staging", found.Headers["X-Env"])
+
+	assert.Error(t, db.UpdateServerHeaders("nope", map[string]string{"a": "b"}))
+}
+
+func TestSQLiteStorage_ResolveEffectiveServer(t *testing.T) {
+	db := setupTestDB(t)
+
+	// Neither ServerID nor GroupID set: no server.
+	plain := &http.Request{Method: http.GET, URL: "/pets"}
+	server, err := db.ResolveEffectiveServer(plain)
+	assert.NoError(t, err)
+	assert.Zero(t, server)
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.UpdateServerHeaders("prod", map[string]string{"X-Env": "prod"}))
+
+	// A direct ServerID resolves without needing a group.
+	direct := &http.Request{Method: http.GET, URL: "/pets", ServerID: &prod.ID}
+	server, err = db.ResolveEffectiveServer(direct)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://api.example.com", server.BaseURL)
+	assert.Equal(t, "prod", server.Headers["X-Env"])
+
+	// A direct ServerID takes priority over the request's group's server.
+	group, err := db.GetOrCreateGroup("petstore")
+	assert.NoError(t, err)
+	_, err = db.UpsertServer("staging", "https://staging.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.SetGroupServer("petstore", "staging"))
+
+	both := &http.Request{Method: http.GET, URL: "/pets", GroupID: &group.ID, ServerID: &prod.ID}
+	server, err = db.ResolveEffectiveServer(both)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://api.example.com", server.BaseURL, "a direct ServerID must win over the group's server")
+
+	// With no ServerID, falls back to the group's server.
+	viaGroup := &http.Request{Method: http.GET, URL: "/pets", GroupID: &group.ID}
+	server, err = db.ResolveEffectiveServer(viaGroup)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://staging.example.com", server.BaseURL)
+}
+
 func TestSQLiteStorage_SaveLoadRoundTripsGroupID(t *testing.T) {
 	db := setupTestDB(t)
 
@@ -217,6 +287,40 @@ func TestSQLiteStorage_SaveLoadRoundTripsGroupID(t *testing.T) {
 	for _, r := range loaded {
 		if r.Name == "ungrouped" {
 			assert.Zero(t, r.GroupID)
+		}
+	}
+}
+
+func TestSQLiteStorage_SaveLoadRoundTripsServerID(t *testing.T) {
+	db := setupTestDB(t)
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+
+	req := &http.Request{
+		Name:     "list pets",
+		Method:   http.GET,
+		URL:      "/pets",
+		Headers:  map[string]string{},
+		ServerID: &prod.ID,
+	}
+	assert.NoError(t, db.Save(req))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(loaded))
+	assert.NotZero(t, loaded[0].ServerID)
+	assert.Equal(t, prod.ID, *loaded[0].ServerID)
+
+	// A plain request (no server) round-trips with a nil ServerID.
+	unassigned := &http.Request{Name: "unassigned", Method: http.GET, URL: "http://example.com", Headers: map[string]string{}}
+	assert.NoError(t, db.Save(unassigned))
+
+	loaded, err = db.Load()
+	assert.NoError(t, err)
+	for _, r := range loaded {
+		if r.Name == "unassigned" {
+			assert.Zero(t, r.ServerID)
 		}
 	}
 }

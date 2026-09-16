@@ -120,7 +120,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
-		m.responsePane.SetResponse(msg.Response)
+		m.responsePane.SetResponse(msg.Response, msg.Request)
 		m.focusedPanel = utils.ResponsePanel
 		return m, nil
 

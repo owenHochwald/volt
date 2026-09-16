@@ -7,6 +7,7 @@ const (
 	TabBody TabIndex = iota
 	TabHeaders
 	TabTiming
+	TabRequest
 )
 
 // Tab indices for load test mode
@@ -21,7 +22,7 @@ type TabIndex int
 
 // renderTabs renders the tab bar for normal response mode
 func (m ResponsePane) renderTabs() string {
-	tabs := []string{"[1] Body", "[2] Headers", "[3] Timing"}
+	tabs := []string{"[1] Body", "[2] Headers", "[3] Timing", "[4] Request"}
 	return m.renderTabBar(tabs)
 }
 
@@ -52,5 +53,5 @@ func (m ResponsePane) getMaxTabs() int {
 	if m.isLoadTest {
 		return 3 // Overview, Latency, Errors
 	}
-	return 3 // Body, Headers, Timing
+	return 4 // Body, Headers, Timing, Request
 }

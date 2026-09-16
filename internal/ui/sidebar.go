@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,9 +45,35 @@ type SidebarPane struct {
 
 	desiredCursorIndex int
 
+	// allRequests/groupNames hold the last load's full, unfiltered request
+	// set and its group-id-to-name lookup, kept around so cycling the group
+	// filter (see groupOptions) can re-derive requestsList without a fresh
+	// database round-trip.
+	allRequests []http.Request
+	groupNames  map[int64]string
+
+	// groupOptions is the group filter's cycle: index 0 is always
+	// allGroupsOption (show every request), each following entry one
+	// group's name, sorted. Cycled with "[" / "]" and shown as the
+	// sidebar's first line, above the request list - so a workspace with
+	// many saved requests across groups can narrow the list down instead
+	// of always scrolling through everything at once.
+	groupOptions     []string
+	groupFilterIndex int
+
+	// pendingDelete holds the item awaiting a y/n confirmation after
+	// DeleteRequest ('d') was pressed, or nil when nothing is pending.
+	// Deleting a saved request is irreversible, so it's confirmed rather
+	// than acted on immediately.
+	pendingDelete *RequestItem
+
 	db   *storage.SQLiteStorage
 	keys keybindings.KeyMap
 }
+
+// allGroupsOption is the group filter's choice for "show every request,
+// regardless of group" - always groupOptions[0].
+const allGroupsOption = "All groups"
 
 // helpHintLines is how many rows View()'s "Press ? for help" hint occupies
 // (HelpStyle's Margin(1, 2) adds a blank line above and below the text
@@ -54,8 +81,59 @@ type SidebarPane struct {
 // within the space SetSize was given instead of overflowing it.
 const helpHintLines = 3
 
+// groupFilterLines is how many rows the group filter line at the top of
+// View() occupies, reserved the same way as helpHintLines.
+const groupFilterLines = 1
+
 func (s *SidebarPane) listHeight() int {
-	return max(s.height-helpHintLines, 0)
+	return max(s.height-helpHintLines-groupFilterLines, 0)
+}
+
+// currentGroupFilter returns the selected group's name, or "" when
+// groupOptions[0] (allGroupsOption) is selected - meaning don't filter.
+func (s *SidebarPane) currentGroupFilter() string {
+	if s.groupFilterIndex <= 0 || s.groupFilterIndex >= len(s.groupOptions) {
+		return ""
+	}
+	return s.groupOptions[s.groupFilterIndex]
+}
+
+// cycleGroupFilter moves the group filter by delta (wrapping) and rebuilds
+// the visible request list to match.
+func (s *SidebarPane) cycleGroupFilter(delta int) {
+	n := len(s.groupOptions)
+	if n == 0 {
+		return
+	}
+	s.groupFilterIndex = ((s.groupFilterIndex+delta)%n + n) % n
+	s.rebuildItems()
+}
+
+// rebuildItems re-derives requestsList from allRequests/groupNames under the
+// current group filter, without needing a fresh database load - called both
+// after a database reload and whenever the group filter itself changes.
+func (s *SidebarPane) rebuildItems() {
+	filterGroup := s.currentGroupFilter()
+	items := make([]list.Item, 0, len(s.allRequests))
+	for _, req := range s.allRequests {
+		var groupLabel string
+		if req.GroupID != nil {
+			if name, ok := s.groupNames[*req.GroupID]; ok {
+				groupLabel = name
+			}
+		}
+		if filterGroup != "" && groupLabel != filterGroup {
+			continue
+		}
+		items = append(items, RequestItem{
+			title:   req.Name,
+			desc:    s.describeURL(req.URL, groupLabel),
+			group:   groupLabel,
+			Request: &req,
+		})
+	}
+	s.SetRequests(items)
+	s.requestsList.Title = fmt.Sprintf("Saved (%d)", len(items))
 }
 
 // IsFiltering reports whether the user is actively typing a "/" search
@@ -105,55 +183,63 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RequestsLoadingMsg:
 		if msg.Err != nil {
+			s.allRequests = nil
 			s.SetRequests([]list.Item{})
 			s.requestsList.Title = "Saved (0)"
 			return s, nil
 
 		}
+		// Captured before groupOptions is rebuilt below, so the selected
+		// group can be found again by *name* afterwards - reusing the old
+		// index directly would silently point at a different group if the
+		// set of groups shrank or reordered (e.g. the selected one was
+		// deleted), the same class of bug a plain bounds check can't catch.
+		selectedGroupName := s.currentGroupFilter()
+
 		// Best-effort: a group name is a display nicety, so a lookup
-		// failure just falls back to showing no group label.
+		// failure just falls back to showing no group label and no filter
+		// options beyond allGroupsOption.
 		groupNames := map[int64]string{}
+		var groupNamesSorted []string
 		if groups, err := s.db.ListGroups(); err == nil {
 			for _, g := range groups {
 				groupNames[g.ID] = g.Name
+				groupNamesSorted = append(groupNamesSorted, g.Name)
 			}
 		}
-		items := make([]list.Item, 0, len(msg.Requests))
-		for _, req := range msg.Requests {
-			var groupLabel string
-			if req.GroupID != nil {
-				if name, ok := groupNames[*req.GroupID]; ok {
-					groupLabel = name
+		sort.Strings(groupNamesSorted)
+		s.groupNames = groupNames
+		s.groupOptions = append([]string{allGroupsOption}, groupNamesSorted...)
+
+		s.groupFilterIndex = 0
+		if selectedGroupName != "" {
+			for i, name := range s.groupOptions {
+				if name == selectedGroupName {
+					s.groupFilterIndex = i
+					break
 				}
 			}
-			items = append(items, RequestItem{
-				title:   req.Name,
-				desc:    s.describeURL(req.URL, groupLabel),
-				group:   groupLabel,
-				Request: &req,
-			})
 		}
-		s.SetRequests(items)
-		s.requestsList.Title = fmt.Sprintf("Saved (%d)", len(s.requestsList.Items()))
 
-		if s.desiredCursorIndex >= 0 && len(items) > 0 {
-			cursorPos := min(s.desiredCursorIndex, len(items)-1)
+		s.allRequests = msg.Requests
+		s.rebuildItems()
+
+		visibleCount := len(s.requestsList.Items())
+		if s.desiredCursorIndex >= 0 && visibleCount > 0 {
+			cursorPos := min(s.desiredCursorIndex, visibleCount-1)
 			s.requestsList.Select(cursorPos)
 			s.desiredCursorIndex = -1
 		}
 		return s, nil
 	case tea.KeyMsg:
-		// While the user is actively typing a "/" filter query, every key
-		// must go straight to the list's own filter text input instead of
-		// being intercepted below - otherwise typing e.g. "json" would
-		// trigger DeleteRequest ('d') or navigation ('j'/'k') on whatever's
-		// currently selected instead of being typed into the search box.
-		if s.requestsList.FilterState() == list.Filtering {
-			break
-		}
-		if keybindings.Matches(msg, s.keys.DeleteRequest) {
-			item, ok := s.SelectedItem()
-			if !ok || item.Request == nil || item.Request.ID == 0 {
+		// A pending delete swallows the very next key as its y/n answer,
+		// checked before anything else (including the filter-typing guard
+		// right below) - while confirming, that's the only thing any key
+		// should mean.
+		if s.pendingDelete != nil {
+			item := s.pendingDelete
+			s.pendingDelete = nil
+			if msg.String() != "y" && msg.String() != "Y" && msg.String() != "enter" {
 				return s, nil
 			}
 
@@ -169,6 +255,38 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.desiredCursorIndex = 0
 			}
 			return s, DeleteRequestCmd(s.db, item.Request.ID)
+		}
+
+		// While the user is actively typing a "/" filter query, every key
+		// must go straight to the list's own filter text input instead of
+		// being intercepted below - otherwise typing e.g. "json" would
+		// trigger DeleteRequest ('d') or navigation ('j'/'k') on whatever's
+		// currently selected instead of being typed into the search box.
+		if s.requestsList.FilterState() == list.Filtering {
+			break
+		}
+		if keybindings.Matches(msg, s.keys.DeleteRequest) {
+			item, ok := s.SelectedItem()
+			if !ok || item.Request == nil || item.Request.ID == 0 {
+				return s, nil
+			}
+			// Deleting is irreversible - confirm before actually doing it
+			// (see pendingDelete above), rather than deleting on the spot.
+			s.pendingDelete = &item
+			return s, nil
+		}
+		// "[" / "]" rather than h/l/left/right: those are also bubbles'
+		// list.Model's own default PrevPage/NextPage keys (along with
+		// pgup/pgdown/b/f/u/d), so binding the group filter to them would
+		// silently steal the list's own page-by-page scrolling out from
+		// under it - exactly the regression this replaced.
+		if msg.String() == "[" {
+			s.cycleGroupFilter(-1)
+			return s, nil
+		}
+		if msg.String() == "]" {
+			s.cycleGroupFilter(1)
+			return s, nil
 		}
 
 		// Navigation override - wrapped to cycle. Two things bubbles'
@@ -218,11 +336,33 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
+// groupFilterStyle renders the sidebar's group filter line - the first
+// thing shown, above the request list itself, so it reads as a field you
+// pick before the list it narrows down.
+var groupFilterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+
 func (s *SidebarPane) View() string {
-	helpText := HelpStyle.Render("/ to search • ? for help")
+	helpText := HelpStyle.Render("/ to search • [/]: group filter • ? for help")
+	if s.pendingDelete != nil {
+		helpText = HelpStyle.Render(
+			lipgloss.NewStyle().Foreground(lipgloss.Color("196")).
+				Render(fmt.Sprintf("Delete %q? y/enter=yes, any other key=no", s.pendingDelete.title)),
+		)
+	}
+
+	current := allGroupsOption
+	if s.groupFilterIndex >= 0 && s.groupFilterIndex < len(s.groupOptions) {
+		current = s.groupOptions[s.groupFilterIndex]
+	}
+	// "[" / "]" work no matter where the list cursor is - there's no
+	// separate "focus" to move back to - but that's not obvious from the
+	// brackets alone, so the hint is spelled out right here too, not just
+	// in the footer below (which can be easy to miss).
+	groupLine := groupFilterStyle.Render(fmt.Sprintf("[/] ‹ %s ›", current))
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
+		groupLine,
 		s.requestsList.View(),
 		helpText,
 	)
@@ -259,6 +399,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 		db:           db,
 		keys:         keys,
 		requestsList: list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
+		groupOptions: []string{allGroupsOption},
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
 	sidebar.requestsList.SetShowHelp(false)

@@ -20,6 +20,14 @@ func (m *RequestPane) syncRequest() {
 	m.Request.URL = m.URLInput.Value()
 	m.Request.Name = m.NameInput.Value()
 
+	if m.ServerSelector != nil {
+		if name := m.ServerSelector.Value(); name != noServerOption {
+			m.Request.ServerID = m.serverIDByName(name)
+		} else {
+			m.Request.ServerID = nil
+		}
+	}
+
 	headerMap, headerErrors := utils.ParseKeyValuePairs(m.Headers.Value())
 	m.Request.Headers = headerMap
 	m.ParseErrors = headerErrors
@@ -53,10 +61,12 @@ func (m *RequestPane) syncRequest() {
 
 // resolvedRequest returns a copy of m.Request with any {name} path
 // placeholders filled in from PathParams, its body rebuilt from BodyParams
-// (when present), and, if the request belongs to a group and stores a
-// relative path (e.g. "/pets"), its URL resolved against that group's
-// configured server. The stored request itself is left untouched, so
-// editing and saving keep operating on the raw URL/body template as saved.
+// (when present), and, if the request resolves against a server (directly
+// via ServerID, or via its group's server) and stores a relative path (e.g.
+// "/pets"), its URL resolved against that server's base URL and that
+// server's default headers merged in underneath its own. The stored request
+// itself is left untouched, so editing and saving keep operating on the raw
+// URL/body/header template as saved.
 func (m *RequestPane) resolvedRequest() *http.Request {
 	resolvedReq := *m.Request
 	resolvedReq.URL = SubstitutePathParams(m.Request.URL, m.PathParams)
@@ -64,13 +74,17 @@ func (m *RequestPane) resolvedRequest() *http.Request {
 		resolvedReq.Body = BuildRequestBody(m.BodyParams)
 	}
 
-	if m.Request.GroupID != nil && m.DB != nil {
-		if resolved, err := m.DB.ResolveEffectiveURL(&resolvedReq); err == nil {
-			resolvedReq.URL = resolved
+	changed := resolvedReq.URL != m.Request.URL || resolvedReq.Body != m.Request.Body
+
+	if m.DB != nil && (m.Request.ServerID != nil || m.Request.GroupID != nil) {
+		if server, err := m.DB.ResolveEffectiveServer(&resolvedReq); err == nil && server != nil {
+			resolvedReq.URL = resolvedReq.EffectiveURL(server)
+			resolvedReq.Headers = server.MergeHeaders(resolvedReq.Headers)
+			changed = true
 		}
 	}
 
-	if resolvedReq.URL == m.Request.URL && resolvedReq.Body == m.Request.Body {
+	if !changed {
 		return m.Request
 	}
 	return &resolvedReq
@@ -152,6 +166,7 @@ func sendRequestCmd(client *http.Client, request *http.Request) tea.Cmd {
 
 		return http.ResultMsg{
 			Response: responseObject,
+			Request:  request,
 		}
 	}
 }

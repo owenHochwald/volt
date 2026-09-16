@@ -13,6 +13,11 @@ USAGE:
   volt group       Manage request groups (one-level folders for saved requests)
   volt server      Manage named servers that groups can point their requests at
 
+GLOBAL FLAGS:
+  -v, --debug       Show internal logging (e.g. database migration output),
+                     hidden by default. Works anywhere: before or after a
+                     subcommand.
+
 IMPORT FLAGS:
   -group <name>     Import into this request group (created if missing)
   -base-url <url>   Set/override the group's server URL, or (ungrouped) the base
@@ -32,6 +37,12 @@ SERVER SUBCOMMANDS:
                                             group pointing at it moves with it
   volt server rename <old> <new>           Rename a server
   volt server delete <name>                Delete a server
+  volt server set-header <name> <key> <value>  Set (or update) a default header,
+                                                merged into every request that
+                                                uses this server
+  volt server headers <name>               List a server's default headers, numbered
+  volt server unset-header <name> <index>  Remove a default header by the number
+                                            shown in ` + "`volt server headers`" + `
 
 BENCH FLAGS:
   -url <string>     Target URL (required)

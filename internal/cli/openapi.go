@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/owenHochwald/Volt/internal/http"
@@ -166,6 +167,19 @@ type bodyField struct {
 	// it's shown only as a hint - so an array/object type isn't resolved
 	// any further.
 	Type string
+	// Default is the schema's "default" value, stringified regardless of
+	// its JSON type (a deliberate simplification - see stringifyJSONValue),
+	// or "" if the schema declares none.
+	Default string
+	// Enum is the schema's "enum" values, stringified, or nil if the
+	// schema doesn't constrain this field to a fixed set of values.
+	Enum []string
+	// MinLength/MaxLength/Minimum/Maximum mirror the schema's own
+	// constraints of the same name, nil where the schema declares none.
+	MinLength *int
+	MaxLength *int
+	Minimum   *float64
+	Maximum   *float64
 }
 
 // jsonRequestBodyFields returns the top-level properties of an operation's
@@ -205,13 +219,57 @@ func jsonRequestBodyFields(doc, op map[string]interface{}) []bodyField {
 
 	fields := make([]bodyField, len(names))
 	for i, name := range names {
-		propType := ""
+		field := bodyField{Name: name}
 		if prop, ok := properties[name].(map[string]interface{}); ok {
-			propType, _ = prop["type"].(string)
+			field.Type, _ = prop["type"].(string)
+			if def, ok := prop["default"]; ok {
+				field.Default = stringifyJSONValue(def)
+			}
+			if enumRaw, ok := prop["enum"].([]interface{}); ok {
+				for _, e := range enumRaw {
+					field.Enum = append(field.Enum, stringifyJSONValue(e))
+				}
+			}
+			if v, ok := prop["minLength"].(float64); ok {
+				n := int(v)
+				field.MinLength = &n
+			}
+			if v, ok := prop["maxLength"].(float64); ok {
+				n := int(v)
+				field.MaxLength = &n
+			}
+			if v, ok := prop["minimum"].(float64); ok {
+				field.Minimum = &v
+			}
+			if v, ok := prop["maximum"].(float64); ok {
+				field.Maximum = &v
+			}
 		}
-		fields[i] = bodyField{Name: name, Type: propType}
+		fields[i] = field
 	}
 	return fields
+}
+
+// stringifyJSONValue renders a decoded JSON value (string/float64/bool/nil,
+// per encoding/json's default map[string]interface{} unmarshal) as plain
+// text, for a schema's "default"/"enum" entries - Volt's body params are
+// always edited as strings regardless of the schema's declared type.
+func stringifyJSONValue(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int64(val)) {
+			return strconv.FormatInt(int64(val), 10)
+		}
+		return strconv.FormatFloat(val, 'g', -1, 64)
+	case bool:
+		return strconv.FormatBool(val)
+	case nil:
+		return ""
+	default:
+		return fmt.Sprint(val)
+	}
 }
 
 // maxSchemaRefDepth caps how many "$ref": "#/components/schemas/Name"
@@ -247,22 +305,27 @@ func resolveSchemaRef(doc, schema map[string]interface{}) map[string]interface{}
 	return current
 }
 
-// requestBodyTemplate builds a flat JSON object with each field mapped to
-// either an empty string (unknown type) or a "<type>" marker (e.g.
-// "<integer>") - a fill-in-the-blanks starting point for the body params
-// UI, matching how PathParams are edited. The TUI recognizes this exact
-// shape (see requestpane.extractBodySpecs) to show each field with its
-// declared type and know it's safe to present as blank, fillable inputs.
+// requestBodyTemplate builds a Request.Body value that carries this
+// operation's field schema (type/default/enum) under the sentinel
+// http.BodySchemaKey - the TUI recognizes that exact key (see
+// requestpane.extractBodySpecs) to drive the Body Params UI: showing each
+// field's type, pre-filling its default, and offering a picker for enum
+// values, instead of a blank freeform textarea.
 func requestBodyTemplate(fields []bodyField) string {
-	template := make(map[string]string, len(fields))
+	schema := make(map[string]http.BodyFieldSchema, len(fields))
 	for _, f := range fields {
-		if f.Type != "" {
-			template[f.Name] = "<" + f.Type + ">"
-		} else {
-			template[f.Name] = ""
+		schema[f.Name] = http.BodyFieldSchema{
+			Type:      f.Type,
+			Default:   f.Default,
+			Enum:      f.Enum,
+			MinLength: f.MinLength,
+			MaxLength: f.MaxLength,
+			Minimum:   f.Minimum,
+			Maximum:   f.Maximum,
 		}
 	}
-	data, err := json.Marshal(template)
+	wrapper := map[string]interface{}{http.BodySchemaKey: schema}
+	data, err := json.Marshal(wrapper)
 	if err != nil {
 		return ""
 	}

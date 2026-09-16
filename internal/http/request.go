@@ -42,6 +42,11 @@ type Request struct {
 	// resolved against that group's configured Server at send time - see
 	// EffectiveURL.
 	GroupID *int64 `json:"group_id,omitempty"`
+	// ServerID, when set, picks a server directly for this request -
+	// independent of GroupID - to resolve a relative URL against and to
+	// merge that server's default headers in. It takes priority over
+	// GroupID's server when both are set (see storage.ResolveEffectiveServer).
+	ServerID *int64 `json:"server_id,omitempty"`
 }
 
 func NewBlankRequest() *Request {

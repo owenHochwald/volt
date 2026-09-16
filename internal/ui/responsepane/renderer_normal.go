@@ -51,6 +51,63 @@ func (m ResponsePane) renderHeaders() string {
 	return b.String()
 }
 
+// renderRequest renders the actual request that was sent - method, URL,
+// headers, and body - so what went over the wire (path/body params
+// substituted, server headers merged in, etc. - see
+// RequestPane.resolvedRequest) stays inspectable independent of whatever's
+// since been typed into the request pane above it.
+func (m ResponsePane) renderRequest() string {
+	if m.SentRequest == nil {
+		return "No request sent yet"
+	}
+	req := m.SentRequest
+
+	var b strings.Builder
+	b.WriteString("Sent Request\n")
+	b.WriteString(strings.Repeat("─", 60) + "\n\n")
+
+	b.WriteString(responseLabelStyle.Render("Method"))
+	b.WriteString(": ")
+	b.WriteString(responseValueStyle.Render(req.Method))
+	b.WriteString("\n\n")
+
+	b.WriteString(responseLabelStyle.Render("URL"))
+	b.WriteString(": ")
+	b.WriteString(responseValueStyle.Render(req.URL))
+	b.WriteString("\n\n")
+
+	b.WriteString(responseLabelStyle.Render("Headers"))
+	b.WriteString(":\n")
+	if len(req.Headers) == 0 {
+		b.WriteString(faintStyle.Render("  (none)"))
+		b.WriteString("\n")
+	} else {
+		keys := make([]string, 0, len(req.Headers))
+		for k := range req.Headers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString("  ")
+			b.WriteString(responseKeyStyle.Render(k))
+			b.WriteString(": ")
+			b.WriteString(responseValueStyle.Render(req.Headers[k]))
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString(responseLabelStyle.Render("Body"))
+	b.WriteString(":\n")
+	if req.Body == "" || req.Body == "{}" {
+		b.WriteString(faintStyle.Render("  (empty)"))
+	} else {
+		b.WriteString(formatContentByType(req.Body, "application/json"))
+	}
+
+	return b.String()
+}
+
 // renderTiming renders the response timing information
 func (m ResponsePane) renderTiming() string {
 	if m.Response == nil {

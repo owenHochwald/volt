@@ -55,6 +55,7 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 		currentMode:         normalMode,
 	}
 
+	m.rebuildServerSelector()
 	m.FocusManager = normalMode.GetFocusManager(&m)
 
 	return m

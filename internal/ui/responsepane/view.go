@@ -100,6 +100,8 @@ func (m ResponsePane) renderActiveTabContent() string {
 		return m.renderHeaders()
 	case TabTiming:
 		return m.renderTiming()
+	case TabRequest:
+		return m.renderRequest()
 	default:
 		return "Something went wrong."
 	}

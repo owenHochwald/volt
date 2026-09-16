@@ -14,6 +14,13 @@ type ResponsePane struct {
 	isLoadTest    bool
 	height, width int
 
+	// SentRequest is the actual, fully-resolved request that produced
+	// Response (path/body params substituted, server headers merged in,
+	// etc. - see RequestPane.resolvedRequest) - shown on the Request tab so
+	// what was actually sent over the wire is inspectable, not just what's
+	// still being edited in the request pane.
+	SentRequest *http.Request
+
 	viewport  viewport.Model
 	activeTab int
 
@@ -30,9 +37,11 @@ func (m *ResponsePane) SetFocused(focused bool) {
 	// Response pane doesn't currently use focus state, but implements interface for consistency
 }
 
-// SetResponse updates the response pane with a new HTTP response
-func (m *ResponsePane) SetResponse(response *http.Response) {
+// SetResponse updates the response pane with a new HTTP response and the
+// request that produced it (see SentRequest).
+func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Request) {
 	m.Response = response
+	m.SentRequest = sentRequest
 	m.isLoadTest = false
 
 	if m.Response != nil {

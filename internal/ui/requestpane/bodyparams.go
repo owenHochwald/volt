@@ -2,72 +2,77 @@ package requestpane
 
 import (
 	"encoding/json"
-	"regexp"
 	"sort"
+	"strconv"
+
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
-// bodySpec is one field extracted from a body template: its name and,
-// when the template encoded one, its declared type (see bodyTypeMarker).
+// bodySpec is one field extracted from a request's body schema template.
 type bodySpec struct {
-	Name string
-	Type string
+	Name      string
+	Type      string
+	Default   string
+	Enum      []string
+	MinLength *int
+	MaxLength *int
+	Minimum   *float64
+	Maximum   *float64
 }
 
-// bodyTypeMarker matches the "<type>" placeholder `volt import` writes for
-// a field whose OpenAPI schema declared a type, e.g. "<string>",
-// "<integer>". A plain empty string means "field exists, type unknown".
-var bodyTypeMarker = regexp.MustCompile(`^<(\w+)>$`)
-
-// extractBodySpecs returns the top-level fields of body when it looks like
-// a `volt import`-generated request-body-schema template: a flat JSON
-// object whose values are all either empty strings or "<type>" markers,
-// e.g. {"name":"<string>","color":""}. Sorted by name.
-//
-// The "empty or marker only" requirement is deliberate, not incidental: a
-// body that already carries real data - a request saved earlier the normal
-// way, body typed by hand as "key = value" and synced to {"key":"value"} -
-// must stay visible and editable as text, not get swapped for blank
-// fill-in fields that would hide it. Only an untouched template is treated
-// as body params. Non-string values (numbers, nested objects, arrays) fail
-// to unmarshal into map[string]string and so also fall back to the
-// freeform textarea - a deliberate simplification for JSON-only support.
+// extractBodySpecs returns the fields declared under the sentinel
+// http.BodySchemaKey in body (as `volt import` writes for an operation
+// with a JSON request body schema), sorted by name. Any other shape -
+// empty, not JSON, a real (non-schema) body a user typed by hand - yields
+// no body params, so the freeform Body textarea is used instead (see
+// RequestPane.View). Detecting the schema by this explicit sentinel key,
+// rather than inferring it from the body's shape, means a real request
+// body can never be mistaken for one: nothing but `volt import` would
+// plausibly produce a top-level key literally named "__volt_body_schema__".
 func extractBodySpecs(body string) []bodySpec {
 	if body == "" {
 		return nil
 	}
-	var obj map[string]string
-	if err := json.Unmarshal([]byte(body), &obj); err != nil || len(obj) == 0 {
+	var wrapper map[string]map[string]http.BodyFieldSchema
+	if err := json.Unmarshal([]byte(body), &wrapper); err != nil {
 		return nil
 	}
-	for _, v := range obj {
-		if v != "" && !bodyTypeMarker.MatchString(v) {
-			return nil
-		}
+	schema, ok := wrapper[http.BodySchemaKey]
+	if !ok || len(schema) == 0 {
+		return nil
 	}
 
-	names := make([]string, 0, len(obj))
-	for name := range obj {
+	names := make([]string, 0, len(schema))
+	for name := range schema {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	specs := make([]bodySpec, len(names))
 	for i, name := range names {
-		typ := ""
-		if m := bodyTypeMarker.FindStringSubmatch(obj[name]); m != nil {
-			typ = m[1]
+		f := schema[name]
+		specs[i] = bodySpec{
+			Name:      name,
+			Type:      f.Type,
+			Default:   f.Default,
+			Enum:      f.Enum,
+			MinLength: f.MinLength,
+			MaxLength: f.MaxLength,
+			Minimum:   f.Minimum,
+			Maximum:   f.Maximum,
 		}
-		specs[i] = bodySpec{Name: name, Type: typ}
 	}
 	return specs
 }
 
 // BuildRequestBody serializes the current body param values into a flat
-// JSON object, e.g. {"name":"widget","color":"red"}.
+// JSON object, respecting each field's declared type (e.g.
+// {"active":true,"count":5,"name":"widget"}) rather than sending every
+// value as a JSON string regardless of what the schema actually declared.
 func BuildRequestBody(params []Param) string {
-	body := make(map[string]string, len(params))
+	body := make(map[string]interface{}, len(params))
 	for _, p := range params {
-		body[p.Name] = p.Input.Value()
+		body[p.Name] = paramJSONValue(p)
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -76,11 +81,39 @@ func BuildRequestBody(params []Param) string {
 	return string(data)
 }
 
-// syncBodyParams re-derives m.BodyParams (name, type, and input) from the
-// request's current Body, preserving already-typed values for names that
-// are still present. It's a no-op if the set of param names hasn't
-// changed, and otherwise rebuilds the focus cycle so the (possibly new)
-// fields are reachable via tab.
+// paramJSONValue converts a param's current text value to the JSON type its
+// schema declared. A value that doesn't actually parse as that type (still
+// being typed, or invalid - see ValidateParam) falls back to a plain
+// string, so it round-trips as typed instead of being silently dropped or
+// zeroed.
+func paramJSONValue(p Param) interface{} {
+	val := p.Value()
+	switch p.Type {
+	case "boolean":
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	case "integer":
+		if n, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return n
+		}
+	case "number":
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
+	}
+	return val
+}
+
+// syncBodyParams re-derives m.BodyParams from the request's current Body.
+// It's a no-op if the set of param names hasn't changed, and otherwise
+// rebuilds the focus cycle so the (possibly new) fields are reachable via
+// tab. Unlike syncPathParams, this only ever runs once per loaded/created
+// request (from reinitRequestPane) rather than on every keystroke - see
+// RequestPane.syncRequest for why re-deriving continuously would be
+// actively wrong here - so params are always built fresh (no existing
+// input's value needs preserving) and can freely take their schema's
+// default value or enum picker right away.
 func (m *RequestPane) syncBodyParams() {
 	specs := extractBodySpecs(m.Request.Body)
 
@@ -92,12 +125,48 @@ func (m *RequestPane) syncBodyParams() {
 		return
 	}
 
-	params := rebuildParams(m.BodyParams, names)
+	params := make([]Param, len(specs))
 	for i, s := range specs {
-		params[i].Type = s.Type
-		if s.Type != "" {
-			params[i].Input.Placeholder = s.Type
+		p := Param{
+			Name:      s.Name,
+			Type:      s.Type,
+			MinLength: s.MinLength,
+			MaxLength: s.MaxLength,
+			Minimum:   s.Minimum,
+			Maximum:   s.Maximum,
 		}
+		if len(s.Enum) > 0 {
+			// Enum values are always one of the fixed options, so
+			// min/maxLength and minimum/maximum don't apply - an enum
+			// picker can't produce an out-of-range value to begin with.
+			p.Enum = NewEnumSelector(s.Enum, s.Default)
+		} else if s.Type == "boolean" {
+			// A boolean can only ever be true or false, so it gets the
+			// same fixed-choice picker as a declared enum instead of a
+			// free-text field someone could type "yes"/"1"/anything else
+			// into.
+			initial := "false"
+			if s.Default == "true" || s.Default == "false" {
+				initial = s.Default
+			}
+			p.Enum = NewEnumSelector([]string{"true", "false"}, initial)
+		} else {
+			p.Input = newParamInput()
+			if s.Type != "" {
+				p.Input.Placeholder = s.Type
+			}
+			if s.MaxLength != nil {
+				// Enforced live: typing simply can't go past this, unlike
+				// MinLength/Minimum/Maximum which are checked at send time
+				// (see ValidateParams) since they can't be enforced
+				// without rejecting perfectly normal in-progress typing.
+				p.Input.CharLimit = *s.MaxLength
+			}
+			if s.Default != "" {
+				p.Input.SetValue(s.Default)
+			}
+		}
+		params[i] = p
 	}
 	m.BodyParams = params
 	m.rebuildFocusManager()

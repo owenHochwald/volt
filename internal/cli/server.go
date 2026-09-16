@@ -1,11 +1,18 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strconv"
+
+	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
+)
 
 // RunServerCLI dispatches `volt server <subcommand> ...`.
 func RunServerCLI(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: volt server <add|list|set-url|rename|delete> ...")
+		return fmt.Errorf("usage: volt server <add|list|set-url|rename|delete|set-header|headers|unset-header> ...")
 	}
 
 	db, closeDB, err := openDefaultDB()
@@ -36,7 +43,7 @@ func RunServerCLI(args []string) error {
 			return nil
 		}
 		for _, s := range servers {
-			fmt.Printf("  %-20s %s\n", s.Name, s.BaseURL)
+			fmt.Printf("  %-20s %-30s %d header(s)\n", s.Name, s.BaseURL, len(s.Headers))
 		}
 		return nil
 
@@ -70,7 +77,93 @@ func RunServerCLI(args []string) error {
 		fmt.Printf("Deleted server %q\n", args[1])
 		return nil
 
+	case "set-header":
+		if len(args) != 4 {
+			return fmt.Errorf("usage: volt server set-header <name> <key> <value>")
+		}
+		server, err := getServerOrFail(db, args[1])
+		if err != nil {
+			return err
+		}
+		headers := server.Headers
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		headers[args[2]] = args[3]
+		if err := db.UpdateServerHeaders(server.Name, headers); err != nil {
+			return err
+		}
+		fmt.Printf("Set header %q on server %q\n", args[2], server.Name)
+		return nil
+
+	case "headers":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: volt server headers <name>")
+		}
+		server, err := getServerOrFail(db, args[1])
+		if err != nil {
+			return err
+		}
+		if len(server.Headers) == 0 {
+			fmt.Printf("Server %q has no default headers.\n", server.Name)
+			return nil
+		}
+		for i, key := range sortedHeaderKeys(server.Headers) {
+			fmt.Printf("  %d. %s = %s\n", i+1, key, server.Headers[key])
+		}
+		return nil
+
+	case "unset-header":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: volt server unset-header <name> <index>")
+		}
+		server, err := getServerOrFail(db, args[1])
+		if err != nil {
+			return err
+		}
+		index, err := strconv.Atoi(args[2])
+		if err != nil {
+			return fmt.Errorf("invalid index %q: must be a number from `volt server headers %s`", args[2], server.Name)
+		}
+		keys := sortedHeaderKeys(server.Headers)
+		if index < 1 || index > len(keys) {
+			return fmt.Errorf("no header at index %d (server %q has %d header(s))", index, server.Name, len(keys))
+		}
+		removedKey := keys[index-1]
+		delete(server.Headers, removedKey)
+		if err := db.UpdateServerHeaders(server.Name, server.Headers); err != nil {
+			return err
+		}
+		fmt.Printf("Removed header %q from server %q\n", removedKey, server.Name)
+		return nil
+
 	default:
 		return fmt.Errorf("unknown server subcommand: %s", args[0])
 	}
+}
+
+// getServerOrFail loads a server by name, turning "not found" into an error
+// instead of the nil-with-no-error GetServerByName returns - every
+// header subcommand needs the server to exist to do anything useful.
+func getServerOrFail(db *storage.SQLiteStorage, name string) (*http.Server, error) {
+	server, err := db.GetServerByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if server == nil {
+		return nil, fmt.Errorf("server not found: %s", name)
+	}
+	return server, nil
+}
+
+// sortedHeaderKeys returns a server's header names in a stable (sorted)
+// order, so `volt server headers` prints numbers that `volt server
+// unset-header <name> <index>` can reliably refer back to.
+func sortedHeaderKeys(headers map[string]string) []string {
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
