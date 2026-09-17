@@ -48,6 +48,42 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSaveToFileKey(msg)
 		}
 
+		// The search prompt (see SearchResponse) claims every key while
+		// open, same reason as the filename prompt above.
+		if m.searching {
+			return m.handleSearchInputKey(msg)
+		}
+
+		// gg (go to top) / {n}g (go to line n) - see navigation.go. Armed
+		// by a bare "g" below; while armed, every key either continues the
+		// sequence or cancels it and falls through to be handled normally.
+		if m.gPending {
+			if m.continueGoto(msg.String()) {
+				return m, nil
+			}
+		}
+		if keybindings.Matches(msg, m.keys.GotoTop) {
+			m.beginGoto()
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.GotoBottom) {
+			m.viewport.GotoBottom()
+			return m, nil
+		}
+
+		// "/" search, "n"/"b" cycle through its matches - see search.go.
+		if keybindings.Matches(msg, m.keys.SearchResponse) {
+			return m, m.openSearch()
+		}
+		if keybindings.Matches(msg, m.keys.SearchNext) {
+			m.advanceSearchMatch(1)
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.SearchPrev) {
+			m.advanceSearchMatch(-1)
+			return m, nil
+		}
+
 		// Direct tab access
 		if keybindings.Matches(msg, m.keys.DirectTab) {
 			switch msg.String() {
@@ -220,13 +256,13 @@ func (m *ResponsePane) updateViewportForActiveTab() {
 	case TabRequest:
 		content = m.renderRequest()
 	}
-	m.viewport.SetContent(content)
+	m.setViewportContent(content)
 }
 
 // updateLoadTestTabContent updates the viewport content for load test tabs
 func (m *ResponsePane) updateLoadTestTabContent() {
 	if m.LoadTestStats == nil {
-		m.viewport.SetContent("No data")
+		m.setViewportContent("No data")
 		return
 	}
 
@@ -239,5 +275,5 @@ func (m *ResponsePane) updateLoadTestTabContent() {
 	case TabLoadTestErrors:
 		content = m.renderLoadTestErrors()
 	}
-	m.viewport.SetContent(content)
+	m.setViewportContent(content)
 }

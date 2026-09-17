@@ -64,6 +64,12 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 				km.ToggleRawBody,
 				km.SaveResponseRaw,
 				km.ScrollUp,
+				km.SearchResponse,
+				km.SearchNext,
+				km.SearchPrev,
+				km.GotoTop,
+				km.GotoBottom,
+				km.GotoLine,
 			},
 		},
 	}

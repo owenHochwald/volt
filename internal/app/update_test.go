@@ -119,6 +119,29 @@ func TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst(t *testing.T) {
 	}
 }
 
+// TestEsc_InResponsePanel_ClosesSearchPromptFirst is the same guard as
+// TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst above, for the
+// response pane's other filename-prompt-shaped overlay: its "/" search
+// prompt (see SearchResponse).
+func TestEsc_InResponsePanel_ClosesSearchPromptFirst(t *testing.T) {
+	m := setupTestModel(t)
+	m.focusedPanel = utils.ResponsePanel
+	m.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
+	m.responsePane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	if !m.responsePane.IsSearching() {
+		t.Fatal("test setup error: expected '/' to open the search prompt")
+	}
+
+	model, _ := m.Update(escMsg())
+	result, ok := model.(Model)
+	if !ok {
+		t.Fatalf("expected Model, got %T", model)
+	}
+	if result.focusedPanel != utils.ResponsePanel {
+		t.Errorf("expected esc to stay in the response panel while its search prompt is open, got %v", result.focusedPanel)
+	}
+}
+
 // TestFKeys_JumpToPanel_EvenMidEditInRequestPane verifies f1/f2/f3 reliably
 // switch panels from anywhere, including while the request panel is focused
 // - unlike shift+tab, which the request pane also needs for its own

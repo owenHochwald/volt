@@ -13,13 +13,20 @@ func SetupResponsePane(keys keybindings.KeyMap) ResponsePane {
 	filenameInput.CharLimit = 500
 	filenameInput.Width = 50
 
+	searchInput := textinput.New()
+	searchInput.Placeholder = "search query"
+	searchInput.CharLimit = 500
+	searchInput.Width = 50
+
 	return ResponsePane{
-		viewport:      viewport.New(20, 10),
-		width:         20,
-		height:        30,
-		activeTab:     int(TabBody), // Start on Body tab
-		isLoadTest:    false,
-		filenameInput: filenameInput,
-		keys:          keys,
+		viewport:       viewport.New(20, 10),
+		width:          20,
+		height:         30,
+		activeTab:      int(TabBody), // Start on Body tab
+		isLoadTest:     false,
+		filenameInput:  filenameInput,
+		searchInput:    searchInput,
+		searchMatchIdx: -1,
+		keys:           keys,
 	}
 }

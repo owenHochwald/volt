@@ -56,6 +56,27 @@ type KeyMap struct {
 	ScrollUp        key.Binding
 	ScrollDown      key.Binding
 
+	// GotoTop/GotoBottom/GotoLine are vim/less-style navigation over
+	// whichever tab's content is currently in the viewport (Body - raw or
+	// pretty - Headers, Timing, Request all share it, so these work the
+	// same regardless of which is active). GotoTop's key ("g") only *arms*
+	// the sequence - ResponsePane.gPending decides from the next keystroke
+	// whether it's "gg" (bare, go to the very top), digits followed by "g"
+	// (go to that line number - see GotoLine, display-only since it has no
+	// single keystroke of its own), or anything else (cancelled). GotoBottom
+	// ("G") needs no such sequence - it's a single keystroke to the very
+	// bottom.
+	GotoTop    key.Binding
+	GotoBottom key.Binding
+	GotoLine   key.Binding
+
+	// SearchResponse opens a less/vim-style "/" search prompt over
+	// whatever's currently in the viewport; SearchNext/SearchPrev ("n"/"b")
+	// cycle through the matches it finds, wrapping around.
+	SearchResponse key.Binding
+	SearchNext     key.Binding
+	SearchPrev     key.Binding
+
 	// Help Modal
 	CloseHelp key.Binding
 	NextTab   key.Binding
@@ -230,6 +251,33 @@ func DefaultKeyMap() KeyMap {
 		ScrollDown: key.NewBinding(
 			key.WithKeys("j", "down"),
 			key.WithHelp("j/↓", "scroll down"),
+		),
+		GotoTop: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("gg", "go to top"),
+		),
+		GotoBottom: key.NewBinding(
+			key.WithKeys("G"),
+			key.WithHelp("G", "go to bottom"),
+		),
+		// GotoLine has no keystroke of its own to match on - typing digits
+		// right after "g" (see GotoTop) is what actually triggers it (see
+		// ResponsePane.gPending) - this exists purely so the help modal
+		// lists it.
+		GotoLine: key.NewBinding(
+			key.WithHelp("{n}g", "go to line n"),
+		),
+		SearchResponse: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		SearchNext: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "next match"),
+		),
+		SearchPrev: key.NewBinding(
+			key.WithKeys("b"),
+			key.WithHelp("b", "previous match"),
 		),
 
 		// Help Modal

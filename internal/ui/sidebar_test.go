@@ -52,6 +52,26 @@ func requestItemTitles(sidebar *SidebarPane) []string {
 	return titles
 }
 
+// TestSidebar_Esc_DoesNotQuitTheApp is a regression test for a real bug:
+// bubbles' list.Model ships with esc bound to its own internal Quit
+// keybinding (alongside "q"), returning tea.Quit the instant esc is
+// pressed with the sidebar focused and no filter active - silently
+// exiting the whole program instead of leaving esc free for its other
+// uses elsewhere (closing a filter query, switching panels). "q" is left
+// alone; only esc must stop quitting.
+func TestSidebar_Esc_DoesNotQuitTheApp(t *testing.T) {
+	sidebar, _, _ := setupSidebarWithRequest(t)
+
+	_, cmd := sidebar.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); ok {
+		t.Fatal("expected esc to NOT quit the app while the sidebar is focused")
+	}
+}
+
 func TestSidebar_DeleteRequest_RequiresConfirmation(t *testing.T) {
 	sidebar, db, _ := setupSidebarWithRequest(t)
 

@@ -23,15 +23,24 @@ func (m ResponsePane) View() string {
 		return m.renderSaveToFilePrompt()
 	}
 
-	// MaxHeight (unlike a plain lipgloss.Height(), which only pads short
-	// content) clips renderNormalView's output if it ever comes out taller
-	// than allocated - SetHeight's own reservation is only an estimate
-	// (see its comment), since the scroll indicator and save-status line
-	// are each sometimes present and sometimes not; this is the backstop
-	// against that inflating the pane past its box and corrupting the
-	// layout around it, the same defensive pattern requestpane's View()
-	// already uses for the same reason.
-	return lipgloss.NewStyle().MaxHeight(max(m.height, 1)).Render(m.renderNormalView())
+	if m.searching {
+		return m.renderSearchPrompt()
+	}
+
+	// footer is joined on AFTER body's own MaxHeight clip below, not as
+	// one of body's own elements - body's exact rendered height is only
+	// ever an estimate (SetHeight's viewport.Height reservation, the tab
+	// bar's own internal spacing, etc. all have to line up exactly for it
+	// to not drift), so when body ran even one line over budget, this
+	// footer - the key-binding hint, i.e. the single most useful line when
+	// the pane is otherwise full of scrollable content - was silently the
+	// one that got clipped off, being the last line of one single combined
+	// block under one MaxHeight. Clipping body alone and unconditionally
+	// appending footer after guarantees it survives regardless of how
+	// body's own height estimate drifts.
+	body, footer := m.renderNormalView()
+	clippedBody := lipgloss.NewStyle().MaxHeight(max(m.height-1, 0)).Render(body)
+	return clippedBody + "\n" + footer
 }
 
 // renderSaveToFilePrompt renders the filename entry overlay opened by
@@ -47,20 +56,40 @@ func (m ResponsePane) renderSaveToFilePrompt() string {
 	)
 }
 
+// renderSearchPrompt renders the search entry overlay opened by
+// SearchResponse ("/") - mirrors renderSaveToFilePrompt above.
+func (m ResponsePane) renderSearchPrompt() string {
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		ui.LabelStyle.Render("Search:"),
+		m.searchInput.View(),
+		"",
+		footerHelpStyle.MaxWidth(max(m.width, 1)).Render("enter: search · esc: cancel"),
+	)
+}
+
 // footerHint renders this pane's pinned one-line key hint below the
 // response content - reflects ToggleRawBody's current state (rather than
 // a fixed string) so it always says what pressing "r" would actually do
-// next.
+// next, and, whenever there's an active search (see search.go), leads
+// with its query and position among its matches.
 func (m ResponsePane) footerHint() string {
 	rawHint := "r: raw view"
 	if m.rawBody {
 		rawHint = "r: pretty view"
 	}
-	return fmt.Sprintf("%s · s: save to file · y: copy", rawHint)
+	hint := fmt.Sprintf("%s · s: save to file · y: copy · /: search · gg/G: top/bottom", rawHint)
+	if m.searchQuery != "" && len(m.searchMatches) > 0 {
+		hint = fmt.Sprintf("/%s (%d/%d) · n: next · b: prev · %s", m.searchQuery, m.searchMatchIdx+1, len(m.searchMatches), hint)
+	}
+	return hint
 }
 
-// renderNormalView renders the normal response view with status bar, tabs, and content
-func (m ResponsePane) renderNormalView() string {
+// renderNormalView renders the normal response view's status bar, tabs,
+// and content (body) separately from its pinned footer hint (footer) -
+// kept apart so View() can clip body alone rather than the two together
+// (see View()'s own comment for why that split matters).
+func (m ResponsePane) renderNormalView() (body, footer string) {
 	// The viewport's content is populated per-tab by
 	// updateViewportForActiveTab (called from SetResponse and on every tab
 	// switch) - it already puts the raw error message in the Body tab and
@@ -91,8 +120,12 @@ func (m ResponsePane) renderNormalView() string {
 		}
 		elements = append(elements, style.MaxWidth(max(m.width, 1)).Render(m.saveStatusMsg))
 	}
-	elements = append(elements, footerHelpStyle.MaxWidth(max(m.width, 1)).Render(m.footerHint()))
-	return lipgloss.JoinVertical(lipgloss.Left, elements...)
+	if m.searchStatusMsg != "" {
+		elements = append(elements, errorTextStyle.MaxWidth(max(m.width, 1)).Render(m.searchStatusMsg))
+	}
+	body = lipgloss.JoinVertical(lipgloss.Left, elements...)
+	footer = footerHelpStyle.MaxWidth(max(m.width, 1)).Render(m.footerHint())
+	return body, footer
 }
 
 // scrollIndicator renders a hint below the tab content when there's more to

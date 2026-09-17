@@ -104,11 +104,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedPanel = utils.SidebarPanel
 				return m, nil
 			}
-			// Esc's own save-to-file prompt (see SaveResponseRaw) takes
-			// priority over the panel switch below - otherwise esc could
-			// never actually cancel that prompt, since this would always
-			// intercept it first and switch panels instead.
-			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() {
+			// Esc's own save-to-file/search prompts (see SaveResponseRaw/
+			// SearchResponse) take priority over the panel switch below -
+			// otherwise esc could never actually cancel either, since this
+			// would always intercept it first and switch panels instead.
+			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() && !m.responsePane.IsSearching() {
 				m.focusedPanel = utils.RequestPanel
 				return m, nil
 			}

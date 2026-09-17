@@ -41,6 +41,35 @@ type ResponsePane struct {
 	saveStatusMsg string
 	saveStatusErr bool
 
+	// currentContent is whatever's currently in the viewport - kept
+	// alongside it (see setViewportContent) since viewport.Model doesn't
+	// expose its own content back out, and search (searchMatchLines) needs
+	// the raw string to search against, exactly as displayed (raw or
+	// pretty, whichever tab) - see search.go.
+	currentContent string
+
+	// Search (search.go): searching/searchInput drive the "/" prompt, the
+	// same mode+textinput overlay pattern as savingToFile/filenameInput
+	// above. searchQuery/searchMatches/searchMatchIdx hold the last
+	// confirmed search's state (matches are 0-based line indices into
+	// currentContent, in ascending order) so SearchNext/SearchPrev ("n"/
+	// "b") can cycle through them without re-searching. searchStatusMsg
+	// reports "no matches for ..." the same way saveStatusMsg reports a
+	// save outcome.
+	searching       bool
+	searchInput     textinput.Model
+	searchQuery     string
+	searchMatches   []int
+	searchMatchIdx  int
+	searchStatusMsg string
+
+	// gPending/gotoLineBuffer implement vim/less-style "gg" (go to top) and
+	// "{n}g" (go to line n) - see navigation.go. gPending is armed by a
+	// bare "g" keypress (see GotoTop) and cleared by whatever key resolves
+	// or cancels the sequence.
+	gPending       bool
+	gotoLineBuffer string
+
 	keys keybindings.KeyMap
 }
 
@@ -61,6 +90,14 @@ func (m *ResponsePane) SetFocused(focused bool) {
 // panel-switch swallowing it before the prompt ever sees it.
 func (m *ResponsePane) IsSavingToFile() bool {
 	return m.savingToFile
+}
+
+// IsSearching reports whether the "/" search prompt (see SearchResponse)
+// is currently open - checked by app/update.go for the same reason as
+// IsSavingToFile: so esc closes this prompt first instead of the
+// panel-switch swallowing it before the prompt ever sees it.
+func (m *ResponsePane) IsSearching() bool {
+	return m.searching
 }
 
 // SetResponse updates the response pane with a new HTTP response and the

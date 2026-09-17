@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -252,6 +253,18 @@ func (s *SidebarPane) describeURL(url, groupLabel string) string {
 func (s *SidebarPane) SetRequests(items []list.Item) {
 	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.listWidth(), s.listHeight())
 	s.requestsList.SetShowHelp(false)
+	disableEscQuit(&s.requestsList)
+}
+
+// disableEscQuit strips esc out of the list's own default Quit binding
+// ("q"/"esc" - see bubbles' list.DefaultKeyMap), which otherwise exits the
+// whole program the instant esc is pressed with the sidebar focused and
+// nothing being filtered - esc is meant to be free for other uses (e.g.
+// closing a filter query or, elsewhere, switching panels), not a hidden
+// quit shortcut. The app's own Quit keybinding (see keybindings.KeyMap,
+// bound to ctrl+c) is unaffected.
+func disableEscQuit(l *list.Model) {
+	l.KeyMap.Quit = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
 }
 
 func (s *SidebarPane) Init() tea.Cmd {
@@ -490,6 +503,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
 	sidebar.requestsList.SetShowHelp(false)
+	disableEscQuit(&sidebar.requestsList)
 
 	return sidebar
 }
