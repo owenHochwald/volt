@@ -260,6 +260,33 @@ func TestSQLiteStorage_DeleteGroup_RemovesGroupServersRows(t *testing.T) {
 	assert.Equal(t, 0, len(allowed))
 }
 
+// TestSQLiteStorage_GetGroupByID verifies GetGroupByID (GetGroupByName's
+// id-keyed counterpart) returns the same data by id, and (nil, nil) - not
+// an error - for an id that doesn't exist.
+func TestSQLiteStorage_GetGroupByID(t *testing.T) {
+	db := setupTestDB(t)
+
+	group := &http.Group{Name: "petstore"}
+	assert.NoError(t, db.SaveGroup(group))
+	_, err := db.UpsertServer("prod", "https://api.example.com")
+	assert.NoError(t, err)
+	assert.NoError(t, db.SetGroupServer("petstore", "prod"))
+
+	found, err := db.GetGroupByID(group.ID)
+	assert.NoError(t, err)
+	if found == nil {
+		t.Fatal("expected a non-nil group")
+	}
+	assert.Equal(t, "petstore", found.Name)
+	if found.ServerID == nil {
+		t.Fatal("expected ServerID to be set")
+	}
+
+	missing, err := db.GetGroupByID(999999)
+	assert.NoError(t, err)
+	assert.Zero(t, missing)
+}
+
 func TestSQLiteStorage_DeleteGroup_CascadesToItsRequests(t *testing.T) {
 	db := setupTestDB(t)
 

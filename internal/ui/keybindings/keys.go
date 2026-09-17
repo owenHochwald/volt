@@ -37,6 +37,7 @@ type KeyMap struct {
 	SendRequest      key.Binding
 	SaveRequest      key.Binding
 	ResetRequest     key.Binding
+	ClearParams      key.Binding
 	ToggleLoadTest   key.Binding
 	NextField        key.Binding
 	PrevField        key.Binding
@@ -46,12 +47,14 @@ type KeyMap struct {
 	ScrollFieldsDown key.Binding
 
 	// Response Pane
-	CopyResponse key.Binding
-	TabNavNext   key.Binding
-	TabNavPrev   key.Binding
-	DirectTab    key.Binding // 1,2,3,4
-	ScrollUp     key.Binding
-	ScrollDown   key.Binding
+	CopyResponse    key.Binding
+	ToggleRawBody   key.Binding
+	SaveResponseRaw key.Binding
+	TabNavNext      key.Binding
+	TabNavPrev      key.Binding
+	DirectTab       key.Binding // 1,2,3,4
+	ScrollUp        key.Binding
+	ScrollDown      key.Binding
 
 	// Help Modal
 	CloseHelp key.Binding
@@ -94,9 +97,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("f3"),
 			key.WithHelp("f3", "focus response"),
 		),
+		// EscapePanel steps back one panel at a time (response -> request
+		// -> sidebar), the same direction as the panel layout itself reads
+		// left to right - not straight to the sidebar from anywhere.
 		EscapePanel: key.NewBinding(
 			key.WithKeys("esc"),
-			key.WithHelp("esc", "return to sidebar"),
+			key.WithHelp("esc", "back a panel"),
 		),
 		OpenGroups: key.NewBinding(
 			key.WithKeys("ctrl+g"),
@@ -143,6 +149,16 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+r"),
 			key.WithHelp("ctrl+r", "reset request"),
 		),
+		// ClearParams resets every path/body/array field back to its
+		// schema's own defaults, discarding anything typed over them -
+		// unlike ResetRequest above, this keeps the request's own identity
+		// (schema/URL/method/name), only clearing its *values*. Saving
+		// afterward (ctrl+s) persists that cleared state too, same as any
+		// other edit.
+		ClearParams: key.NewBinding(
+			key.WithKeys("ctrl+x"),
+			key.WithHelp("ctrl+x", "clear params"),
+		),
 		ToggleLoadTest: key.NewBinding(
 			key.WithKeys("ctrl+l"),
 			key.WithHelp("ctrl+l", "toggle load test"),
@@ -176,6 +192,24 @@ func DefaultKeyMap() KeyMap {
 		CopyResponse: key.NewBinding(
 			key.WithKeys("y", "Y"),
 			key.WithHelp("y/Y", "copy response"),
+		),
+		// ToggleRawBody switches the Body tab between its normal
+		// formatted/highlighted rendering (see formatContentByType) and
+		// the response body exactly as received - useful when the pretty
+		// version hides or reformats something (whitespace, a body that
+		// isn't actually the content-type it claims to be, etc.) that
+		// matters to see byte-for-byte.
+		ToggleRawBody: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "toggle raw body"),
+		),
+		// SaveResponseRaw opens a filename prompt (see ResponsePane's
+		// savingToFile) to save the response body - always the raw bytes
+		// as received, regardless of ToggleRawBody's current display
+		// state - to a file on disk.
+		SaveResponseRaw: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "save raw body to file"),
 		),
 		TabNavNext: key.NewBinding(
 			key.WithKeys("l", "right"),

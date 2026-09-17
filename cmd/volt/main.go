@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/app"
@@ -14,6 +15,8 @@ import (
 func main() {
 	args, verbose := extractVerboseFlag(os.Args[1:])
 	storage.Verbose = verbose
+	args, dbPathOverride := extractDBPathFlag(args)
+	cli.DBPathOverride = dbPathOverride
 	if verbose {
 		// File-based (see logging.DefaultLogPath) since stdout/stderr
 		// aren't usable once the TUI takes over the terminal - the same
@@ -72,10 +75,14 @@ func main() {
 	}
 
 	// TUI mode
-	dbPath, err := storage.DefaultDBPath()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting home directory: %v", err)
-		os.Exit(1)
+	dbPath := dbPathOverride
+	if dbPath == "" {
+		var err error
+		dbPath, err = storage.DefaultDBPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting home directory: %v", err)
+			os.Exit(1)
+		}
 	}
 
 	store, err := storage.NewSQLiteStorage(dbPath)
@@ -111,4 +118,32 @@ func extractVerboseFlag(args []string) ([]string, bool) {
 		}
 	}
 	return remaining, verbose
+}
+
+// extractDBPathFlag pulls a --db/-db path out of args, wherever it appears
+// (before or after a subcommand, as "--db path" or "--db=path"), returning
+// the remaining args and the path (empty if not given). Lets both the TUI
+// and every CLI subcommand (see cli.DBPathOverride) be pointed at a
+// database other than the real one at ~/.volt/volt.db - e.g. for trying
+// something out without risking real saved requests.
+func extractDBPathFlag(args []string) ([]string, string) {
+	remaining := make([]string, 0, len(args))
+	dbPath := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--db" || a == "-db":
+			if i+1 < len(args) {
+				dbPath = args[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "--db="):
+			dbPath = strings.TrimPrefix(a, "--db=")
+		case strings.HasPrefix(a, "-db="):
+			dbPath = strings.TrimPrefix(a, "-db=")
+		default:
+			remaining = append(remaining, a)
+		}
+	}
+	return remaining, dbPath
 }

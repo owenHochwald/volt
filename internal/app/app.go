@@ -55,8 +55,8 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 	// request was open.
 	focusedPanel := utils.SidebarPanel
 	if db != nil {
-		if snapshot, err := db.LoadLastSentRequest(); err == nil && snapshot != nil {
-			requestPane.ApplySnapshot(snapshot)
+		if lastSent, err := db.LoadLastSentRequest(); err == nil && lastSent != nil {
+			requestPane.ApplySnapshot(lastSent)
 			focusedPanel = utils.RequestPanel
 		}
 	}

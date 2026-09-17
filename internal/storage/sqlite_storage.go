@@ -74,6 +74,33 @@ func deserializePathParamSchema(jsonStr string) (map[string]http.BodyFieldSchema
 	return schema, nil
 }
 
+// serializeParamValues/deserializeParamValues mirror
+// serializePathParamSchema/deserializePathParamSchema for
+// http.Request.ParamValues - an empty/zero value round-trips as an empty
+// string (the param_values column's migration default), not the literal
+// 4-byte "null".
+func serializeParamValues(values http.ParamValues) (string, error) {
+	if len(values.PathParamValues) == 0 && len(values.BodyParamValues) == 0 && len(values.ArrayParamValues) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func deserializeParamValues(jsonStr string) (http.ParamValues, error) {
+	if jsonStr == "" {
+		return http.ParamValues{}, nil
+	}
+	var values http.ParamValues
+	if err := json.Unmarshal([]byte(jsonStr), &values); err != nil {
+		return http.ParamValues{}, err
+	}
+	return values, nil
+}
+
 func runMigrations(db *sql.DB) error {
 	if !Verbose {
 		goose.SetLogger(goose.NopLogger())
@@ -119,6 +146,14 @@ func (s *SQLiteStorage) Close() error {
 	return s.db.Close()
 }
 
+// Save upserts request: an already-saved request (request.ID != 0) whose
+// Name hasn't changed since it was last saved is updated in place, so
+// resaving an edited request (see requestpane.RequestPane's ctrl+s
+// handling) refines the same row instead of piling up a duplicate every
+// time. A blank/never-saved request (ID == 0) or one whose Name *has*
+// changed is treated as a deliberately new request - "renaming and
+// resaving" is how you save a variant alongside the original, not how you
+// rename it in place (there's no in-place rename through this path).
 func (s *SQLiteStorage) Save(request *http.Request) error {
 	headerString, err := serializeHeaders(request.Headers)
 	if err != nil {
@@ -128,12 +163,32 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	if err != nil {
 		return err
 	}
-	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	paramValuesString, err := serializeParamValues(request.ParamValues)
+	if err != nil {
+		return err
+	}
+
+	if request.ID != 0 {
+		var existingName string
+		err := s.db.QueryRow(`SELECT name FROM requests WHERE id = ?`, request.ID).Scan(&existingName)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && existingName == request.Name {
+			q := `UPDATE requests SET name = ?, method = ?, url = ?, headers = ?, body = ?, group_id = ?, server_id = ?, path_param_schema = ?, param_values = ? WHERE id = ?`
+			_, err = s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, paramValuesString, request.ID)
+			return err
+		}
+		// Row no longer exists, or the name changed - fall through to
+		// insert a new row below.
+	}
+
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema, param_values) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	// database/sql's default converter turns a nil *int64 into SQL NULL and
 	// dereferences a non-nil one, so request.GroupID/ServerID can be passed
 	// as-is.
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString)
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, paramValuesString)
 	if err != nil {
 		return err
 	}
@@ -168,7 +223,7 @@ func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[s
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema, param_values FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -188,9 +243,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			groupID         sql.NullInt64
 			serverID        sql.NullInt64
 			pathParamSchema string
+			paramValues     string
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema, &paramValues); err != nil {
 			return nil, err
 
 		}
@@ -202,6 +258,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 		if err != nil {
 			return nil, err
 		}
+		paramValuesStruct, err := deserializeParamValues(paramValues)
+		if err != nil {
+			return nil, err
+		}
 		request := http.Request{
 			ID:              id,
 			Name:            name,
@@ -210,6 +270,7 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			Headers:         headersMap,
 			Body:            body,
 			PathParamSchema: pathParamSchemaMap,
+			ParamValues:     paramValuesStruct,
 		}
 		if groupID.Valid {
 			gid := groupID.Int64
@@ -246,13 +307,14 @@ func (s *SQLiteStorage) Delete(id int64) error {
 // (non-request) state Volt persists today.
 const lastSentRequestKey = "last_sent_request"
 
-// SaveLastSentRequest persists snapshot as the request to restore on the
-// next app start (see LoadLastSentRequest) - overwriting whatever was
+// SaveLastSentRequest persists request (schema/template AND its current
+// ParamValues - see http.Request.ParamValues) as the request to restore on
+// the next app start (see LoadLastSentRequest) - overwriting whatever was
 // saved before, since only the *last* send matters. Called only once a
 // send actually goes out (see requestpane's handleSubmit), never for a
 // request that's merely being edited.
-func (s *SQLiteStorage) SaveLastSentRequest(snapshot *http.RequestSnapshot) error {
-	data, err := json.Marshal(snapshot)
+func (s *SQLiteStorage) SaveLastSentRequest(request *http.Request) error {
+	data, err := json.Marshal(request)
 	if err != nil {
 		return err
 	}
@@ -265,7 +327,7 @@ func (s *SQLiteStorage) SaveLastSentRequest(snapshot *http.RequestSnapshot) erro
 // (nil, nil) if nothing's been sent yet (a fresh database, or one from
 // before this existed) - not an error, since that's the ordinary starting
 // state.
-func (s *SQLiteStorage) LoadLastSentRequest() (*http.RequestSnapshot, error) {
+func (s *SQLiteStorage) LoadLastSentRequest() (*http.Request, error) {
 	q := `SELECT value FROM app_state WHERE key = ?`
 	var value string
 	if err := s.db.QueryRow(q, lastSentRequestKey).Scan(&value); err != nil {
@@ -274,11 +336,11 @@ func (s *SQLiteStorage) LoadLastSentRequest() (*http.RequestSnapshot, error) {
 		}
 		return nil, err
 	}
-	var snapshot http.RequestSnapshot
-	if err := json.Unmarshal([]byte(value), &snapshot); err != nil {
+	var request http.Request
+	if err := json.Unmarshal([]byte(value), &request); err != nil {
 		return nil, err
 	}
-	return &snapshot, nil
+	return &request, nil
 }
 
 // ClearLastSentRequest deletes whatever SaveLastSentRequest last saved, so
@@ -290,6 +352,42 @@ func (s *SQLiteStorage) LoadLastSentRequest() (*http.RequestSnapshot, error) {
 func (s *SQLiteStorage) ClearLastSentRequest() error {
 	_, err := s.db.Exec(`DELETE FROM app_state WHERE key = ?`, lastSentRequestKey)
 	return err
+}
+
+// lastGroupFilterKey is the app_state row SaveLastGroupFilter/
+// LoadLastGroupFilter read and write - the sidebar's group filter (see
+// ui.SidebarPane.groupOptions), so the next app start reopens on whatever
+// group was last being worked in instead of always resetting to "All
+// groups".
+const lastGroupFilterKey = "last_group_filter"
+
+// SaveLastGroupFilter persists name (a group name, or "" for "All
+// groups") as the sidebar's group filter to restore on the next app
+// start - overwriting whatever was saved before, since only the most
+// recent selection matters. Called every time the filter changes (see
+// ui.SidebarPane.cycleGroupFilter), including back to "" - an empty
+// string is itself a meaningful, deliberately saved choice ("All groups"
+// was last selected), not the absence of one.
+func (s *SQLiteStorage) SaveLastGroupFilter(name string) error {
+	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+	_, err := s.db.Exec(q, lastGroupFilterKey, name)
+	return err
+}
+
+// LoadLastGroupFilter returns the group name saved by SaveLastGroupFilter,
+// or ("", nil) if nothing's been saved yet (a fresh database, or one from
+// before this existed, or the last selection genuinely was "All groups") -
+// not an error, since that's the ordinary starting state.
+func (s *SQLiteStorage) LoadLastGroupFilter() (string, error) {
+	q := `SELECT value FROM app_state WHERE key = ?`
+	var value string
+	if err := s.db.QueryRow(q, lastGroupFilterKey).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return value, nil
 }
 
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
@@ -524,6 +622,27 @@ func (s *SQLiteStorage) GetGroupByName(name string) (*http.Group, error) {
 	if serverID.Valid {
 		id := serverID.Int64
 		group.ServerID = &id
+	}
+	return &group, nil
+}
+
+// GetGroupByID is GetGroupByName's id-keyed counterpart - used wherever
+// only a request's numeric GroupID is on hand (e.g.
+// requestpane.rebuildServerSelector), not its name.
+func (s *SQLiteStorage) GetGroupByID(id int64) (*http.Group, error) {
+	q := `SELECT id, name, server_id FROM request_groups WHERE id = ?`
+	var group http.Group
+	var serverID sql.NullInt64
+	err := s.db.QueryRow(q, id).Scan(&group.ID, &group.Name, &serverID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if serverID.Valid {
+		sid := serverID.Int64
+		group.ServerID = &sid
 	}
 	return &group, nil
 }

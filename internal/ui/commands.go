@@ -53,14 +53,16 @@ func SaveRequestCmd(db *storage.SQLiteStorage, request *http.Request) tea.Cmd {
 	}
 }
 
-// SaveLastSentRequestCmd persists snapshot as the request to restore on
-// the app's next start (see storage.SaveLastSentRequest) - fire-and-forget
-// (no result Msg): a failure here only means the *next* restart won't have
+// SaveLastSentRequestCmd persists request (passed by value so the async
+// closure captures its own copy, immune to whatever the caller's own
+// *http.Request does afterward) as the request to restore on the app's
+// next start (see storage.SaveLastSentRequest) - fire-and-forget (no
+// result Msg): a failure here only means the *next* restart won't have
 // something to restore, not something the user sending a request right
 // now needs to be interrupted about.
-func SaveLastSentRequestCmd(db *storage.SQLiteStorage, snapshot http.RequestSnapshot) tea.Cmd {
+func SaveLastSentRequestCmd(db *storage.SQLiteStorage, request http.Request) tea.Cmd {
 	return func() tea.Msg {
-		_ = db.SaveLastSentRequest(&snapshot)
+		_ = db.SaveLastSentRequest(&request)
 		return nil
 	}
 }
@@ -72,6 +74,19 @@ func SaveLastSentRequestCmd(db *storage.SQLiteStorage, snapshot http.RequestSnap
 func ClearLastSentRequestCmd(db *storage.SQLiteStorage) tea.Cmd {
 	return func() tea.Msg {
 		_ = db.ClearLastSentRequest()
+		return nil
+	}
+}
+
+// SaveLastGroupFilterCmd persists name (see storage.SaveLastGroupFilter)
+// as the sidebar's group filter to restore on the app's next start -
+// fire-and-forget, same rationale as SaveLastSentRequestCmd/
+// ClearLastSentRequestCmd: a failure here only affects what the *next*
+// restart restores, not anything the user needs interrupted about right
+// now.
+func SaveLastGroupFilterCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
+	return func() tea.Msg {
+		_ = db.SaveLastGroupFilter(name)
 		return nil
 	}
 }

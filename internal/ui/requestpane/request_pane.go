@@ -177,6 +177,28 @@ func (m *RequestPane) ResultMsgCleanup() {
 	m.RequestInProgress = false
 }
 
+// MarkSaved records saved.ID onto this pane's request, right after a
+// successful ctrl+s (see ui.RequestSavedMsg, dispatched by app.Model
+// regardless of which panel is currently focused - a save can still be in
+// flight after the user has already moved on). Without this,
+// m.Request.ID would stay at its pre-save value (0 for a brand new
+// request), so the *next* ctrl+s would always insert another row (see
+// storage.SQLiteStorage.Save's ID != 0 + unchanged-Name check) instead of
+// updating the one just created.
+//
+// Guarded on Method/URL/Name still matching saved: if the pane moved on
+// to a different request while the save was in flight, saved no longer
+// describes what's currently loaded, so stamping its ID here would
+// silently misattribute it to the wrong request.
+func (m *RequestPane) MarkSaved(saved *http.Request) {
+	if m.Request == nil || saved == nil {
+		return
+	}
+	if m.Request.Method == saved.Method && m.Request.URL == saved.URL && m.Request.Name == saved.Name {
+		m.Request.ID = saved.ID
+	}
+}
+
 // ExitLoadTestMode exits load test mode and resets state
 func (m *RequestPane) ExitLoadTestMode() {
 	if m.FocusManager != nil {

@@ -98,25 +98,142 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 	assert.Equal(t, groupID, *updated.GroupID)
 }
 
+// TestSQLiteStorage_Save_UpsertsWhenNameUnchanged is a regression test
+// for a real feature request: resaving an already-saved request (ID != 0)
+// whose Name hasn't changed must update that same row in place, not pile
+// up a duplicate every time ctrl+s is pressed.
+func TestSQLiteStorage_Save_UpsertsWhenNameUnchanged(t *testing.T) {
+	db := setupTestDB(t)
+
+	req := &http.Request{Name: "getHost", Method: "GET", URL: "http://x/1", Headers: map[string]string{}}
+	assert.NoError(t, db.Save(req))
+	firstID := req.ID
+
+	req.URL = "http://x/2"
+	req.ParamValues = http.ParamValues{BodyParamValues: map[string]string{"name": "widget-1"}}
+	assert.NoError(t, db.Save(req))
+
+	assert.Equal(t, firstID, req.ID, "expected the same row's ID to be reused, not a new one assigned")
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(loaded), "expected the resave to update the row in place, not insert a duplicate")
+	assert.Equal(t, "http://x/2", loaded[0].URL)
+	assert.Equal(t, "widget-1", loaded[0].ParamValues.BodyParamValues["name"])
+}
+
+// TestSQLiteStorage_Save_InsertsNewRowWhenNameChanged verifies the other
+// half of the upsert rule: changing Name and resaving is how you save a
+// variant alongside the original (there's no in-place rename through
+// Save), so it must insert a second row rather than overwrite the first.
+func TestSQLiteStorage_Save_InsertsNewRowWhenNameChanged(t *testing.T) {
+	db := setupTestDB(t)
+
+	req := &http.Request{Name: "getHost", Method: "GET", URL: "http://x", Headers: map[string]string{}}
+	assert.NoError(t, db.Save(req))
+	firstID := req.ID
+
+	req.Name = "getHostV2"
+	assert.NoError(t, db.Save(req))
+
+	assert.NotEqual(t, firstID, req.ID, "expected a new row/ID when Name changed")
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(loaded), "expected both the original and the renamed-and-resaved variant to exist")
+}
+
+// TestSQLiteStorage_SaveLoad_RoundTripsParamValues is a regression test
+// for a real feature request: a saved request's currently typed/selected
+// field values (see http.Request.ParamValues) must round-trip through
+// Save/Load - reopening a saved request should show exactly what was
+// filled in, not just blank fields matching its schema.
+func TestSQLiteStorage_SaveLoad_RoundTripsParamValues(t *testing.T) {
+	db := setupTestDB(t)
+
+	req := &http.Request{
+		Name:    "getHost",
+		Method:  "GET",
+		URL:     "http://localhost:8080/hosts/{id}",
+		Headers: map[string]string{},
+		ParamValues: http.ParamValues{
+			PathParamValues: map[string]string{"id": "42"},
+			BodyParamValues: map[string]string{"name": "widget-1"},
+			ArrayParamValues: map[string][]map[string]string{
+				"tags": {{"key": "env", "value": "prod"}},
+			},
+		},
+	}
+	assert.NoError(t, db.Save(req))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(loaded))
+	assert.Equal(t, req.ParamValues, loaded[0].ParamValues)
+}
+
+// TestSQLiteStorage_SaveLoad_EmptyParamValuesRoundTrips verifies a request
+// with no filled-in values (the ordinary case for a freshly imported,
+// never-edited request) round-trips as a zero http.ParamValues, not a
+// literal "null" or some other non-empty placeholder.
+func TestSQLiteStorage_SaveLoad_EmptyParamValuesRoundTrips(t *testing.T) {
+	db := setupTestDB(t)
+
+	req := &http.Request{Name: "plain", Method: "GET", URL: "http://x", Headers: map[string]string{}}
+	assert.NoError(t, db.Save(req))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(loaded))
+	assert.Zero(t, loaded[0].ParamValues)
+}
+
+// TestSQLiteStorage_UpdateRequestSchema_DoesNotTouchParamValues verifies
+// `volt import -force` (see UpdateRequestSchema) only refreshes the
+// schema-derived columns - it must never clobber a user's previously
+// saved field values, which have nothing to do with what changed in the
+// spec.
+func TestSQLiteStorage_UpdateRequestSchema_DoesNotTouchParamValues(t *testing.T) {
+	db := setupTestDB(t)
+
+	req := &http.Request{
+		Name:    "old name",
+		Method:  "GET",
+		URL:     "http://localhost:8080/widgets/{id}",
+		Headers: map[string]string{},
+		ParamValues: http.ParamValues{
+			PathParamValues: map[string]string{"id": "7"},
+		},
+	}
+	assert.NoError(t, db.Save(req))
+
+	assert.NoError(t, db.UpdateRequestSchema(req.ID, "new name", map[string]string{}, "new body", nil))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(loaded))
+	assert.Equal(t, req.ParamValues, loaded[0].ParamValues)
+}
+
 // TestSQLiteStorage_LastSentRequest_RoundTrips verifies
 // SaveLastSentRequest/LoadLastSentRequest preserve the full snapshot -
 // base request template plus every field value - byte-for-byte.
 func TestSQLiteStorage_LastSentRequest_RoundTrips(t *testing.T) {
 	db := setupTestDB(t)
 
-	snapshot := &http.RequestSnapshot{
-		Request: http.Request{
-			Method:  "POST",
-			URL:     "https://api.example.com/hosts/{host_id}",
-			Headers: map[string]string{"X-Env": "prod"},
-			PathParamSchema: map[string]http.BodyFieldSchema{
-				"host_id": {Type: "integer", Required: true},
-			},
+	snapshot := &http.Request{
+		Method:  "POST",
+		URL:     "https://api.example.com/hosts/{host_id}",
+		Headers: map[string]string{"X-Env": "prod"},
+		PathParamSchema: map[string]http.BodyFieldSchema{
+			"host_id": {Type: "integer", Required: true},
 		},
-		PathParamValues: map[string]string{"host_id": "42"},
-		BodyParamValues: map[string]string{"name": "widget"},
-		ArrayParamValues: map[string][]map[string]string{
-			"tags": {{"key": "env", "value": "prod"}},
+		ParamValues: http.ParamValues{
+			PathParamValues: map[string]string{"host_id": "42"},
+			BodyParamValues: map[string]string{"name": "widget"},
+			ArrayParamValues: map[string][]map[string]string{
+				"tags": {{"key": "env", "value": "prod"}},
+			},
 		},
 	}
 
@@ -127,11 +244,11 @@ func TestSQLiteStorage_LastSentRequest_RoundTrips(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected a non-nil snapshot")
 	}
-	assert.Equal(t, snapshot.Request.Method, got.Request.Method)
-	assert.Equal(t, snapshot.Request.URL, got.Request.URL)
-	assert.Equal(t, snapshot.PathParamValues, got.PathParamValues)
-	assert.Equal(t, snapshot.BodyParamValues, got.BodyParamValues)
-	assert.Equal(t, snapshot.ArrayParamValues, got.ArrayParamValues)
+	assert.Equal(t, snapshot.Method, got.Method)
+	assert.Equal(t, snapshot.URL, got.URL)
+	assert.Equal(t, snapshot.ParamValues.PathParamValues, got.ParamValues.PathParamValues)
+	assert.Equal(t, snapshot.ParamValues.BodyParamValues, got.ParamValues.BodyParamValues)
+	assert.Equal(t, snapshot.ParamValues.ArrayParamValues, got.ParamValues.ArrayParamValues)
 }
 
 // TestSQLiteStorage_LastSentRequest_NoneSavedYet verifies a fresh database
@@ -155,7 +272,7 @@ func TestSQLiteStorage_LastSentRequest_NoneSavedYet(t *testing.T) {
 func TestSQLiteStorage_ClearLastSentRequest_RemovesIt(t *testing.T) {
 	db := setupTestDB(t)
 
-	assert.NoError(t, db.SaveLastSentRequest(&http.RequestSnapshot{Request: http.Request{Method: "GET", URL: "https://a.example.com"}}))
+	assert.NoError(t, db.SaveLastSentRequest(&http.Request{Method: "GET", URL: "https://a.example.com"}))
 
 	got, err := db.LoadLastSentRequest()
 	assert.NoError(t, err)
@@ -185,16 +302,42 @@ func TestSQLiteStorage_ClearLastSentRequest_NoopWhenNothingSaved(t *testing.T) {
 func TestSQLiteStorage_LastSentRequest_OverwritesPrevious(t *testing.T) {
 	db := setupTestDB(t)
 
-	assert.NoError(t, db.SaveLastSentRequest(&http.RequestSnapshot{Request: http.Request{Method: "GET", URL: "https://a.example.com"}}))
-	assert.NoError(t, db.SaveLastSentRequest(&http.RequestSnapshot{Request: http.Request{Method: "POST", URL: "https://b.example.com"}}))
+	assert.NoError(t, db.SaveLastSentRequest(&http.Request{Method: "GET", URL: "https://a.example.com"}))
+	assert.NoError(t, db.SaveLastSentRequest(&http.Request{Method: "POST", URL: "https://b.example.com"}))
 
 	got, err := db.LoadLastSentRequest()
 	assert.NoError(t, err)
 	if got == nil {
 		t.Fatal("expected a non-nil snapshot")
 	}
-	assert.Equal(t, "POST", got.Request.Method)
-	assert.Equal(t, "https://b.example.com", got.Request.URL)
+	assert.Equal(t, "POST", got.Method)
+	assert.Equal(t, "https://b.example.com", got.URL)
+}
+
+// TestSQLiteStorage_LastGroupFilter_RoundTrips verifies
+// SaveLastGroupFilter/LoadLastGroupFilter preserve a group name, and that
+// a fresh database returns "" (not an error) - "All groups", the ordinary
+// starting state.
+func TestSQLiteStorage_LastGroupFilter_RoundTrips(t *testing.T) {
+	db := setupTestDB(t)
+
+	got, err := db.LoadLastGroupFilter()
+	assert.NoError(t, err)
+	if got != "" {
+		t.Errorf("expected \"\" (All groups) with nothing saved yet, got %q", got)
+	}
+
+	assert.NoError(t, db.SaveLastGroupFilter("petstore"))
+	got, err = db.LoadLastGroupFilter()
+	assert.NoError(t, err)
+	assert.Equal(t, "petstore", got)
+
+	// Saving "" (a deliberate "All groups" choice) must overwrite the
+	// previous non-empty value, not be treated as "nothing to save".
+	assert.NoError(t, db.SaveLastGroupFilter(""))
+	got, err = db.LoadLastGroupFilter()
+	assert.NoError(t, err)
+	assert.Equal(t, "", got)
 }
 
 func TestSQLiteStorage_SaveAndLoad(t *testing.T) {

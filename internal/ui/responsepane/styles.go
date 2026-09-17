@@ -48,4 +48,14 @@ var (
 	// scrollIndicatorStyle renders the "more above/below" hint shown when a
 	// tab's content overflows the viewport - see ResponsePane.scrollIndicator.
 	scrollIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Italic(true)
+
+	// successTextStyle renders a plain-text success confirmation (e.g.
+	// "saved to file.json") - the mirror of errorTextStyle above, for a
+	// good outcome instead of a bad one.
+	successTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+
+	// footerHelpStyle renders this pane's pinned one-line key hint (e.g.
+	// "r: raw/pretty · s: save to file · y: copy"), dim so it stays out of
+	// the way of the actual response content above it.
+	footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )

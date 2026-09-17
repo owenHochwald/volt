@@ -80,9 +80,7 @@ func TestRequestPane_ResetRequest_ClearsPersistedLastSentRequest(t *testing.T) {
 	pane, db := setupTestPane(t)
 	pane.PanelFocused = true
 
-	if err := db.SaveLastSentRequest(&http.RequestSnapshot{
-		Request: http.Request{Method: http.GET, URL: "https://api.example.com/x"},
-	}); err != nil {
+	if err := db.SaveLastSentRequest(&http.Request{Method: http.GET, URL: "https://api.example.com/x"}); err != nil {
 		t.Fatalf("test setup error saving snapshot: %v", err)
 	}
 	if got, err := db.LoadLastSentRequest(); err != nil || got == nil {

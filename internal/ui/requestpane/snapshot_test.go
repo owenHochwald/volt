@@ -43,16 +43,16 @@ func TestRequestPane_Snapshot_CapturesFieldValues(t *testing.T) {
 
 	snap := pane.Snapshot()
 
-	if snap.PathParamValues["host_id"] != "42" {
-		t.Errorf("expected host_id=42, got %+v", snap.PathParamValues)
+	if snap.ParamValues.PathParamValues["host_id"] != "42" {
+		t.Errorf("expected host_id=42, got %+v", snap.ParamValues.PathParamValues)
 	}
-	if snap.BodyParamValues["name"] != "widget-1" {
-		t.Errorf("expected name=widget-1, got %+v", snap.BodyParamValues)
+	if snap.ParamValues.BodyParamValues["name"] != "widget-1" {
+		t.Errorf("expected name=widget-1, got %+v", snap.ParamValues.BodyParamValues)
 	}
-	if _, ok := snap.BodyParamValues["email"]; ok {
-		t.Errorf("expected untouched 'email' to be omitted, got %+v", snap.BodyParamValues)
+	if _, ok := snap.ParamValues.BodyParamValues["email"]; ok {
+		t.Errorf("expected untouched 'email' to be omitted, got %+v", snap.ParamValues.BodyParamValues)
 	}
-	tags := snap.ArrayParamValues["tags"]
+	tags := snap.ParamValues.ArrayParamValues["tags"]
 	if len(tags) != 1 || tags[0]["key"] != "env" || tags[0]["value"] != "prod" {
 		t.Errorf("expected tags=[{key:env value:prod}], got %+v", tags)
 	}
@@ -68,22 +68,22 @@ func TestRequestPane_ApplySnapshot_RestoresFieldValues(t *testing.T) {
 		"name": {Type: "string"},
 		"tags": {Type: "array", ItemsRefName: "Tag", Items: tagItemSchema()},
 	})
-	snap := &http.RequestSnapshot{
-		Request: http.Request{
-			Method:  http.POST,
-			URL:     "https://api.example.com/hosts/{host_id}",
-			Body:    body,
-			Headers: map[string]string{},
-			PathParamSchema: map[string]http.BodyFieldSchema{
-				"host_id": {Type: "integer"},
-			},
+	snap := &http.Request{
+		Method:  http.POST,
+		URL:     "https://api.example.com/hosts/{host_id}",
+		Body:    body,
+		Headers: map[string]string{},
+		PathParamSchema: map[string]http.BodyFieldSchema{
+			"host_id": {Type: "integer"},
 		},
-		PathParamValues: map[string]string{"host_id": "42"},
-		BodyParamValues: map[string]string{"name": "widget-1"},
-		ArrayParamValues: map[string][]map[string]string{
-			"tags": {
-				{"key": "env", "value": "prod"},
-				{"key": "team", "value": "volt"},
+		ParamValues: http.ParamValues{
+			PathParamValues: map[string]string{"host_id": "42"},
+			BodyParamValues: map[string]string{"name": "widget-1"},
+			ArrayParamValues: map[string][]map[string]string{
+				"tags": {
+					{"key": "env", "value": "prod"},
+					{"key": "team", "value": "volt"},
+				},
 			},
 		},
 	}
@@ -185,8 +185,8 @@ func TestRequestPane_HandleSubmit_SavesSnapshotOnlyOnActualSend(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected a snapshot to be saved after an actual send")
 	}
-	if got.BodyParamValues["name"] != "server-1" {
-		t.Errorf("expected the saved snapshot to carry the filled-in value, got %+v", got.BodyParamValues)
+	if got.ParamValues.BodyParamValues["name"] != "server-1" {
+		t.Errorf("expected the saved snapshot to carry the filled-in value, got %+v", got.ParamValues.BodyParamValues)
 	}
 }
 

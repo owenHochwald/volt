@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -18,7 +19,44 @@ func (m ResponsePane) View() string {
 		return "Make a request to see the response here!"
 	}
 
-	return m.renderNormalView()
+	if m.savingToFile {
+		return m.renderSaveToFilePrompt()
+	}
+
+	// MaxHeight (unlike a plain lipgloss.Height(), which only pads short
+	// content) clips renderNormalView's output if it ever comes out taller
+	// than allocated - SetHeight's own reservation is only an estimate
+	// (see its comment), since the scroll indicator and save-status line
+	// are each sometimes present and sometimes not; this is the backstop
+	// against that inflating the pane past its box and corrupting the
+	// layout around it, the same defensive pattern requestpane's View()
+	// already uses for the same reason.
+	return lipgloss.NewStyle().MaxHeight(max(m.height, 1)).Render(m.renderNormalView())
+}
+
+// renderSaveToFilePrompt renders the filename entry overlay opened by
+// SaveResponseRaw ("s") - mirrors groupspane's create/rename prompt
+// (label + textinput + a one-line key hint).
+func (m ResponsePane) renderSaveToFilePrompt() string {
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		ui.LabelStyle.Render("Save raw response body to file:"),
+		m.filenameInput.View(),
+		"",
+		footerHelpStyle.MaxWidth(max(m.width, 1)).Render("enter: save · esc: cancel"),
+	)
+}
+
+// footerHint renders this pane's pinned one-line key hint below the
+// response content - reflects ToggleRawBody's current state (rather than
+// a fixed string) so it always says what pressing "r" would actually do
+// next.
+func (m ResponsePane) footerHint() string {
+	rawHint := "r: raw view"
+	if m.rawBody {
+		rawHint = "r: pretty view"
+	}
+	return fmt.Sprintf("%s · s: save to file · y: copy", rawHint)
 }
 
 // renderNormalView renders the normal response view with status bar, tabs, and content
@@ -46,6 +84,14 @@ func (m ResponsePane) renderNormalView() string {
 	if indicator := m.scrollIndicator(); indicator != "" {
 		elements = append(elements, indicator)
 	}
+	if m.saveStatusMsg != "" {
+		style := successTextStyle
+		if m.saveStatusErr {
+			style = errorTextStyle
+		}
+		elements = append(elements, style.MaxWidth(max(m.width, 1)).Render(m.saveStatusMsg))
+	}
+	elements = append(elements, footerHelpStyle.MaxWidth(max(m.width, 1)).Render(m.footerHint()))
 	return lipgloss.JoinVertical(lipgloss.Left, elements...)
 }
 

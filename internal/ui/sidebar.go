@@ -61,6 +61,20 @@ type SidebarPane struct {
 	groupOptions     []string
 	groupFilterIndex int
 
+	// pendingGroupFilterName is the group filter saved from a previous
+	// session (see storage.LoadLastGroupFilter), loaded once at
+	// construction - groupOptions doesn't exist yet at that point (it's
+	// only built once the database's groups are loaded - see
+	// RequestsLoadingMsg), so this just remembers the *name* to look for
+	// once it does. restoredGroupFilter tracks whether that's already
+	// happened, since RequestsLoadingMsg can fire more than once per
+	// session (e.g. after a save/delete/import) and only the very first
+	// one should pull from disk - every later one already has the user's
+	// own current-session selection to preserve instead (see
+	// selectedGroupName in RequestsLoadingMsg's handling).
+	pendingGroupFilterName string
+	restoredGroupFilter    bool
+
 	// pendingDelete holds the item awaiting a y/n confirmation after
 	// DeleteRequest ('d') was pressed, or nil when nothing is pending.
 	// Deleting a saved request is irreversible, so it's confirmed rather
@@ -150,6 +164,20 @@ func (s *SidebarPane) currentGroupFilter() string {
 		return ""
 	}
 	return s.groupOptions[s.groupFilterIndex]
+}
+
+// saveGroupFilterCmd persists the current group filter (see
+// currentGroupFilter/SaveLastGroupFilterCmd) so the next app start
+// restores it - called every time "[" / "]" changes the selection,
+// including back to "" ("All groups" is itself a deliberately saved
+// choice, not the absence of one - see storage.SaveLastGroupFilter). A
+// no-op Cmd when there's no database (some test setups construct a
+// SidebarPane with a nil db).
+func (s *SidebarPane) saveGroupFilterCmd() tea.Cmd {
+	if s.db == nil {
+		return nil
+	}
+	return SaveLastGroupFilterCmd(s.db, s.currentGroupFilter())
 }
 
 // cycleGroupFilter moves the group filter by delta (wrapping) and rebuilds
@@ -250,6 +278,19 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// deleted), the same class of bug a plain bounds check can't catch.
 		selectedGroupName := s.currentGroupFilter()
 
+		// The very first load of a session has nothing selected yet
+		// (selectedGroupName == ""), so this is where a filter restored
+		// from a previous session (see pendingGroupFilterName) gets its
+		// one chance to apply - every later reload this session already
+		// has the user's own current selection to preserve above instead,
+		// which must win over a since-stale value from disk.
+		if !s.restoredGroupFilter {
+			s.restoredGroupFilter = true
+			if selectedGroupName == "" && s.pendingGroupFilterName != "" {
+				selectedGroupName = s.pendingGroupFilterName
+			}
+		}
+
 		// Best-effort: a group name is a display nicety, so a lookup
 		// failure just falls back to showing no group label and no filter
 		// options beyond allGroupsOption.
@@ -336,11 +377,11 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// under it - exactly the regression this replaced.
 		if msg.String() == "[" {
 			s.cycleGroupFilter(-1)
-			return s, nil
+			return s, s.saveGroupFilterCmd()
 		}
 		if msg.String() == "]" {
 			s.cycleGroupFilter(1)
-			return s, nil
+			return s, s.saveGroupFilterCmd()
 		}
 
 		// Navigation override - wrapped to cycle. Two things bubbles'
@@ -432,14 +473,20 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 		},
 	}
 
+	var pendingGroupFilterName string
+	if db != nil {
+		pendingGroupFilterName, _ = db.LoadLastGroupFilter()
+	}
+
 	sidebar := &SidebarPane{
-		panelFocused: false,
-		height:       10,
-		width:        10,
-		db:           db,
-		keys:         keys,
-		requestsList: list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
-		groupOptions: []string{allGroupsOption},
+		panelFocused:           false,
+		height:                 10,
+		width:                  10,
+		db:                     db,
+		keys:                   keys,
+		requestsList:           list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
+		groupOptions:           []string{allGroupsOption},
+		pendingGroupFilterName: pendingGroupFilterName,
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
 	sidebar.requestsList.SetShowHelp(false)

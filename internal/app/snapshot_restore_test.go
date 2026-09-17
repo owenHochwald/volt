@@ -21,16 +21,16 @@ func TestSetupModel_RestoresLastSentRequest(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	snapshot := &http.RequestSnapshot{
-		Request: http.Request{
-			Method:  http.POST,
-			URL:     "https://api.example.com/hosts/{host_id}",
-			Headers: map[string]string{},
-			PathParamSchema: map[string]http.BodyFieldSchema{
-				"host_id": {Type: "integer"},
-			},
+	snapshot := &http.Request{
+		Method:  http.POST,
+		URL:     "https://api.example.com/hosts/{host_id}",
+		Headers: map[string]string{},
+		PathParamSchema: map[string]http.BodyFieldSchema{
+			"host_id": {Type: "integer"},
 		},
-		PathParamValues: map[string]string{"host_id": "42"},
+		ParamValues: http.ParamValues{
+			PathParamValues: map[string]string{"host_id": "42"},
+		},
 	}
 	if err := db.SaveLastSentRequest(snapshot); err != nil {
 		t.Fatalf("failed to save snapshot: %v", err)
@@ -44,7 +44,7 @@ func TestSetupModel_RestoresLastSentRequest(t *testing.T) {
 	if len(m.requestPane.PathParams) != 1 || m.requestPane.PathParams[0].Value() != "42" {
 		t.Fatalf("expected host_id=42 restored into PathParams, got %+v", m.requestPane.PathParams)
 	}
-	if m.requestPane.Request.URL != snapshot.Request.URL {
+	if m.requestPane.Request.URL != snapshot.URL {
 		t.Errorf("expected the restored request's URL to match the snapshot, got %q", m.requestPane.Request.URL)
 	}
 }

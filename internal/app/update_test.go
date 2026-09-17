@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -67,6 +68,54 @@ func TestShiftTab_InSidebarOrResponsePanel_StillCyclesPanels(t *testing.T) {
 	}
 	if result2.focusedPanel != utils.SidebarPanel {
 		t.Errorf("expected shift+tab from the response panel to wrap to the sidebar, got %v", result2.focusedPanel)
+	}
+}
+
+func escMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyEsc}
+}
+
+// TestEsc_InResponsePanel_ReturnsToRequestPanel is a regression test for a
+// real feature request: esc already stepped back from the request panel
+// to the sidebar - it should step back the same way from the response
+// panel to the request panel, not require jumping straight to the sidebar
+// (or an F-key) to get there.
+func TestEsc_InResponsePanel_ReturnsToRequestPanel(t *testing.T) {
+	m := setupTestModel(t)
+	m.focusedPanel = utils.ResponsePanel
+
+	model, _ := m.Update(escMsg())
+	result, ok := model.(Model)
+	if !ok {
+		t.Fatalf("expected Model, got %T", model)
+	}
+	if result.focusedPanel != utils.RequestPanel {
+		t.Errorf("expected esc from the response panel to return to the request panel, got %v", result.focusedPanel)
+	}
+}
+
+// TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst verifies esc's more
+// specific existing meaning - canceling the response pane's own
+// save-to-file filename prompt (see SaveResponseRaw) - takes priority
+// over the panel switch above; otherwise that prompt could never actually
+// be cancelled with esc, since the panel-switch would always intercept it
+// first.
+func TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst(t *testing.T) {
+	m := setupTestModel(t)
+	m.focusedPanel = utils.ResponsePanel
+	m.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
+	m.responsePane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if !m.responsePane.IsSavingToFile() {
+		t.Fatal("test setup error: expected 's' to open the save-to-file prompt")
+	}
+
+	model, _ := m.Update(escMsg())
+	result, ok := model.(Model)
+	if !ok {
+		t.Fatalf("expected Model, got %T", model)
+	}
+	if result.focusedPanel != utils.ResponsePanel {
+		t.Errorf("expected esc to stay in the response panel while its save prompt is open, got %v", result.focusedPanel)
 	}
 }
 

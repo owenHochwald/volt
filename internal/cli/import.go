@@ -26,13 +26,24 @@ type ImportSummary struct {
 // later be assigned to a group) rather than being used once and forgotten.
 const defaultServerName = "default"
 
-// openDefaultDB opens Volt's saved-requests database at its standard
-// location (~/.volt/volt.db), used by every subcommand that touches
-// requests, groups, or servers.
+// DBPathOverride, when non-empty, is used in place of Volt's standard
+// database location (~/.volt/volt.db) by every subcommand that opens one
+// (see openDefaultDB) - set from main via the top-level --db flag, so a
+// user (or a test) can point the whole CLI at a different file without
+// touching their real data.
+var DBPathOverride string
+
+// openDefaultDB opens Volt's saved-requests database - DBPathOverride if
+// set, otherwise its standard location (~/.volt/volt.db) - used by every
+// subcommand that touches requests, groups, or servers.
 func openDefaultDB() (*storage.SQLiteStorage, func(), error) {
-	dbPath, err := storage.DefaultDBPath()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to resolve database path: %w", err)
+	dbPath := DBPathOverride
+	if dbPath == "" {
+		var err error
+		dbPath, err = storage.DefaultDBPath()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to resolve database path: %w", err)
+		}
 	}
 	db, err := storage.NewSQLiteStorage(dbPath)
 	if err != nil {

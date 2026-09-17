@@ -104,6 +104,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedPanel = utils.SidebarPanel
 				return m, nil
 			}
+			// Esc's own save-to-file prompt (see SaveResponseRaw) takes
+			// priority over the panel switch below - otherwise esc could
+			// never actually cancel that prompt, since this would always
+			// intercept it first and switch panels instead.
+			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() {
+				m.focusedPanel = utils.RequestPanel
+				return m, nil
+			}
 		}
 		if keybindings.Matches(msg, m.keys.LoadRequest) && !m.sidebarPane.IsFiltering() {
 			// Guarded on IsFiltering(): LoadRequest is bound to enter/space,
@@ -150,6 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			return m, nil
 		}
+		m.requestPane.MarkSaved(msg.Request)
 		return m, ui.LoadRequestsCmd(m.db)
 
 	case ui.RequestDeletedMsg:

@@ -17,6 +17,9 @@ GLOBAL FLAGS:
   -v, --debug       Show internal logging (e.g. database migration output),
                      hidden by default. Works anywhere: before or after a
                      subcommand.
+  --db <path>       Use this database file instead of the default
+                     (~/.volt/volt.db). Works anywhere: before or after a
+                     subcommand.
 
 IMPORT FLAGS:
   -group <name>     Import into this request group (created if missing)

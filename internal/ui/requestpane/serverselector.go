@@ -35,19 +35,49 @@ func (m *RequestPane) ShowServerSelector() bool {
 // it either.
 func (m *RequestPane) rebuildServerSelector() {
 	var servers []http.Server
+	var groupDefaultServerID *int64
 	if m.DB != nil && m.ShowServerSelector() {
 		servers, _ = m.DB.ListGroupServers(*m.Request.GroupID)
+		if group, err := m.DB.GetGroupByID(*m.Request.GroupID); err == nil && group != nil {
+			groupDefaultServerID = group.ServerID
+		}
 	}
 	m.Servers = servers
 
+	// A request's own ServerID directly overrides the group's default,
+	// but when it's unset (the picker showing "(none)"), resolution still
+	// falls through to the group's default server rather than genuinely
+	// using none at all (see ResolveEffectiveServer) - so offering
+	// "(none)" as the starting choice whenever the group actually has a
+	// default was misleading: the request went out to that default
+	// regardless of what the picker showed. "(none)" is only offered (and
+	// only ever the starting choice) when the group genuinely has no
+	// default to fall back to, where it's accurate - no server really is
+	// used until one's picked directly.
+	includeNone := groupDefaultServerID == nil
 	options := make([]string, 0, len(servers)+1)
-	options = append(options, noServerOption)
-	initial := noServerOption
+	initial := ""
+	if includeNone {
+		options = append(options, noServerOption)
+		initial = noServerOption
+	}
 	for _, s := range servers {
 		options = append(options, s.Name)
-		if m.Request != nil && m.Request.ServerID != nil && s.ID == *m.Request.ServerID {
+		switch {
+		case m.Request != nil && m.Request.ServerID != nil && s.ID == *m.Request.ServerID:
+			initial = s.Name
+		case initial == "" && groupDefaultServerID != nil && s.ID == *groupDefaultServerID:
 			initial = s.Name
 		}
+	}
+	// Defensive fallback: a group with a default (includeNone == false)
+	// should always have that default among servers too (SetGroupServer
+	// guarantees it), so this shouldn't normally trigger - but rather than
+	// ever leave the picker starting unset (a different, deliberate
+	// meaning elsewhere - see EnumSelector.allowUnset), fall back to
+	// whatever's first.
+	if initial == "" && len(servers) > 0 {
+		initial = servers[0].Name
 	}
 	m.ServerSelector = NewEnumSelector(options, initial)
 }

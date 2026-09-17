@@ -30,7 +30,13 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keybindings.Matches(msg, m.keys.SaveRequest) {
 			m.syncRequest()
-			return m, ui.SaveRequestCmd(m.DB, m.Request)
+			// Snapshot (not m.Request directly) so the currently
+			// typed/selected field values (see http.Request.ParamValues)
+			// are persisted along with the schema/template - otherwise
+			// reopening a saved request would only ever show blank/
+			// default fields again, never what was actually filled in.
+			snapshot := m.Snapshot()
+			return m, ui.SaveRequestCmd(m.DB, &snapshot)
 		}
 		if keybindings.Matches(msg, m.keys.ResetRequest) {
 			m.resetToBlank()
@@ -41,6 +47,10 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.DB != nil {
 				return m, ui.ClearLastSentRequestCmd(m.DB)
 			}
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.ClearParams) {
+			m.clearParamValues()
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.NextField) {
@@ -141,6 +151,12 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	m.rebuildServerSelector()
 	m.syncPathParams()
 	m.syncBodyParams()
+	// Restores whatever was typed/selected into request's fields the last
+	// time it was saved/sent (see http.Request.ParamValues) - after
+	// syncPathParams/syncBodyParams have (re)built the fields to apply
+	// them onto, and before the rebuildFocusManager below, since applying
+	// array item counts can itself change the focus cycle's shape.
+	m.applyParamValues(request.ParamValues)
 	// rebuildServerSelector always replaces m.ServerSelector with a fresh
 	// instance, but syncPathParams/syncBodyParams only rebuild the focus
 	// cycle when their own field set actually changed (e.g. a request with

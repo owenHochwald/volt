@@ -8,8 +8,8 @@ func (m Model) sidebarWidth() int {
 	if width < 20 {
 		width = 20
 	}
-	if width > 60 {
-		width = 60
+	if width > 80 {
+		width = 80
 	}
 	return width
 }

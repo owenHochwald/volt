@@ -58,6 +58,27 @@ type Request struct {
 	// placeholder is just edited as unconstrained free text (see
 	// requestpane.rebuildParams).
 	PathParamSchema map[string]BodyFieldSchema `json:"path_param_schema,omitempty"`
+	// ParamValues holds every currently typed/selected path/body/array
+	// param value for this request (see ParamValues), independent of the
+	// schema/template itself (Body/PathParamSchema) - so reloading a saved
+	// request (see requestpane.RequestPane's reinitRequestPane) restores
+	// exactly what was filled in, not just blank fields matching its
+	// schema. Refreshed on every explicit save (see requestpane.
+	// RequestPane.Snapshot) and by app restore of the last request
+	// actually sent (see storage.SaveLastSentRequest/LoadLastSentRequest);
+	// cleared by ClearParams ("ctrl+x" - see requestpane.
+	// RequestPane.clearParamValues) back to the schema's own defaults.
+	ParamValues ParamValues `json:"param_values,omitempty"`
+}
+
+// ParamValues holds every currently typed/selected field value for a
+// request - scalar path/body param values, and array param items - keyed
+// by field name (or, for a "simple" array's lone unnamed field, "" - see
+// requestpane.simpleArrayItemName).
+type ParamValues struct {
+	PathParamValues  map[string]string              `json:"path_param_values,omitempty"`
+	BodyParamValues  map[string]string              `json:"body_param_values,omitempty"`
+	ArrayParamValues map[string][]map[string]string `json:"array_param_values,omitempty"`
 }
 
 func NewBlankRequest() *Request {

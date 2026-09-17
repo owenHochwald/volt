@@ -165,6 +165,30 @@ func setupSidebarWithGroups(t *testing.T) (*SidebarPane, *storage.SQLiteStorage)
 	return sidebar, db
 }
 
+// TestRequestItem_FilterValue_FuzzyMatchesURL locks in that "/" search
+// already fuzzy-matches against a request's full URL (not just its name):
+// RequestItem.FilterValue includes the URL, and the sidebar's list never
+// overrides list.Model's own Filter field, so list.DefaultFilter (backed
+// by sahilm/fuzzy - genuine subsequence matching, not a plain substring
+// check) is what actually runs. "vnd" matches "/vm/v3/node" as the
+// subsequence v...n...d, even though it's not a literal substring of it.
+func TestRequestItem_FilterValue_FuzzyMatchesURL(t *testing.T) {
+	items := []RequestItem{
+		{title: "getNodes", Request: &http.Request{Method: http.GET, URL: "http://127.0.0.1:1500/vm/v3/node"}},
+		{title: "getHosts", Request: &http.Request{Method: http.GET, URL: "http://127.0.0.1:1500/vm/v3/host"}},
+		{title: "getInvoices", Request: &http.Request{Method: http.GET, URL: "http://127.0.0.1:1500/billing/v2/invoice"}},
+	}
+	values := make([]string, len(items))
+	for i, item := range items {
+		values[i] = item.FilterValue()
+	}
+
+	ranks := list.DefaultFilter("vnd", values)
+	if len(ranks) != 1 || ranks[0].Index != 0 {
+		t.Fatalf("expected \"vnd\" to fuzzy-match only getNodes's URL (index 0), got %+v", ranks)
+	}
+}
+
 func TestSidebar_GroupFilter_StartsShowingEveryRequest(t *testing.T) {
 	sidebar, _ := setupSidebarWithGroups(t)
 
@@ -174,6 +198,157 @@ func TestSidebar_GroupFilter_StartsShowingEveryRequest(t *testing.T) {
 	titles := requestItemTitles(sidebar)
 	if len(titles) != 3 {
 		t.Errorf("expected all 3 requests visible with no filter, got %v", titles)
+	}
+}
+
+// TestSidebar_GroupFilter_CyclingPersistsChoice is a regression test for a
+// real feature request: changing the group filter ("[" / "]") should
+// persist the choice (see storage.SaveLastGroupFilter) so the next app
+// start reopens on it - not always reset to "All groups".
+func TestSidebar_GroupFilter_CyclingPersistsChoice(t *testing.T) {
+	sidebar, db := setupSidebarWithGroups(t)
+
+	cmd := sendKey(t, sidebar, "]")
+	if cmd == nil {
+		t.Fatal("expected a non-nil command to persist the new filter")
+	}
+	cmd() // execute the fire-and-forget save
+
+	want := sidebar.currentGroupFilter()
+	if want == "" {
+		t.Fatal("test setup error: expected cycling to actually move off \"All groups\"")
+	}
+	got, err := db.LoadLastGroupFilter()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("expected the persisted filter to match the newly selected group %q, got %q", want, got)
+	}
+}
+
+// TestSidebar_GroupFilter_CyclingBackToAllGroupsPersistsThatToo verifies
+// "All groups" is itself saved as a deliberate choice (an empty string),
+// not skipped - otherwise cycling back to it would leave a stale non-empty
+// value on disk that the next start would incorrectly restore.
+func TestSidebar_GroupFilter_CyclingBackToAllGroupsPersistsThatToo(t *testing.T) {
+	sidebar, db := setupSidebarWithGroups(t)
+
+	sendKey(t, sidebar, "]")() // move off "All groups"
+	if sidebar.currentGroupFilter() == "" {
+		t.Fatal("test setup error: expected to have moved off \"All groups\"")
+	}
+
+	n := len(sidebar.groupOptions)
+	for i := 0; i < n-1; i++ {
+		cmd := sendKey(t, sidebar, "]")
+		if cmd != nil {
+			cmd()
+		}
+	}
+	if sidebar.currentGroupFilter() != "" {
+		t.Fatalf("test setup error: expected to have cycled all the way back to \"All groups\", got %q", sidebar.currentGroupFilter())
+	}
+
+	got, err := db.LoadLastGroupFilter()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected \"All groups\" to be persisted as an empty string, got %q", got)
+	}
+}
+
+// TestSidebar_GroupFilter_RestoresFromPreviousSession verifies a group
+// filter saved by a previous session (see storage.SaveLastGroupFilter) is
+// applied on the sidebar's first load - not left sitting unused in the
+// database.
+func TestSidebar_GroupFilter_RestoresFromPreviousSession(t *testing.T) {
+	db, err := storage.NewSQLiteStorage(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create sqlite storage: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	alpha, err := db.GetOrCreateGroup("alpha")
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if _, err := db.GetOrCreateGroup("beta"); err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if err := db.SaveLastGroupFilter("alpha"); err != nil {
+		t.Fatalf("failed to save group filter: %v", err)
+	}
+
+	req := &http.Request{Name: "in alpha", Method: http.GET, URL: "http://a", Headers: map[string]string{}, GroupID: &alpha.ID}
+	if err := db.Save(req); err != nil {
+		t.Fatalf("failed to save request: %v", err)
+	}
+	requests, err := db.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// NewSidebar (not setupSidebarWithGroups, which predates this restore
+	// feature) is what actually reads the persisted filter - see its
+	// pendingGroupFilterName.
+	sidebar := NewSidebar(db, keybindings.DefaultKeyMap())
+	sidebar.SetSize(40, 20)
+	loadSidebarRequests(t, sidebar, requests)
+
+	if got := sidebar.currentGroupFilter(); got != "alpha" {
+		t.Errorf("expected the restored filter to be %q, got %q", "alpha", got)
+	}
+}
+
+// TestSidebar_GroupFilter_RestoreOnlyAppliesOnFirstLoad verifies a second
+// RequestsLoadingMsg this session (e.g. after saving/deleting/importing a
+// request) does not re-apply the on-disk filter over whatever the user
+// has since selected in this session - only the very first load gets that
+// one chance (see restoredGroupFilter).
+func TestSidebar_GroupFilter_RestoreOnlyAppliesOnFirstLoad(t *testing.T) {
+	db, err := storage.NewSQLiteStorage(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create sqlite storage: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	if _, err := db.GetOrCreateGroup("alpha"); err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if _, err := db.GetOrCreateGroup("beta"); err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	if err := db.SaveLastGroupFilter("alpha"); err != nil {
+		t.Fatalf("failed to save group filter: %v", err)
+	}
+
+	sidebar := NewSidebar(db, keybindings.DefaultKeyMap())
+	sidebar.SetSize(40, 20)
+	loadSidebarRequests(t, sidebar, nil) // first load: restores "alpha"
+	if got := sidebar.currentGroupFilter(); got != "alpha" {
+		t.Fatalf("test setup error: expected the first load to restore %q, got %q", "alpha", got)
+	}
+
+	// The user switches to "beta" mid-session, without saving it back to
+	// disk (simulating a lost/skipped write, or just checking this
+	// in-memory case directly).
+	sidebar.groupFilterIndex = 0
+	for i, name := range sidebar.groupOptions {
+		if name == "beta" {
+			sidebar.groupFilterIndex = i
+		}
+	}
+	if sidebar.currentGroupFilter() != "beta" {
+		t.Fatalf("test setup error: expected to have selected %q, got %q", "beta", sidebar.currentGroupFilter())
+	}
+
+	// A second load (e.g. after some other change) must preserve "beta",
+	// not silently jump back to the on-disk "alpha".
+	loadSidebarRequests(t, sidebar, nil)
+	if got := sidebar.currentGroupFilter(); got != "beta" {
+		t.Errorf("expected the second load to preserve the in-session selection %q, got %q", "beta", got)
 	}
 }
 
