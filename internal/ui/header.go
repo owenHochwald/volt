@@ -31,7 +31,7 @@ func (h *Header) View() string {
 
 	logo := HeaderLogoStyle.Render(asciiArt)
 
-	help := HeaderHelpStyle.Render("⚡ v0.1/ISP • [ ? ] Help • [ ctrl+c ] Quit")
+	help := HeaderHelpStyle.Render("⚡ v0.2/isp • [ ? ] Help • [ ctrl+c ] Quit")
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, logo, "\t", help)
 }
