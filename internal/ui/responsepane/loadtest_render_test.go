@@ -36,8 +36,8 @@ func TestLoadTestErrorsIncludeSortedStatusBreakdown(t *testing.T) {
 		"204",
 		"400",
 		"503",
-		"http_4xx",
-		"http_5xx",
+		"HTTP 4xx responses",
+		"HTTP 5xx responses",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Errorf("error view does not contain %q:\n%s", expected, rendered)

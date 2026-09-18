@@ -43,16 +43,31 @@ Volt is a **keyboard-driven HTTP client** that lives in your terminal. Built as 
 | **Memory footprint** | ~500MB | ~300MB | ~50MB | <5MB | **~15MB** |
 | **Startup time** | ~3s | ~2s | <1s | instant | **instant** |
 
-### Throughput Benchmarks (Apple M4)
+<!-- BEGIN GENERATED BENCHMARK COMPARISON -->
+### Throughput comparison
 
-*Testing against a zero-latency local endpoint to measure engine overhead:*
+No benchmark results are checked in yet. Generate a fresh comparison on the
+machine whose performance you want to document.
+<!-- END GENERATED BENCHMARK COMPARISON -->
 
-| Concurrency | Requests/Sec |
-|-------------|--------------|
-| 10          | 141,533      |
-| 50          | 208,035      |
-| **100**     | **213,885**  |
-| 500         | 92,891       |
+The comparison is generated from controlled local endpoints with pinned versions
+of Volt, wrk, hey, and k6. Docker is the only runtime dependency:
+
+```bash
+# Short integration check
+make benchmark-smoke
+
+# Five 10-second runs for every workload and concurrency level
+make benchmark-comparison
+```
+
+Progress is written to stderr and the paste-ready Markdown section is written to
+stdout. Review a completed run, then replace the marked block above. To keep a
+dated copy without changing the command:
+
+```bash
+make benchmark-comparison > benchmarks/comparison-$(date +%F).md
+```
 
 ---
 

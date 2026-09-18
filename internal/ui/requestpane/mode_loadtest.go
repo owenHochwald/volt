@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -107,7 +108,7 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*Req
 		if err != nil {
 			m.ParseErrors = append(m.ParseErrors, "Load test config error: "+err.Error())
 			m.RequestInProgress = false
-			return m, ui.NotifyCmd(ui.NotificationError, err.Error())
+			return m, ui.NotifyErrorCmd(apperror.FromApplication(err))
 		}
 		return m, ui.StartLoadTestCmd(config)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/logging"
 )
 
@@ -76,7 +77,8 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 	res, err := c.makeCustomRequest(ctx, req)
 	if err != nil {
 		logging.Logf("http: <- %s %s failed: %v", req.Method, req.URL, err)
-		result <- &Response{Error: err.Error()}
+		failure := apperror.FromNetwork(err)
+		result <- &Response{Error: failure.Message, Failure: failure}
 		return
 	}
 
@@ -90,7 +92,8 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		logging.Logf("http: <- %s %s: got status %s but failed reading body: %v", req.Method, req.URL, res.Status, err)
-		result <- &Response{Error: err.Error()}
+		failure := apperror.FromNetwork(err)
+		result <- &Response{Error: failure.Message, Failure: failure}
 		return
 	}
 

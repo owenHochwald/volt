@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -87,7 +88,7 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*Reques
 
 		if err := m.validateRequest(); err != nil {
 			m.RequestInProgress = false
-			return m, ui.NotifyCmd(ui.NotificationError, err.Error())
+			return m, ui.NotifyErrorCmd(apperror.FromApplication(err))
 		}
 
 		errs := ValidateParams(m.PathParams)

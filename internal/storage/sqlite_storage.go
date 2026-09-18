@@ -108,6 +108,7 @@ func runMigrations(db *sql.DB) error {
 
 	// Set the embedded filesystem for goose
 	goose.SetBaseFS(embedMigrations)
+	goose.SetLogger(goose.NopLogger())
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
