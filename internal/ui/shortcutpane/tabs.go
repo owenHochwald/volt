@@ -14,6 +14,19 @@ const (
 // TabIndex represents a tab position
 type TabIndex int
 
+func (m ShortcutPane) renderSurfaceTabs() string {
+	tabs := []string{"HELP", "SETTINGS"}
+	rendered := make([]string, 0, len(tabs))
+	for index, tab := range tabs {
+		if Surface(index) == m.surface {
+			rendered = append(rendered, m.styles.Tabs.Active.Render(tab))
+		} else {
+			rendered = append(rendered, m.styles.Tabs.Inactive.Render(tab))
+		}
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Left, rendered...)
+}
+
 // renderTabs renders the tab bar with shortcut categories
 func (m ShortcutPane) renderTabs() string {
 	var tabNames []string

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"image/color"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/design"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 func TestSetupModelAppliesLoadedThemeAndWarning(t *testing.T) {
@@ -72,4 +74,72 @@ func TestCustomThemeIgnoresTerminalBackground(t *testing.T) {
 
 	assert.Equal(t, custom, model.theme)
 	assert.Equal(t, "/tmp/adaptive.yaml", model.themeSource)
+}
+
+func TestSettingsCancelRestoresOriginalTheme(t *testing.T) {
+	model := newTestModel(t)
+	model.openHelp(keybindings.ContextGlobal)
+
+	model, _ = updateAppModel(model, appKeyPress('l', "l", 0))
+	model, previewCmd := updateAppModel(model, appKeyPress('j', "j", 0))
+	model, _ = updateAppModel(model, previewCmd())
+	assert.Equal(t, "adaptive", model.themeSource)
+
+	model, _ = updateAppModel(model, appKeyPress(tea.KeyEscape, "", 0))
+	assert.Equal(t, "default", model.themeSource)
+	assert.False(t, model.showHelpModal)
+}
+
+func TestSettingsSaveKeepsPreviewedTheme(t *testing.T) {
+	model := newTestModel(t)
+	model.openHelp(keybindings.ContextGlobal)
+
+	model, _ = updateAppModel(model, appKeyPress('l', "l", 0))
+	model, previewCmd := updateAppModel(model, appKeyPress('j', "j", 0))
+	model, _ = updateAppModel(model, previewCmd())
+	model, saveCmd := updateAppModel(model, appKeyPress(tea.KeyEnter, "", 0))
+	model, _ = updateAppModel(model, saveCmd())
+
+	assert.Equal(t, "adaptive", model.themeSource)
+	assert.False(t, model.showHelpModal)
+	assert.Equal(t, ui.NotificationSuccess, model.notification.Level)
+}
+
+func TestThemePersistenceResultIsVisible(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		level ui.NotificationLevel
+		text  string
+	}{
+		{
+			name:  "saved",
+			level: ui.NotificationSuccess,
+			text:  "Theme saved: Mono",
+		},
+		{
+			name:  "save failed",
+			err:   errors.New("permission denied"),
+			level: ui.NotificationWarning,
+			text:  "Theme is active but couldn't be saved",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := newTestModel(t)
+			model, _ = updateAppModel(model, themeSelectionSavedMsg{
+				themeName: "Mono",
+				err:       test.err,
+			})
+
+			assert.Equal(t, test.level, model.notification.Level)
+			assert.Equal(t, test.text, model.notification.Text)
+		})
+	}
+}
+
+func updateAppModel(model Model, msg tea.Msg) (Model, tea.Cmd) {
+	updated, cmd := model.Update(msg)
+	return updated.(Model), cmd
 }

@@ -69,6 +69,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
 
 		if keybindings.Matches(msg, m.keys.Quit) {
+			if m.showHelpModal {
+				m.closeHelp()
+				return m, nil
+			}
 			if m.quitArmed {
 				if m.loadTestCancel != nil {
 					m.loadTestCancel()
@@ -89,9 +93,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if overlayOpen {
 				m.disarmQuit()
 			} else {
-				if m.showHelpModal {
-					m.closeHelp()
-				} else if m.focusedPanel != utils.SidebarPanel {
+				if m.focusedPanel != utils.SidebarPanel {
 					m.setFocusedPanel(utils.SidebarPanel)
 				}
 				return m, m.armQuit()
@@ -219,6 +221,48 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case importpane.ImportResultMsg:
 		m.importPane, cmd = m.importPane.Update(msg)
 		return m, cmd
+
+	case shortcutpane.PreviewThemeMsg:
+		m.applyTheme(msg.Theme, msg.Source)
+		if msg.Source == "adaptive" {
+			return m, tea.RequestBackgroundColor
+		}
+		return m, nil
+
+	case shortcutpane.SaveThemeMsg:
+		m.saveThemeSession(msg.Theme, msg.Source)
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme changed to " + msg.Theme.Name,
+		}
+		saveCmd := saveThemeSelectionCmd(msg.Source, msg.Theme.Name)
+		if msg.Source == "adaptive" {
+			return m, tea.Batch(saveCmd, tea.RequestBackgroundColor)
+		}
+		return m, saveCmd
+
+	case shortcutpane.CancelThemePreviewMsg:
+		m.closeHelp()
+		m.notification = ui.Notification{
+			Level: ui.NotificationInfo,
+			Text:  "Theme preview canceled",
+		}
+		return m, nil
+
+	case themeSelectionSavedMsg:
+		if msg.err != nil {
+			m.notification = ui.Notification{
+				Level: ui.NotificationWarning,
+				Text:  "Theme is active but couldn't be saved",
+				Hint:  msg.err.Error(),
+			}
+			return m, nil
+		}
+		m.notification = ui.Notification{
+			Level: ui.NotificationSuccess,
+			Text:  "Theme saved: " + msg.themeName,
+		}
+		return m, nil
 
 	case quitSequenceExpiredMsg:
 		if m.quitArmed && msg.sequence == m.quitSequence {

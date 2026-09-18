@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -14,14 +15,14 @@ func TestHelpTabNavigationKeys(t *testing.T) {
 		key   tea.KeyPressMsg
 		want  TabIndex
 	}{
-		{name: "l advances", start: Global, key: helpKeyPress('l', "l"), want: Sidebar},
-		{name: "h moves backward", start: Response, key: helpKeyPress('h', "h"), want: Request},
+		{name: "j advances", start: Global, key: helpKeyPress('j', "j"), want: Sidebar},
+		{name: "k moves backward", start: Response, key: helpKeyPress('k', "k"), want: Request},
 		// Wraps past index 5 (the Import help group, the last of our 6
 		// contextual groups - see keybindings.KeyMap.GetKeyGroups), not
 		// Response - main only has the first 4 groups (Global/Sidebar/
 		// Request/Response); ours adds Groups and Import.
-		{name: "l wraps", start: TabIndex(5), key: helpKeyPress('l', "l"), want: Global},
-		{name: "h wraps", start: Global, key: helpKeyPress('h', "h"), want: TabIndex(5)},
+		{name: "j wraps", start: TabIndex(5), key: helpKeyPress('j', "j"), want: Global},
+		{name: "k wraps", start: Global, key: helpKeyPress('k', "k"), want: TabIndex(5)},
 		{name: "one selects global", start: Response, key: helpKeyPress('1', "1"), want: Global},
 		{name: "two selects sidebar", start: Global, key: helpKeyPress('2', "2"), want: Sidebar},
 		{name: "three selects request", start: Global, key: helpKeyPress('3', "3"), want: Request},
@@ -39,6 +40,47 @@ func TestHelpTabNavigationKeys(t *testing.T) {
 				t.Fatalf("active tab = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHelpAndSettingsUseTopLevelHorizontalNavigation(t *testing.T) {
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+
+	pane, _ = pane.Update(helpKeyPress('l', "l"))
+	if pane.ActiveSurface() != SurfaceSettings {
+		t.Fatalf("l selected surface %d, want settings", pane.ActiveSurface())
+	}
+
+	pane, _ = pane.Update(helpKeyPress('h', "h"))
+	if pane.ActiveSurface() != SurfaceHelp {
+		t.Fatalf("h selected surface %d, want help", pane.ActiveSurface())
+	}
+}
+
+func TestSettingsPreviewSaveAndCancel(t *testing.T) {
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane.SetThemeOptions([]ThemeOption{
+		{Name: "Default", Source: "default", Theme: design.DefaultTheme()},
+		{Name: "Adaptive", Source: "adaptive", Theme: design.AdaptiveTheme(true)},
+	}, "default")
+	pane, _ = pane.Update(helpKeyPress('l', "l"))
+
+	pane, previewCmd := pane.Update(helpKeyPress('j', "j"))
+	preview, ok := previewCmd().(PreviewThemeMsg)
+	if !ok || preview.Source != "adaptive" {
+		t.Fatalf("preview message = %#v, want adaptive", previewCmd())
+	}
+
+	pane, saveCmd := pane.Update(helpKeyPress(tea.KeyEnter, ""))
+	saved, ok := saveCmd().(SaveThemeMsg)
+	if !ok || saved.Source != "adaptive" {
+		t.Fatalf("save message = %#v, want adaptive", saveCmd())
+	}
+
+	pane, _ = pane.Update(helpKeyPress('k', "k"))
+	_, cancelCmd := pane.Update(helpKeyPress('q', "q"))
+	if _, ok := cancelCmd().(CancelThemePreviewMsg); !ok {
+		t.Fatalf("cancel message = %#v", cancelCmd())
 	}
 }
 

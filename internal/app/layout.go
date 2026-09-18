@@ -55,7 +55,10 @@ func calculateLayout(width, height int) terminalLayout {
 
 	if width >= wideTerminalWidth && height >= wideTerminalHeight {
 		layout.mode = layoutWide
-		layout.headerHeight = 8
+		// 9 = 2 border rows + 7 content rows (Header.fullView's 6-row ASCII
+		// logo, plus the separator rule every header frame now appends
+		// below its own content - see internal/ui/header.go).
+		layout.headerHeight = 9
 		layout.statusHeight = 1
 		layout.contentHeight = max(height-layout.headerHeight-layout.statusHeight, 0)
 		layout.sidebarWidth = clamp(width/4, 24, 34)
@@ -66,7 +69,9 @@ func calculateLayout(width, height int) terminalLayout {
 	}
 
 	layout.mode = layoutFocused
-	layout.headerHeight = 3
+	// 4 = 2 border rows + 2 content rows (Header.compressedView/
+	// compactView's one context line plus the separator rule below it).
+	layout.headerHeight = 4
 	layout.tabBarHeight = 1
 	layout.statusHeight = 1
 	layout.contentHeight = max(height-layout.headerHeight-layout.tabBarHeight-layout.statusHeight, 0)

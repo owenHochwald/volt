@@ -45,6 +45,7 @@ type Model struct {
 	zoomedResponse bool
 
 	width, height int
+	startupFrame  int
 
 	loadTestUpdates  <-chan *http.LoadTestStats
 	loadTestCancel   context.CancelFunc
@@ -53,6 +54,8 @@ type Model struct {
 	showGroupsModal  bool
 	showImportModal  bool
 	notification     ui.Notification
+	themeSession     design.ThemeLoadResult
+	themeSessionOpen bool
 	quitArmed        bool
 	quitSequence     uint64
 }

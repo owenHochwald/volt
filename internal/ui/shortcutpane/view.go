@@ -13,20 +13,31 @@ func (m ShortcutPane) View() string {
 		Padding(1, 2).
 		Width(m.width).
 		Height(m.height).
+		MaxWidth(m.width).
+		MaxHeight(m.height).
 		Bold(true)
 
-	title := m.styles.Text.Logo.Render("Keyboard Shortcuts")
+	title := m.styles.Text.Logo.Render("VOLT COMMAND CENTER")
+	surfaceTabs := m.renderSurfaceTabs()
 
-	tabBar := m.renderTabs()
-	content := m.renderShortcutList()
-
-	footer := m.styles.Text.Muted.Render(m.keys.CloseHelp.Help().Key + " " + m.keys.CloseHelp.Help().Desc)
+	content := m.renderSettings()
+	footerText := "h/l section • j/k select • enter save • esc cancel"
+	if m.surface == SurfaceHelp {
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.renderTabs(),
+			"",
+			m.renderShortcutList(),
+		)
+		footerText = "h/l section • j/k category • 1-4 jump • q/? close"
+	}
+	footer := m.styles.Text.Muted.Render(footerText)
 
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
 		"",
-		tabBar,
+		surfaceTabs,
 		"",
 		content,
 		"",
