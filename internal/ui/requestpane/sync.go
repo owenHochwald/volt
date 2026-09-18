@@ -70,15 +70,25 @@ func (m *RequestPane) syncRequest() {
 	// Request.Body with the garbage result) on every send attempt,
 	// regardless of what was actually typed into the array's fields.
 	if len(m.BodyParams) == 0 && len(m.ArrayParams) == 0 {
-		bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
-		jsonData, err := json.Marshal(bodyMap)
-		if err != nil {
-			m.ParseErrors = append(m.ParseErrors, "JSON marshal error: "+err.Error())
-			m.Request.Body = "{}" // Set to valid empty JSON
+		// A blank Body textarea - typical of a request whose schema (or
+		// lack of one) declares no body at all, e.g. an imported GET/
+		// bodyless endpoint - must stay a genuinely bodyless request
+		// (Request.Body == "") rather than turning into a real "{}" JSON
+		// object body on every tick just because ParseKeyValuePairs/
+		// json.Marshal of an empty map happens to produce one.
+		if strings.TrimSpace(m.Body.Value()) == "" {
+			m.Request.Body = ""
 		} else {
-			m.Request.Body = string(jsonData)
-			for _, e := range bodyErrors {
-				m.ParseErrors = append(m.ParseErrors, "body: "+e)
+			bodyMap, bodyErrors := utils.ParseKeyValuePairs(m.Body.Value())
+			jsonData, err := json.Marshal(bodyMap)
+			if err != nil {
+				m.ParseErrors = append(m.ParseErrors, "JSON marshal error: "+err.Error())
+				m.Request.Body = "{}" // Set to valid empty JSON
+			} else {
+				m.Request.Body = string(jsonData)
+				for _, e := range bodyErrors {
+					m.ParseErrors = append(m.ParseErrors, "body: "+e)
+				}
 			}
 		}
 	}

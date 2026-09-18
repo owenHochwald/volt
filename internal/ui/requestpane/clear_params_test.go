@@ -8,17 +8,23 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
-// TestRequestPane_ClearParamValues_ResetsFieldsButKeepsIdentity is a
+// TestRequestPane_ClearParamValues_ProducesACleanSchemaLessRequest is a
 // regression test for a real feature request: ctrl+x ("clear params")
-// must discard whatever was typed into path/body/array fields while
-// preserving the request's own identity (ID/name/URL/method/schema) -
-// unlike ctrl+r (ResetRequest), which replaces the whole request.
-func TestRequestPane_ClearParamValues_ResetsFieldsButKeepsIdentity(t *testing.T) {
+// must wipe a request back to a clean, schema-less, group/server-less
+// slate - URL/Headers/Body, every path/body/array param and its schema,
+// and its group/server association - while preserving only the request's
+// own identity (ID/name/method), so re-saving overwrites the same row
+// instead of creating a new one. Unlike ctrl+r (ResetRequest), which
+// replaces the whole request (including its ID/name), this keeps editing
+// the *same* request, just emptied out.
+func TestRequestPane_ClearParamValues_ProducesACleanSchemaLessRequest(t *testing.T) {
 	pane, _ := setupTestPane(t)
 
 	body := schemaBody(t, map[string]http.BodyFieldSchema{
 		"name": {Type: "string"},
 	})
+	groupID := int64(3)
+	serverID := int64(9)
 	req := &http.Request{
 		ID:      7,
 		Name:    "getHost",
@@ -29,6 +35,8 @@ func TestRequestPane_ClearParamValues_ResetsFieldsButKeepsIdentity(t *testing.T)
 		PathParamSchema: map[string]http.BodyFieldSchema{
 			"host_id": {Type: "integer"},
 		},
+		GroupID:  &groupID,
+		ServerID: &serverID,
 	}
 	pane.reinitRequestPane(req)
 	pane.PathParams[0].Input.SetValue("42")
@@ -39,20 +47,26 @@ func TestRequestPane_ClearParamValues_ResetsFieldsButKeepsIdentity(t *testing.T)
 	if pane.Request.ID != 7 || pane.Request.Name != "getHost" || pane.Request.Method != http.POST {
 		t.Errorf("expected the request's identity to survive a clear, got %+v", pane.Request)
 	}
-	if pane.Request.URL != req.URL {
-		t.Errorf("expected URL to survive a clear, got %q", pane.Request.URL)
+	if pane.Request.URL != "" {
+		t.Errorf("expected URL cleared to blank, got %q", pane.Request.URL)
 	}
-	if len(pane.PathParams) != 1 || pane.PathParams[0].Value() != "" {
-		t.Errorf("expected host_id cleared back to blank, got %+v", pane.PathParams)
+	if pane.Request.GroupID != nil || pane.Request.ServerID != nil {
+		t.Errorf("expected group/server association cleared, got group=%v server=%v", pane.Request.GroupID, pane.Request.ServerID)
 	}
-	if len(pane.BodyParams) != 1 || pane.BodyParams[0].Value() != "" {
-		t.Errorf("expected name cleared back to blank, got %+v", pane.BodyParams)
+	if pane.ShowServerSelector() {
+		t.Error("expected the server selector hidden for an ungrouped, cleared request")
+	}
+	if len(pane.PathParams) != 0 {
+		t.Errorf("expected no path params left (URL/schema cleared), got %+v", pane.PathParams)
+	}
+	if len(pane.BodyParams) != 0 {
+		t.Errorf("expected no body params left (body/schema cleared), got %+v", pane.BodyParams)
 	}
 }
 
 // TestRequestPane_ClearParams_Keybinding verifies ctrl+x reaches
 // clearParamValues through the normal Update path (not just called
-// directly), and that fields are reachable via the focus cycle afterward.
+// directly).
 func TestRequestPane_ClearParams_Keybinding(t *testing.T) {
 	pane, _ := setupTestPane(t)
 	pane.PanelFocused = true
@@ -63,8 +77,11 @@ func TestRequestPane_ClearParams_Keybinding(t *testing.T) {
 	pane.BodyParams[0].Input.SetValue("widget-1")
 
 	result, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'x', Mod: tea.ModCtrl}))
-	if len(result.BodyParams) != 1 || result.BodyParams[0].Value() != "" {
-		t.Errorf("expected ctrl+x to clear the body param, got %+v", result.BodyParams)
+	if len(result.BodyParams) != 0 {
+		t.Errorf("expected ctrl+x to clear the body schema/params entirely, got %+v", result.BodyParams)
+	}
+	if result.Request.Body != "" {
+		t.Errorf("expected ctrl+x to clear the body back to blank, got %q", result.Request.Body)
 	}
 }
 
@@ -121,10 +138,14 @@ func TestRequestPane_SaveRequest_PersistsFilledInValues(t *testing.T) {
 
 // TestRequestPane_SaveRequest_AfterClear_PersistsClearedValues verifies
 // the other half of the feature request: saving (ctrl+s) after clearing
-// params (ctrl+x) persists the cleared (empty) state, not the stale
-// filled-in values from before the clear. Save (see db.Save) always
-// inserts a new row rather than updating one in place, so this checks
-// the most recently saved row specifically, not "the only row".
+// params (ctrl+x) persists the cleared (schema-less, group/server-less)
+// state, not the stale filled-in values from before the clear. A cleared
+// request's URL is blank (see clearParamValues) and can't itself be saved
+// (http.Request.Validate rejects an empty URL) - matching a real user
+// clearing the form and then typing in a fresh URL - so this types one in
+// before saving again. Save (see db.Save) always inserts a new row rather
+// than updating one in place, so this checks the most recently saved row
+// specifically, not "the only row".
 func TestRequestPane_SaveRequest_AfterClear_PersistsClearedValues(t *testing.T) {
 	pane, db := setupTestPane(t)
 	pane.PanelFocused = true
@@ -141,6 +162,7 @@ func TestRequestPane_SaveRequest_AfterClear_PersistsClearedValues(t *testing.T) 
 	// Clear, then save again: the cleared (empty) state must be what's
 	// persisted for this second save, not the earlier filled-in value.
 	pane.clearParamValues()
+	pane.URLInput.SetValue("https://api.example.com/cleared")
 	_, cmd2 := pane.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
 	if cmd2 == nil {
 		t.Fatal("expected a non-nil save command")

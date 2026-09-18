@@ -110,15 +110,31 @@ func (m *RequestPane) ApplySnapshot(request *http.Request) {
 	m.reinitRequestPane(request)
 }
 
-// clearParamValues resets every path/body/array param back to its
-// schema's own defaults, discarding anything the user typed over them -
-// bound to ClearParams ("ctrl+x"). Unlike ResetRequest ("ctrl+r", which
-// replaces the whole request with a brand new blank one), this keeps the
-// request's own identity (schema/URL/method/name) and only clears its
-// *values* - e.g. to start filling a form over from scratch, or to save
-// it back without whatever was typed in before (see SaveRequest).
+// clearParamValues wipes the request back to a clean, schema-less slate -
+// URL/Headers/Body, every path/body/array param and its schema, and its
+// Group/Server association - bound to ClearParams ("ctrl+x"). Unlike
+// ResetRequest ("ctrl+r", which replaces the whole request with a brand
+// new blank one, also dropping which saved/imported request this even
+// was), this keeps the request's own identity (ID/name/method) so
+// re-saving (ctrl+s) overwrites the same row instead of creating a new
+// one - it's "start this request over from scratch", not "start over with
+// a different request".
+//
+// A cleared request can't stay tied to an imported schema (its Body/URL
+// templates and PathParamSchema all go, so ShowRequiredErrors/
+// extractBodySpecs/syncPathParams naturally derive zero structured
+// fields) or to a group (GroupID cleared) - and a request with no group
+// has nothing to offer a server from (see ShowServerSelector/
+// rebuildServerSelector), so ServerID is cleared alongside it rather than
+// left pointing at a server the UI no longer even shows a way to change.
 func (m *RequestPane) clearParamValues() {
 	req := *m.Request
 	req.ParamValues = http.ParamValues{}
+	req.Headers = nil
+	req.Body = ""
+	req.URL = ""
+	req.PathParamSchema = nil
+	req.GroupID = nil
+	req.ServerID = nil
 	m.reinitRequestPane(&req)
 }
