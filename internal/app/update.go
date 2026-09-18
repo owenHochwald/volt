@@ -10,6 +10,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/groupspane"
 	"github.com/owenHochwald/Volt/internal/ui/importpane"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -51,6 +52,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if m.themeSource == "adaptive" {
+			m.applyTheme(design.AdaptiveTheme(msg.IsDark()), "adaptive")
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		if keybindings.Matches(msg, m.keys.ForceQuit) {
 			if m.loadTestCancel != nil {

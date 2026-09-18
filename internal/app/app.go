@@ -119,6 +119,9 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.themeSource == "adaptive" {
+		return tea.Batch(m.sidebarPane.Init(), tea.RequestBackgroundColor)
+	}
 	return m.sidebarPane.Init()
 }
 
