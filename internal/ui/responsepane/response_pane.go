@@ -91,11 +91,16 @@ type ResponsePane struct {
 	searchOrigin searchSnapshot
 
 	// gPending/gotoLineBuffer implement vim/less-style "gg" (go to top) and
-	// "{n}g" (go to line n) - see navigation.go. gPending is armed by a
+	// "g{n}g" (go to line n) - see navigation.go. gPending is armed by a
 	// bare "g" keypress (see GotoTop) and cleared by whatever key resolves
-	// or cancels the sequence.
+	// or cancels the sequence, or after gotoSequenceTimeout of inactivity
+	// (see gotoSequence) - otherwise a "g" the user forgot about (or
+	// walked away after) would silently keep digit keys captured as a
+	// goto-line buffer indefinitely instead of switching tabs the way
+	// ActionDirectTab normally would.
 	gPending       bool
 	gotoLineBuffer string
+	gotoSequence   uint64
 
 	// bodyStyleName is the chroma style used for the Body (and sent-
 	// request) tab's pretty rendering (see formatContentByType) -

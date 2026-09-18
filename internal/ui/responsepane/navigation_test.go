@@ -77,8 +77,10 @@ func TestResponsePane_G_ScrollsToBottom(t *testing.T) {
 }
 
 // TestResponsePane_GotoLine_JumpsToLineNumber is a regression test for a
-// real feature request: typing a line number then "g" (e.g. "12g") should
-// jump to that line, vim/less-style.
+// real feature request: "g", then a line number, then "g" again (e.g.
+// "g12g") should jump to that line, vim/less-style. The leading "g"
+// matters - without it, digits are ActionDirectTab's own tab-jump
+// instead (see ActionGotoLine's own key hint, "g{n}g", not "{n}g").
 func TestResponsePane_GotoLine_JumpsToLineNumber(t *testing.T) {
 	pane := setupPaneWithLines(t, 200)
 
@@ -120,5 +122,76 @@ func TestResponsePane_GotoSequence_CancelledByUnrelatedKey(t *testing.T) {
 	}
 	if result.viewport.YOffset() == 0 {
 		t.Error("expected \"j\" to still scroll down after cancelling the sequence")
+	}
+}
+
+// TestResponsePane_GotoSequence_ExpiresAfterInactivity is a regression
+// test for a real feature request: a "g" pressed and then forgotten about
+// (no follow-up key at all, not even an unrelated one - see
+// TestResponsePane_GotoSequence_CancelledByUnrelatedKey for that case)
+// must eventually let go of digit keys on its own, or they'd stay
+// captured as a goto-line buffer indefinitely instead of switching tabs
+// (see ActionDirectTab) the next time the user reaches for one.
+func TestResponsePane_GotoSequence_ExpiresAfterInactivity(t *testing.T) {
+	pane := setupPaneWithLines(t, 200)
+
+	model, cmd := pane.Update(keyRunes("g"))
+	armed := mustResponsePane(t, model)
+	if !armed.gPending {
+		t.Fatal("expected \"g\" to arm gPending")
+	}
+	if cmd == nil {
+		t.Fatal("expected \"g\" to schedule an expiry timeout")
+	}
+
+	// Deliver the expiry directly with the sequence armGotoTimeout
+	// actually armed, rather than calling cmd() - a real tea.Tick command
+	// blocks for the full gotoSequenceTimeout before returning its
+	// message, which would make this test take 3 real seconds for no
+	// reason.
+	model, _ = armed.Update(gotoSequenceExpiredMsg{sequence: armed.gotoSequence})
+	result := mustResponsePane(t, model)
+	if result.gPending {
+		t.Error("expected the sequence to expire after inactivity")
+	}
+}
+
+// TestResponsePane_GotoSequence_StaleExpiryIgnoredAfterResolving verifies
+// a *stale* expiry (scheduled by an earlier keystroke in a sequence
+// that's since resolved, e.g. "gg", or been re-armed by a later digit)
+// doesn't cancel a sequence it no longer applies to - otherwise typing
+// "g" then quickly "1" then waiting could have the *first* keystroke's
+// timer fire and cancel what the "1" already re-armed.
+func TestResponsePane_GotoSequence_StaleExpiryIgnoredAfterResolving(t *testing.T) {
+	pane := setupPaneWithLines(t, 200)
+
+	model, cmd := pane.Update(keyRunes("g"))
+	armed := mustResponsePane(t, model)
+	if cmd == nil {
+		t.Fatal("expected \"g\" to schedule an expiry timeout")
+	}
+	// The stale message this first "g" would eventually deliver, built
+	// directly rather than by calling cmd() - see
+	// TestResponsePane_GotoSequence_ExpiresAfterInactivity for why.
+	staleMsg := gotoSequenceExpiredMsg{sequence: armed.gotoSequence}
+
+	model, _ = armed.Update(keyRunes("g")) // resolves "gg" - gPending clears
+	resolved := mustResponsePane(t, model)
+	if resolved.gPending {
+		t.Fatal("test setup error: expected \"gg\" to resolve the sequence")
+	}
+
+	// A new "g" press re-arms gPending (a new, independent sequence) -
+	// the stale expiry from the *first* "g" must not cancel it.
+	model, _ = resolved.Update(keyRunes("g"))
+	rearmed := mustResponsePane(t, model)
+	if !rearmed.gPending {
+		t.Fatal("test setup error: expected the second \"g\" to re-arm gPending")
+	}
+
+	model, _ = rearmed.Update(staleMsg)
+	result := mustResponsePane(t, model)
+	if !result.gPending {
+		t.Error("expected a stale expiry to leave the current sequence armed")
 	}
 }

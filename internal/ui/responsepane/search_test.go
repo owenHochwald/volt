@@ -266,7 +266,7 @@ func TestResponsePane_SearchNextFromPosition_ContinuesWhenMatchStillVisible(t *t
 // TestResponsePane_SearchNextFromPosition_UnaffectedByOrdinaryScroll is a
 // regression test for a real bug: an ordinary small scroll (j/k,
 // pgup/pgdn) that never actually scrolls the remembered match out of
-// view was still treated the same as a real jump elsewhere (gg/G/{n}g) -
+// view was still treated the same as a real jump elsewhere (gg/G/g{n}g) -
 // re-anchoring "N"/"P" to wherever the view happened to be nudged to,
 // instead of recognizing the match was still on screen and just
 // continuing from it like "n"/"b" would.

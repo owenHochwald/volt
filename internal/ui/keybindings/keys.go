@@ -74,7 +74,7 @@ type KeyMap struct {
 	// the *last search move* (a search, "n", "b", "N", or "P") left off.
 	// SearchNextFromPosition/SearchPrevFromPosition ("N"/"P") do the same
 	// forward/backward search, but relative to wherever the view is
-	// currently scrolled to instead - e.g. after "gg"/"G"/"{n}g" moved the
+	// currently scrolled to instead - e.g. after "gg"/"G"/"g{n}g" moved the
 	// view somewhere the remembered match sequence knows nothing about.
 	SearchResponse         key.Binding
 	SearchNext             key.Binding

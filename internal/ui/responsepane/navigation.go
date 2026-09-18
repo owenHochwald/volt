@@ -1,6 +1,29 @@
 package responsepane
 
-import "strconv"
+import (
+	"strconv"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// gotoSequenceTimeout is how long a "g{n}g" sequence stays armed with no
+// follow-up keystroke before it's cancelled on its own (see
+// gotoSequenceExpiredMsg) - long enough to type a multi-digit line number
+// without rushing, short enough that walking away after an accidental or
+// half-finished "g" doesn't leave digit keys captured indefinitely
+// instead of switching tabs (see ActionDirectTab).
+const gotoSequenceTimeout = 3 * time.Second
+
+// gotoSequenceExpiredMsg cancels a "g{n}g" sequence after gotoSequenceTimeout
+// of inactivity - sequence is compared against ResponsePane.gotoSequence
+// (bumped by every armGotoTimeout call) so a stale timeout from an earlier
+// keystroke in the same sequence can't cancel a *later* one that reset the
+// clock, the same debounce pattern app.Model's own quit-confirmation
+// sequence uses (see armQuit/quitSequenceExpiredMsg).
+type gotoSequenceExpiredMsg struct {
+	sequence uint64
+}
 
 // scrollToLine centers line (0-based) in the viewport when possible,
 // rather than placing it flush against the very top edge - used by both
@@ -16,7 +39,7 @@ func (m *ResponsePane) scrollToLine(line int) {
 // isLineVisible reports whether line (0-based) is within the viewport's
 // currently visible range - used by jumpToNearestMatch (see search.go) to
 // tell an ordinary scroll (j/k, pgup/pgdn - the previously found match
-// stays on screen) apart from a real jump elsewhere (gg/G/{n}g - it
+// stays on screen) apart from a real jump elsewhere (gg/G/g{n}g - it
 // doesn't).
 func (m *ResponsePane) isLineVisible(line int) bool {
 	top := m.viewport.YOffset()
@@ -26,11 +49,27 @@ func (m *ResponsePane) isLineVisible(line int) bool {
 
 // beginGoto arms gPending on a bare "g" keypress (see GotoTop) - the next
 // keystroke decides what happens: another "g" goes straight to the top
-// ("gg"), digits are buffered (see continueGoto) toward a "{n}g" jump to
-// that line, and anything else cancels.
-func (m *ResponsePane) beginGoto() {
+// ("gg"), digits are buffered (see continueGoto) toward a "g{n}g" jump to
+// that line, and anything else cancels. Also arms the inactivity timeout
+// (see armGotoTimeout) that cancels the sequence on its own if nothing
+// follows within gotoSequenceTimeout.
+func (m *ResponsePane) beginGoto() tea.Cmd {
 	m.gPending = true
 	m.gotoLineBuffer = ""
+	return m.armGotoTimeout()
+}
+
+// armGotoTimeout schedules gotoSequenceExpiredMsg after gotoSequenceTimeout,
+// bumping gotoSequence first so only *this* call's timeout can act on
+// arrival - called by beginGoto and, on every digit typed, by continueGoto,
+// so the clock resets while actively typing a line number instead of
+// expiring partway through.
+func (m *ResponsePane) armGotoTimeout() tea.Cmd {
+	m.gotoSequence++
+	sequence := m.gotoSequence
+	return tea.Tick(gotoSequenceTimeout, func(time.Time) tea.Msg {
+		return gotoSequenceExpiredMsg{sequence: sequence}
+	})
 }
 
 // continueGoto handles a keystroke while gPending is armed. It reports
@@ -38,7 +77,7 @@ func (m *ResponsePane) beginGoto() {
 // sequence was cancelled and key should fall through to Update's normal
 // handling instead (so, e.g., "g" then an unrelated key like "j" still
 // scrolls down rather than silently doing nothing).
-func (m *ResponsePane) continueGoto(key string) (consumed bool) {
+func (m *ResponsePane) continueGoto(key string) (cmd tea.Cmd, consumed bool) {
 	switch {
 	case key == "g":
 		if m.gotoLineBuffer != "" {
@@ -48,7 +87,7 @@ func (m *ResponsePane) continueGoto(key string) (consumed bool) {
 		}
 		m.gPending = false
 		m.gotoLineBuffer = ""
-		return true
+		return nil, true
 
 	case len(key) == 1 && key[0] >= '0' && key[0] <= '9':
 		// Capped well past any realistic response body's line count -
@@ -57,12 +96,12 @@ func (m *ResponsePane) continueGoto(key string) (consumed bool) {
 		if len(m.gotoLineBuffer) < 9 {
 			m.gotoLineBuffer += key
 		}
-		return true
+		return m.armGotoTimeout(), true
 
 	default:
 		m.gPending = false
 		m.gotoLineBuffer = ""
-		return false
+		return nil, false
 	}
 }
 

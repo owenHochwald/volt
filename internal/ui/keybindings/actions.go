@@ -236,10 +236,12 @@ func DefaultRegistry() Registry {
 		{ActionSearchPrevFromPos, []Context{ContextResponse}, []string{"P"}, "P", "previous match from here", 39},
 		{ActionGotoTop, []Context{ContextResponse}, []string{"g"}, "gg", "go to top", 38},
 		{ActionGotoBottom, []Context{ContextResponse}, []string{"G"}, "G", "go to bottom", 37},
-		// GotoLine has no keystroke of its own to match on - typing digits
-		// right after "g" (see ActionGotoTop) is what actually triggers it
-		// (see ResponsePane.gPending) - this exists purely so it's listed.
-		{ActionGotoLine, []Context{ContextResponse}, nil, "{n}g", "go to line n", 36},
+		// GotoLine has no keystroke of its own to match on - typing "g"
+		// (see ActionGotoTop) first, then digits, then "g" again is what
+		// actually triggers it (see ResponsePane.gPending) - this exists
+		// purely so it's listed. The leading "g" matters: without it,
+		// digits are ActionDirectTab's own tab-jump instead.
+		{ActionGotoLine, []Context{ContextResponse}, nil, "g{n}g", "go to line n", 36},
 
 		{ActionCloseGroups, []Context{ContextGroups}, []string{"q", "esc"}, "q/esc", "close", 80},
 		{ActionCreateItem, []Context{ContextGroups}, []string{"n"}, "n", "new", 70},

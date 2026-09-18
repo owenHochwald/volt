@@ -210,7 +210,7 @@ func (m *ResponsePane) advanceSearchMatch(delta int) {
 // remembered match (searchMatchIdx) is still visible on screen - an
 // ordinary scroll (j/k, pgup/pgdn) that never actually scrolled it out of
 // view - it behaves exactly like "n"/"b", just continuing from there.
-// Only once it's no longer visible (a real jump elsewhere - gg/G/{n}g)
+// Only once it's no longer visible (a real jump elsewhere - gg/G/g{n}g)
 // does it re-anchor to wherever the viewport is *currently* scrolled to
 // instead of picking up wherever that earlier search left off.
 // forward=true searches down from the current position (wrapping to the

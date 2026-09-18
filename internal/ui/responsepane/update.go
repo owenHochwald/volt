@@ -33,6 +33,13 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case gotoSequenceExpiredMsg:
+		if m.gPending && msg.sequence == m.gotoSequence {
+			m.gPending = false
+			m.gotoLineBuffer = ""
+		}
+		return m, nil
+
 	case SaveResponseBodyMsg:
 		if msg.Err != nil {
 			m.saveStatusMsg = fmt.Sprintf("failed to save: %v", msg.Err)
@@ -65,17 +72,16 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 			return m.handleStylePickerKey(msg)
 		}
 
-		// gg (go to top) / {n}g (go to line n) - see navigation.go. Armed
+		// gg (go to top) / g{n}g (go to line n) - see navigation.go. Armed
 		// by a bare "g" below; while armed, every key either continues the
 		// sequence or cancels it and falls through to be handled normally.
 		if m.gPending {
-			if m.continueGoto(msg.String()) {
-				return m, nil
+			if gotoCmd, consumed := m.continueGoto(msg.String()); consumed {
+				return m, gotoCmd
 			}
 		}
 		if keybindings.Matches(msg, m.keys.GotoTop) {
-			m.beginGoto()
-			return m, nil
+			return m, m.beginGoto()
 		}
 		if keybindings.Matches(msg, m.keys.GotoBottom) {
 			m.viewport.GotoBottom()
