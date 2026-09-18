@@ -62,7 +62,12 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	if keybindings.Matches(msg, m.keys.CloseGroups) {
 		return m, closeCmd
 	}
-	if keybindings.Matches(msg, m.keys.NextTab) || keybindings.Matches(msg, m.keys.PrevTab) {
+	// Plain "tab" (not h/l - see footerHint below) switches between the
+	// Groups and Servers lists: h/l are reserved by the embedding
+	// shortcutpane for switching between its Help/Settings/Groups surfaces
+	// (see shortcutpane/update.go), so this pane can't also claim them for
+	// its own internal list switch without colliding.
+	if msg.String() == "tab" {
 		if m.target == focusGroups {
 			m.target = focusServers
 		} else {

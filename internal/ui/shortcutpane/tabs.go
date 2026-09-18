@@ -15,7 +15,7 @@ const (
 type TabIndex int
 
 func (m ShortcutPane) renderSurfaceTabs() string {
-	tabs := []string{"HELP", "SETTINGS"}
+	tabs := []string{"HELP", "SETTINGS", "GROUPS"}
 	rendered := make([]string, 0, len(tabs))
 	for index, tab := range tabs {
 		if Surface(index) == m.surface {

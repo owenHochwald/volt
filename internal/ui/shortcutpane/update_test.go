@@ -31,7 +31,7 @@ func TestHelpTabNavigationKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+			pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 			pane.activeTab = int(tt.start)
 
 			updated, _ := pane.Update(tt.key)
@@ -44,7 +44,7 @@ func TestHelpTabNavigationKeys(t *testing.T) {
 }
 
 func TestHelpAndSettingsUseTopLevelHorizontalNavigation(t *testing.T) {
-	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 
 	pane, _ = pane.Update(helpKeyPress('l', "l"))
 	if pane.ActiveSurface() != SurfaceSettings {
@@ -58,7 +58,7 @@ func TestHelpAndSettingsUseTopLevelHorizontalNavigation(t *testing.T) {
 }
 
 func TestSettingsPreviewSaveAndCancel(t *testing.T) {
-	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 	pane.SetThemeOptions([]ThemeOption{
 		{Name: "Default", Source: "default", Theme: design.DefaultTheme()},
 		{Name: "Adaptive", Source: "adaptive", Theme: design.AdaptiveTheme(true)},

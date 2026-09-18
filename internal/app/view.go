@@ -26,8 +26,6 @@ func (m Model) View() tea.View {
 	switch {
 	case m.showHelpModal:
 		content = m.overlayHelpModal()
-	case m.showGroupsModal:
-		content = m.overlayModal(m.groupsPane.View())
 	case m.showImportModal:
 		content = m.overlayModal(m.importPane.View())
 	}

@@ -174,6 +174,17 @@ func (m *GroupsPane) reload() {
 	m.servers.Title = fmt.Sprintf("Servers (%d)", len(serverItems))
 }
 
+// IsEditing reports whether a create/rename/edit form is currently
+// capturing keystrokes, as opposed to browsing the groups/servers lists.
+// Used by the embedding shortcutpane (see shortcutpane/update.go) to decide
+// whether a global key (the surface switch, the whole-modal close) should
+// intercept a keypress, or let it reach the focused field untouched -
+// otherwise typing e.g. "h" or "q" into a name field would be swallowed as
+// a surface switch or a close instead of the literal character.
+func (m GroupsPane) IsEditing() bool {
+	return m.mode != modeBrowse
+}
+
 func (m *GroupsPane) SetFocused(focused bool) {
 	m.Focused = focused
 }

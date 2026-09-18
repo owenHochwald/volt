@@ -112,8 +112,6 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	m.headerPane.SetSize(layout.width, layout.mode != layoutWide)
 	m.shortcutPane.SetWidth(layout.modalWidth)
 	m.shortcutPane.SetHeight(layout.modalHeight)
-	m.groupsPane.SetWidth(layout.modalWidth)
-	m.groupsPane.SetHeight(layout.modalHeight)
 	m.importPane.SetWidth(layout.modalWidth)
 	m.importPane.SetHeight(layout.modalHeight)
 

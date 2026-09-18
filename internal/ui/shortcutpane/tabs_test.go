@@ -13,7 +13,7 @@ import (
 func TestHelpTabLabelsFollowConfiguredBinding(t *testing.T) {
 	keys := keybindings.DefaultKeyMap()
 	keys.DirectHelpTab = key.NewBinding(key.WithKeys("a", "b", "c", "d"))
-	pane := SetupShortcutPane(keys)
+	pane := SetupShortcutPane(keys, nil)
 
 	rendered := pane.renderTabs()
 	for _, expected := range []string{"[a] Global", "[b] Sidebar", "[c] Request", "[d] Response"} {
@@ -24,7 +24,7 @@ func TestHelpTabLabelsFollowConfiguredBinding(t *testing.T) {
 }
 
 func TestHelpDoesNotWrapLongRegistryKeys(t *testing.T) {
-	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 	pane.SetWidth(72)
 	pane.SetHeight(30)
 	pane.SetContext(keybindings.ContextRequest)
@@ -65,7 +65,7 @@ func TestReferencePanelShowsCurrentRegistryBindings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+			pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 			pane.SetWidth(100)
 			pane.SetHeight(30)
 			pane.SetContext(tt.context)
@@ -81,7 +81,7 @@ func TestReferencePanelShowsCurrentRegistryBindings(t *testing.T) {
 }
 
 func TestSettingsShowsThemesAndSemanticPreview(t *testing.T) {
-	pane := SetupShortcutPane(keybindings.DefaultKeyMap())
+	pane := SetupShortcutPane(keybindings.DefaultKeyMap(), nil)
 	pane.SetWidth(72)
 	pane.SetHeight(30)
 	pane.SetThemeOptions([]ThemeOption{

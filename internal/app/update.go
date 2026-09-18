@@ -66,7 +66,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
+		noModalOpen := !m.showHelpModal && !m.showImportModal
 
 		if keybindings.Matches(msg, m.keys.Quit) {
 			if m.showHelpModal {
@@ -116,18 +116,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Handle ctrl+g to toggle the groups & servers manager. Unlike '?',
-		// this doesn't collide with typing, so it works from any panel.
+		// Handle ctrl+g to jump straight into the Command Center's Groups
+		// surface. Unlike '?', this doesn't collide with typing, so it
+		// works from any panel.
 		if keybindings.Matches(msg, m.keys.OpenGroups) && noModalOpen {
-			m.showGroupsModal = true
-			m.groupsPane.Open()
+			m.openGroups()
 			return m, nil
-		}
-
-		// If the groups modal is open, route ALL messages to it
-		if m.showGroupsModal {
-			m.groupsPane, cmd = m.groupsPane.Update(msg)
-			return m, cmd
 		}
 
 		// Handle ctrl+i to toggle the OpenAPI import dialog. Unlike '?',
@@ -206,8 +200,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case groupspane.CloseGroupsModalMsg:
-		m.showGroupsModal = false
-		m.groupsPane.SetFocused(false)
+		// The Groups surface's own q/esc closes the whole Command Center
+		// now that it's hosted inside shortcutPane rather than a separate
+		// modal (see openGroups/ShortcutPane.SetSurface).
+		m.closeHelp()
 		// Group renames/assignments made in the modal only take effect in
 		// the sidebar's "[group] ..." labels once requests are reloaded.
 		return m, ui.LoadRequestsCmd(m.db)
@@ -407,7 +403,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Existing panel update routing (only when no modal is open)
-	if !m.showHelpModal && !m.showGroupsModal && !m.showImportModal {
+	if !m.showHelpModal && !m.showImportModal {
 		if m.focusedPanel == utils.SidebarPanel {
 			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd

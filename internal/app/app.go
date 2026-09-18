@@ -9,7 +9,6 @@ import (
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/design"
-	"github.com/owenHochwald/Volt/internal/ui/groupspane"
 	"github.com/owenHochwald/Volt/internal/ui/importpane"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ui/requestpane"
@@ -30,7 +29,6 @@ type Model struct {
 	responsePane *responsepane.ResponsePane
 	headerPane   *ui.Header
 	shortcutPane shortcutpane.ShortcutPane
-	groupsPane   groupspane.GroupsPane
 	importPane   importpane.ImportPane
 
 	savedRequests []http.Request
@@ -51,7 +49,6 @@ type Model struct {
 	loadTestCancel   context.CancelFunc
 	loadTestCanceled bool
 	showHelpModal    bool
-	showGroupsModal  bool
 	showImportModal  bool
 	notification     ui.Notification
 	themeSession     design.ThemeLoadResult
@@ -72,8 +69,7 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	theme := appearance.Theme
 	styles := design.NewStyles(theme)
 	responsePane := responsepane.SetupResponsePane(db, keys, styles)
-	shortcutPane := shortcutpane.SetupShortcutPane(keys, styles)
-	groupsPane := groupspane.SetupGroupsPane(db, keys)
+	shortcutPane := shortcutpane.SetupShortcutPane(keys, db, styles)
 	importPane := importpane.SetupImportPane(db, keys)
 	requestPane := requestpane.SetupRequestPane(db, keys, styles)
 
@@ -102,7 +98,6 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 		requestPane:   requestPane,
 		responsePane:  &responsePane,
 		shortcutPane:  shortcutPane,
-		groupsPane:    groupsPane,
 		importPane:    importPane,
 		focusedPanel:  focusedPanel,
 		headerPane:    ui.SetupHeader(buildinfo.Version(), styles),

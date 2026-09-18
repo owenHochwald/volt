@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -53,6 +54,23 @@ func (m *Model) openHelp(context keybindings.Context) {
 	m.shortcutPane.SetThemeOptions(m.settingsThemeOptions(), m.themeSource)
 	m.shortcutPane.BeginSession()
 	m.shortcutPane.SetContext(context)
+	m.shortcutPane.SetFocused(true)
+}
+
+// openGroups opens the Command Center directly onto its Groups surface -
+// the same modal openHelp opens, just landing somewhere other than Help.
+// Kept as ctrl+g's binding so muscle memory from the old standalone
+// groups modal still works.
+func (m *Model) openGroups() {
+	m.showHelpModal = true
+	m.themeSession = design.ThemeLoadResult{
+		Theme:  m.theme,
+		Source: m.themeSource,
+	}
+	m.themeSessionOpen = true
+	m.shortcutPane.SetThemeOptions(m.settingsThemeOptions(), m.themeSource)
+	m.shortcutPane.BeginSession()
+	m.shortcutPane.SetSurface(shortcutpane.SurfaceGroups)
 	m.shortcutPane.SetFocused(true)
 }
 

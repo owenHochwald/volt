@@ -20,9 +20,9 @@ func (m ShortcutPane) View() string {
 	title := m.styles.Text.Logo.Render("VOLT COMMAND CENTER")
 	surfaceTabs := m.renderSurfaceTabs()
 
-	content := m.renderSettings()
-	footerText := "h/l section • j/k select • enter save • esc cancel"
-	if m.surface == SurfaceHelp {
+	var content, footerText string
+	switch m.surface {
+	case SurfaceHelp:
 		content = lipgloss.JoinVertical(
 			lipgloss.Left,
 			m.renderTabs(),
@@ -30,6 +30,12 @@ func (m ShortcutPane) View() string {
 			m.renderShortcutList(),
 		)
 		footerText = "h/l section • j/k category • 1-4 jump • q/? close"
+	case SurfaceGroups:
+		content = m.groupsPane.ViewContent()
+		footerText = "h/l section • " + m.groupsPane.FooterHint()
+	default:
+		content = m.renderSettings()
+		footerText = "h/l section • j/k select • enter save • esc cancel"
 	}
 	footer := m.styles.Text.Muted.Render(footerText)
 

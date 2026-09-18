@@ -38,6 +38,23 @@ func (m GroupsPane) View() string {
 		Width(m.width).
 		Height(m.height)
 
+	modalContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		titleStyle.Render("Groups & Servers"),
+		"",
+		m.ViewContent(),
+		hintStyle.Render(m.footerHint()),
+	)
+
+	return modalStyle.Render(modalContent)
+}
+
+// ViewContent renders the pane's browse/form body and status line only,
+// without a title, footer hint, or surrounding border - for embedding
+// inside another modal's own title/tabs/footer chrome (see shortcutpane's
+// Groups surface). View() wraps this same content in its own independent
+// modal for when GroupsPane is shown standalone.
+func (m GroupsPane) ViewContent() string {
 	var body string
 	switch m.mode {
 	case modeCreateGroup:
@@ -73,17 +90,7 @@ func (m GroupsPane) View() string {
 		status = style.Render(m.statusMsg)
 	}
 
-	modalContent := lipgloss.JoinVertical(
-		lipgloss.Left,
-		titleStyle.Render("Groups & Servers"),
-		"",
-		body,
-		"",
-		status,
-		hintStyle.Render(m.footerHint()),
-	)
-
-	return modalStyle.Render(modalContent)
+	return lipgloss.JoinVertical(lipgloss.Left, body, "", status)
 }
 
 func (m GroupsPane) renderBrowse() string {
@@ -142,6 +149,14 @@ func (m GroupsPane) renderAssignServer() string {
 		"",
 		m.servers.View(),
 	)
+}
+
+// FooterHint exposes footerHint for the embedding shortcutpane (see
+// shortcutpane/view.go), whose own footer text needs to track whichever
+// mode-specific hint applies (browse vs. a create/rename/edit form)
+// instead of a single static string.
+func (m GroupsPane) FooterHint() string {
+	return m.footerHint()
 }
 
 func (m GroupsPane) footerHint() string {
