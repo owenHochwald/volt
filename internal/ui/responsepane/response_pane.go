@@ -178,6 +178,17 @@ func (m *ResponsePane) IsPickingStyle() bool {
 	return m.pickingStyle
 }
 
+// IsGotoPending reports whether a "gg"/"g{n}g" sequence (see navigation.go)
+// is currently armed - checked by app/update.go for the same reason as
+// IsSavingToFile/IsSearching/IsPickingStyle: so esc reaches this pane's own
+// Update (see continueGoto's default case) and cancels the sequence
+// instead of the panel-switch/quit-arm swallowing it first, otherwise
+// leaving gPending stuck true (still capturing digit keys as a goto-line
+// buffer) even after focus has moved elsewhere.
+func (m *ResponsePane) IsGotoPending() bool {
+	return m.gPending
+}
+
 func (m *ResponsePane) SetStyles(styles design.Styles) {
 	m.styles = styles
 	if m.isLoadTest {

@@ -222,6 +222,31 @@ func TestEsc_InResponsePanel_ClosesSearchPromptFirst(t *testing.T) {
 	}
 }
 
+// TestEsc_InResponsePanel_CancelsPendingGotoSequenceFirst is the same
+// guard as TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst above, for
+// a pending "g{n}g" sequence (see ResponsePane.IsGotoPending) - esc must
+// reach the response pane's own Update (where continueGoto's default case
+// actually clears gPending) instead of the panel-switch/quit-arm
+// swallowing it first and leaving the sequence stuck armed.
+func TestEsc_InResponsePanel_CancelsPendingGotoSequenceFirst(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.ResponsePanel)
+	model.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
+	model.responsePane.Update(appKeyPress('g', "g", 0))
+	if !model.responsePane.IsGotoPending() {
+		t.Fatal("test setup error: expected 'g' to arm the goto sequence")
+	}
+
+	updated, _ := model.Update(escKeyPress())
+	got := updated.(Model)
+	if got.focusedPanel != utils.ResponsePanel {
+		t.Errorf("expected esc to stay in the response panel while a goto sequence is pending, got %v", got.focusedPanel)
+	}
+	if got.responsePane.IsGotoPending() {
+		t.Error("expected esc to cancel the pending goto sequence")
+	}
+}
+
 func TestPanelNavigationKeySequences(t *testing.T) {
 	tests := []struct {
 		name  string

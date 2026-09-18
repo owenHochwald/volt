@@ -13,7 +13,7 @@ import (
 // without rushing, short enough that walking away after an accidental or
 // half-finished "g" doesn't leave digit keys captured indefinitely
 // instead of switching tabs (see ActionDirectTab).
-const gotoSequenceTimeout = 3 * time.Second
+const gotoSequenceTimeout = 5 * time.Second
 
 // gotoSequenceExpiredMsg cancels a "g{n}g" sequence after gotoSequenceTimeout
 // of inactivity - sequence is compared against ResponsePane.gotoSequence

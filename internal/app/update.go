@@ -88,16 +88,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-			// Esc's own save-to-file/search/style-picker overlays (see
-			// SaveResponseRaw/SearchResponse/PickBodyStyle) take priority
-			// over both the panel switch and quit-arming below - otherwise
-			// esc could never actually cancel any of them, since this would
-			// always intercept it first (it still reaches responsePane.
-			// Update below, via the normal routing at the bottom of this
-			// function, which is what actually closes whichever overlay is
-			// open).
+			// Esc's own save-to-file/search/style-picker/goto-line overlays
+			// (see SaveResponseRaw/SearchResponse/PickBodyStyle/GotoTop)
+			// take priority over both the panel switch and quit-arming
+			// below - otherwise esc could never actually cancel any of
+			// them, since this would always intercept it first (it still
+			// reaches responsePane.Update below, via the normal routing at
+			// the bottom of this function, which is what actually closes
+			// whichever overlay is open).
 			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle())
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsGotoPending())
 			if overlayOpen {
 				m.disarmQuit()
 			} else {
