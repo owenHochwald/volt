@@ -17,9 +17,22 @@ import (
 type searchSnapshot struct {
 	offset    int
 	query     string
-	matches   []int
+	matches   []searchMatch
 	matchIdx  int
 	statusMsg string
+}
+
+// searchMatch is a single occurrence of the search query - a specific
+// span within a specific line, not just "the query appears somewhere on
+// this line" - so a line where the query occurs more than once
+// contributes one searchMatch per occurrence, each independently
+// counted, jumped to, and highlighted (see findSearchMatches/
+// highlightMatches). start/end are byte offsets into that line's
+// ansi.Strip'd plain text (what the search regex actually matches
+// against - see findSearchMatches), not the original ANSI-styled line.
+type searchMatch struct {
+	line       int
+	start, end int
 }
 
 // setViewportContent replaces the viewport's content, keeping currentContent
@@ -148,7 +161,7 @@ func (m *ResponsePane) liveSearch() {
 		return
 	}
 
-	matches := searchMatchLines(m.currentContent, query)
+	matches := findSearchMatches(m.currentContent, query)
 	m.searchQuery = query
 	m.searchMatches = matches
 
@@ -161,8 +174,8 @@ func (m *ResponsePane) liveSearch() {
 
 	m.searchStatusMsg = ""
 	idx := -1
-	for i, line := range matches {
-		if line >= m.searchOrigin.offset {
+	for i, match := range matches {
+		if match.line >= m.searchOrigin.offset {
 			idx = i
 			break
 		}
@@ -171,7 +184,7 @@ func (m *ResponsePane) liveSearch() {
 		idx = 0
 	}
 	m.searchMatchIdx = idx
-	m.scrollToLine(matches[idx])
+	m.scrollToLine(matches[idx].line)
 	m.refreshHighlightedContent()
 }
 
@@ -187,7 +200,7 @@ func (m *ResponsePane) advanceSearchMatch(delta int) {
 		return
 	}
 	m.searchMatchIdx = (m.searchMatchIdx + delta + len(m.searchMatches)) % len(m.searchMatches)
-	m.scrollToLine(m.searchMatches[m.searchMatchIdx])
+	m.scrollToLine(m.searchMatches[m.searchMatchIdx].line)
 	m.refreshHighlightedContent()
 }
 
@@ -207,7 +220,7 @@ func (m *ResponsePane) jumpToNearestMatch(forward bool) {
 		return
 	}
 
-	if m.searchMatchIdx >= 0 && m.searchMatchIdx < len(m.searchMatches) && m.isLineVisible(m.searchMatches[m.searchMatchIdx]) {
+	if m.searchMatchIdx >= 0 && m.searchMatchIdx < len(m.searchMatches) && m.isLineVisible(m.searchMatches[m.searchMatchIdx].line) {
 		delta := 1
 		if !forward {
 			delta = -1
@@ -219,8 +232,8 @@ func (m *ResponsePane) jumpToNearestMatch(forward bool) {
 	pos := m.viewport.YOffset()
 	idx := -1
 	if forward {
-		for i, line := range m.searchMatches {
-			if line >= pos {
+		for i, match := range m.searchMatches {
+			if match.line >= pos {
 				idx = i
 				break
 			}
@@ -230,7 +243,7 @@ func (m *ResponsePane) jumpToNearestMatch(forward bool) {
 		}
 	} else {
 		for i := len(m.searchMatches) - 1; i >= 0; i-- {
-			if m.searchMatches[i] <= pos {
+			if m.searchMatches[i].line <= pos {
 				idx = i
 				break
 			}
@@ -240,7 +253,7 @@ func (m *ResponsePane) jumpToNearestMatch(forward bool) {
 		}
 	}
 	m.searchMatchIdx = idx
-	m.scrollToLine(m.searchMatches[idx])
+	m.scrollToLine(m.searchMatches[idx].line)
 	m.refreshHighlightedContent()
 }
 
@@ -262,87 +275,115 @@ func compileSearchQuery(query string) *regexp.Regexp {
 	return regexp.MustCompile("(?i)" + regexp.QuoteMeta(query))
 }
 
-// searchMatchLines returns the 0-based line indices of content (split on
-// "\n") that match query (see compileSearchQuery). content may carry ANSI
-// escape codes (chroma's syntax highlighting in the pretty body view -
-// see formatContentByType) wrapping individual tokens, which matching
-// against the raw string would otherwise silently miss whenever a match's
-// characters fall under different color spans - stripping them first is
-// what makes search work the same in pretty view as it does in raw.
-func searchMatchLines(content, query string) []int {
+// findSearchMatches returns every occurrence of query (see
+// compileSearchQuery) in content (split on "\n"), in ascending order - a
+// line where the query occurs more than once contributes one searchMatch
+// per occurrence, not one for the whole line, so each is counted, jumped
+// to, and highlighted independently (see highlightMatches). content may
+// carry ANSI escape codes (chroma's syntax highlighting in the pretty
+// body view - see formatContentByType) wrapping individual tokens, which
+// matching against the raw string would otherwise silently miss whenever
+// a match's characters fall under different color spans - stripping them
+// first (into plain, matched against instead of line itself) is what
+// makes search work the same in pretty view as it does in raw. The
+// resulting byte offsets are still only valid against that same plain
+// text - see highlightMatches, which re-derives it the same way to stay
+// in sync.
+func findSearchMatches(content, query string) []searchMatch {
 	if query == "" {
 		return nil
 	}
 	re := compileSearchQuery(query)
 	lines := strings.Split(content, "\n")
-	var matches []int
+	var matches []searchMatch
 	for i, line := range lines {
-		if re.MatchString(ansi.Strip(line)) {
-			matches = append(matches, i)
+		plain := ansi.Strip(line)
+		for _, span := range re.FindAllStringIndex(plain, -1) {
+			matches = append(matches, searchMatch{line: i, start: span[0], end: span[1]})
 		}
 	}
 	return matches
 }
 
 // highlightMatches re-renders content with just the matched query text
-// itself highlighted on every matching line - the current match
-// (matches[currentIdx]) distinctly from the rest, so it's obvious which
-// one "n"/"b" will move away from. Rather than trying to layer a
-// highlight on top of a line's existing ANSI styling (chroma's syntax
-// highlighting embeds its own reset codes throughout, which would keep
-// cutting an outer background right back off), a matching line is
-// re-rendered from its plain (ansi.Strip'd) text - trading that line's
-// syntax coloring for a reliable highlight instead. Only the query's own
-// characters get the background, not the rest of the line around them.
-func highlightMatches(content, query string, matches []int, currentIdx int) string {
+// itself highlighted - the current match (matches[currentIdx]) distinctly
+// from the rest, so it's obvious which one "n"/"b" will move away from,
+// even when it shares a line with other matches. Delegates the actual
+// per-line rendering to highlightLineSpans, which preserves that line's
+// own syntax coloring outside the highlighted spans - only the matched
+// text itself trades its original color for style's flat one.
+func highlightMatches(content, query string, matches []searchMatch, currentIdx int) string {
 	if len(matches) == 0 || query == "" {
 		return content
 	}
-	re := compileSearchQuery(query)
-	currentLine := -1
-	if currentIdx >= 0 && currentIdx < len(matches) {
-		currentLine = matches[currentIdx]
-	}
-	matchSet := make(map[int]bool, len(matches))
-	for _, line := range matches {
-		matchSet[line] = true
+	byLine := make(map[int][]styledSpan, len(matches))
+	for i, match := range matches {
+		style := otherMatchStyle
+		if i == currentIdx {
+			style = currentMatchStyle
+		}
+		byLine[match.line] = append(byLine[match.line], styledSpan{match.start, match.end, style})
 	}
 
 	lines := strings.Split(content, "\n")
-	for i := range lines {
-		if !matchSet[i] {
-			continue
-		}
-		plain := ansi.Strip(lines[i])
-		style := otherMatchStyle
-		if i == currentLine {
-			style = currentMatchStyle
-		}
-		lines[i] = highlightQueryInLine(plain, re, style)
+	for lineNum, spans := range byLine {
+		lines[lineNum] = highlightLineSpans(lines[lineNum], spans)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// highlightQueryInLine wraps every non-overlapping match of re within line
-// in style, leaving the rest of the line as plain text. A pattern capable
-// of matching an empty string (e.g. "a*") can produce zero-length spans
-// between characters - FindAllStringIndex still terminates (it advances by
-// a rune whenever a match is empty), it just renders as a run of empty
-// highlighted spans rather than anything meaningful; the same oddity any
-// regex tool shows for such a pattern, not a bug specific to this search.
-func highlightQueryInLine(line string, re *regexp.Regexp, style lipgloss.Style) string {
-	spans := re.FindAllStringIndex(line, -1)
+// styledSpan is one highlighted region within a single line - start/end
+// are byte offsets into that line's ansi.Strip'd plain text (matching
+// searchMatch), rendered in style (see highlightLineSpans).
+type styledSpan struct {
+	start, end int
+	style      lipgloss.Style
+}
+
+// highlightLineSpans re-renders original with each span in spans (already
+// in ascending order - see findSearchMatches, which scans left to right
+// within a line) wrapped in its own style, leaving the rest of the line
+// as-is. Spans are byte offsets into ansi.Strip(original), translated
+// here to cell-column offsets (ansi.Cut/StringWidth operate in display
+// cells, not bytes, so a multi-byte character earlier in the line doesn't
+// throw off where a later highlight actually lands).
+//
+// A matched span is rendered from its *plain* text (plain[start:end]),
+// not ansi.Cut of the original - fine-grained syntax highlighting (e.g.
+// chroma emitting a separate color+reset around nearly every token, as it
+// does for JSON) can leave an ANSI-reconstructed cut carrying an embedded
+// reset of its own; wrapping that in span.style's own SGR codes would
+// have that inner reset cut the wrapping style right back off partway
+// through, before any of the actual characters. Plain text has no such
+// embedded codes to fight with. The gaps *between*/around spans don't
+// have this problem (nothing wraps them) and are still cut straight from
+// the original ANSI-styled line - ansi.Cut reopens whatever styling
+// already applies to that range on its own - preserving the line's
+// existing syntax coloring everywhere except the highlighted spans
+// themselves, rather than discarding it for the whole line the way
+// rendering from ansi.Strip'd text alone would.
+func highlightLineSpans(original string, spans []styledSpan) string {
 	if len(spans) == 0 {
-		return line
+		return original
 	}
+	plain := ansi.Strip(original)
+	totalCells := ansi.StringWidth(plain)
 	var b strings.Builder
-	last := 0
+	lastCell := 0
 	for _, span := range spans {
-		b.WriteString(line[last:span[0]])
-		b.WriteString(style.Render(line[span[0]:span[1]]))
-		last = span[1]
+		leftCell := ansi.StringWidth(plain[:span.start])
+		rightCell := ansi.StringWidth(plain[:span.end])
+		if leftCell > lastCell {
+			b.WriteString(ansi.Cut(original, lastCell, leftCell))
+		}
+		if span.end > span.start {
+			b.WriteString(span.style.Render(plain[span.start:span.end]))
+		}
+		lastCell = max(lastCell, rightCell)
 	}
-	b.WriteString(line[last:])
+	if lastCell < totalCells {
+		b.WriteString(ansi.Cut(original, lastCell, totalCells))
+	}
 	return b.String()
 }
 

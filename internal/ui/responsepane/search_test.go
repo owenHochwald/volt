@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -87,6 +89,39 @@ func TestResponsePane_Search_NoMatches_ReportsStatus(t *testing.T) {
 	}
 	if result.searchStatusMsg == "" {
 		t.Error("expected a \"no matches\" status message")
+	}
+}
+
+// TestResponsePane_Search_CountsEachOccurrenceOnALineSeparately is a
+// regression test for a real bug: a line where the query appears more
+// than once used to be counted (and jumped between via "n"/"b") as a
+// single match, the same as a line with just one occurrence - each
+// occurrence must be its own, independently countable/navigable match.
+func TestResponsePane_Search_CountsEachOccurrenceOnALineSeparately(t *testing.T) {
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane.SetWidth(100)
+	pane.SetHeight(20)
+	pane.SetResponse(&http.Response{
+		StatusCode: 200,
+		Status:     "200 OK",
+		Headers:    map[string][]string{"Content-Type": {"text/plain"}},
+		Body:       "needle one needle two needle three\nno match here",
+	}, &http.Request{})
+	pane.rawBody = true
+	pane.updateViewportForActiveTab()
+
+	result := typeAndConfirmSearch(t, &pane, "needle")
+
+	if len(result.searchMatches) != 3 {
+		t.Fatalf("expected 3 separate matches (one per occurrence on the line), got %d: %+v", len(result.searchMatches), result.searchMatches)
+	}
+	for _, m := range result.searchMatches {
+		if m.line != 0 {
+			t.Errorf("expected every occurrence on line 0, got %+v", m)
+		}
+	}
+	if result.searchMatches[0].start >= result.searchMatches[1].start || result.searchMatches[1].start >= result.searchMatches[2].start {
+		t.Errorf("expected occurrences in left-to-right order, got %+v", result.searchMatches)
 	}
 }
 
@@ -209,7 +244,7 @@ func TestResponsePane_SearchNextFromPosition_ContinuesWhenMatchStillVisible(t *t
 	pane.updateViewportForActiveTab()
 
 	result := typeAndConfirmSearch(t, pane, "line ")
-	matchLine := result.searchMatches[result.searchMatchIdx]
+	matchLine := result.searchMatches[result.searchMatchIdx].line
 	if !result.isLineVisible(matchLine) {
 		t.Fatal("test setup error: expected the just-found match to still be visible")
 	}
@@ -246,7 +281,7 @@ func TestResponsePane_SearchNextFromPosition_UnaffectedByOrdinaryScroll(t *testi
 	model, _ := result.Update(keyRunes("j"))
 	model, _ = model.Update(keyRunes("j"))
 	scrolled := mustResponsePane(t, model)
-	matchLine := scrolled.searchMatches[scrolled.searchMatchIdx]
+	matchLine := scrolled.searchMatches[scrolled.searchMatchIdx].line
 	if !scrolled.isLineVisible(matchLine) {
 		t.Fatal("test setup error: expected the match to still be visible after a small scroll")
 	}
@@ -399,7 +434,7 @@ func TestResponsePane_Search_ForwardFromPositionWrapsToStart(t *testing.T) {
 	if len(result.searchMatches) == 0 {
 		t.Fatal("test setup error: expected at least one match for \"line 3\"")
 	}
-	matchedLine := result.searchMatches[result.searchMatchIdx]
+	matchedLine := result.searchMatches[result.searchMatchIdx].line
 	if matchedLine >= 100 {
 		t.Errorf("expected the search to wrap to a match above the starting position (100), landed on line index %d", matchedLine)
 	}
@@ -517,13 +552,26 @@ func TestResponsePane_Search_InvalidRegexFallsBackToLiteral(t *testing.T) {
 	}
 }
 
-// TestHighlightQueryInLine_HighlightsEveryRegexSpan verifies a pattern that
+// spansFor is a small test helper mirroring what findSearchMatches would
+// produce for a single line, without needing a full ResponsePane/content
+// string just to compute byte-offset spans for highlightLineSpans.
+func spansFor(t *testing.T, plain, query string, style lipgloss.Style) []styledSpan {
+	t.Helper()
+	re := compileSearchQuery(query)
+	var spans []styledSpan
+	for _, span := range re.FindAllStringIndex(plain, -1) {
+		spans = append(spans, styledSpan{span[0], span[1], style})
+	}
+	return spans
+}
+
+// TestHighlightLineSpans_HighlightsEveryRegexSpan verifies a pattern that
 // matches more than once per line (not just a fixed literal repeated) gets
 // every span highlighted, each independently, using its own found bounds
 // rather than a fixed literal length.
-func TestHighlightQueryInLine_HighlightsEveryRegexSpan(t *testing.T) {
-	re := compileSearchQuery(`\d+`)
-	out := highlightQueryInLine("id=1 count=42 total=100", re, otherMatchStyle)
+func TestHighlightLineSpans_HighlightsEveryRegexSpan(t *testing.T) {
+	line := "id=1 count=42 total=100"
+	out := highlightLineSpans(line, spansFor(t, line, `\d+`, otherMatchStyle))
 
 	for _, want := range []string{"1", "42", "100"} {
 		if !strings.Contains(out, otherMatchStyle.Render(want)) {
@@ -532,6 +580,30 @@ func TestHighlightQueryInLine_HighlightsEveryRegexSpan(t *testing.T) {
 	}
 	if !strings.Contains(out, "id=") || !strings.Contains(out, "count=") || !strings.Contains(out, "total=") {
 		t.Errorf("expected the non-matching text to remain plain, got:\n%s", out)
+	}
+}
+
+// TestHighlightLineSpans_PreservesSurroundingColor is a regression test
+// for a real bug: highlighting a match used to re-render its *entire*
+// line from plain, ansi.Strip'd text, discarding any syntax coloring
+// (e.g. chroma's pretty-body highlighting) on the rest of that line, not
+// just the matched span - a matched line would come out entirely flat/
+// white instead of keeping its existing colors around the highlight.
+func TestHighlightLineSpans_PreservesSurroundingColor(t *testing.T) {
+	colored := lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Render("prefix") + "NEEDLE" +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Render("suffix")
+	plain := ansi.Strip(colored)
+
+	out := highlightLineSpans(colored, spansFor(t, plain, "needle", otherMatchStyle))
+
+	if ansi.Strip(out) != "prefixNEEDLEsuffix" {
+		t.Fatalf("expected the line's text to survive intact, got %q", ansi.Strip(out))
+	}
+	if !strings.Contains(out, "\x1b[38;5;255;48;5;58m") {
+		t.Errorf("expected the match itself to carry the highlight style, got:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[38;5;212m") {
+		t.Errorf("expected the surrounding text's original color to survive, got:\n%s", out)
 	}
 }
 

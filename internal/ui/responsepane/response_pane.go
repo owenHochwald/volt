@@ -72,15 +72,16 @@ type ResponsePane struct {
 	// Search (search.go): searching/searchInput drive the "/" prompt, the
 	// same mode+textinput overlay pattern as savingToFile/filenameInput
 	// above. searchQuery/searchMatches/searchMatchIdx hold the last
-	// confirmed search's state (matches are 0-based line indices into
-	// currentContent, in ascending order) so SearchNext/SearchPrev ("n"/
-	// "b") can cycle through them without re-searching. searchStatusMsg
-	// reports "no matches for ..." the same way saveStatusMsg reports a
-	// save outcome.
+	// confirmed search's state (matches are individual occurrences into
+	// currentContent - a line with the query more than once contributes
+	// one searchMatch per occurrence, not one for the whole line - in
+	// ascending order) so SearchNext/SearchPrev ("n"/"b") can cycle
+	// through them without re-searching. searchStatusMsg reports "no
+	// matches for ..." the same way saveStatusMsg reports a save outcome.
 	searching       bool
 	searchInput     textinput.Model
 	searchQuery     string
-	searchMatches   []int
+	searchMatches   []searchMatch
 	searchMatchIdx  int
 	searchStatusMsg string
 
