@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[Installation](#installation) • [Quick Start](#quick-start) • [AI Agents and CI](#ai-agents-and-ci) • [Keybindings](docs/keybindings.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
+[Installation](#installation) • [Quick Start](#quick-start) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [Why Volt?](#why-volt) • [CLI Mode](#cli-load-testing)
 
 ![Demo](demo.gif)
 
@@ -48,6 +48,13 @@ production-readiness decisions.
 
 
 > **Note**: This is an active learning project. Performance optimizations are ongoing, and contributions/feedback are welcome :)
+
+Volt's theme and color customization system is specified in
+[Themes and Customization](CUSTOMIZATION.md). Custom themes are small YAML
+files placed at `<user-config-dir>/volt/theme.yaml` or `~/.volt/theme.yaml`;
+start by overriding only the semantic colors you want to change. Visual and
+interaction decisions are maintained in the
+[Volt Design System](DESIGN_SYSTEM.md).
 
 ## Why Volt?
 

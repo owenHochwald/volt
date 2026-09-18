@@ -28,21 +28,21 @@ func (m ResponsePane) renderLoadTestOverview() string {
 	}
 
 	// Requests
-	b.WriteString(responseLabelStyle.Render("Requests"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Requests"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d / %d", stats.CompletedRequests, stats.TotalRequests)))
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d / %d", stats.CompletedRequests, stats.TotalRequests)))
 	b.WriteString("\n\n")
 
 	// Success
-	b.WriteString(responseLabelStyle.Render("Success"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Success"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d (%.1f%%)", successCount, successRate)))
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d (%.1f%%)", successCount, successRate)))
 	b.WriteString("\n\n")
 
 	// Failed
-	b.WriteString(responseLabelStyle.Render("Failed"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Failed"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d (%.1f%%)", stats.FailedRequests, 100-successRate)))
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d (%.1f%%)", stats.FailedRequests, 100-successRate)))
 	b.WriteString("\n\n")
 
 	// Calculate throughput
@@ -56,15 +56,15 @@ func (m ResponsePane) renderLoadTestOverview() string {
 	}
 
 	// Throughput
-	b.WriteString(responseLabelStyle.Render("Throughput"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Throughput"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(fmt.Sprintf("%.1f req/s", throughput)))
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%.1f req/s", throughput)))
 	b.WriteString("\n\n")
 
 	// Duration
-	b.WriteString(responseLabelStyle.Render("Duration"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Duration"))
 	b.WriteString(": ")
-	b.WriteString(responseValueStyle.Render(elapsed.Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(elapsed.Round(time.Millisecond).String()))
 	b.WriteString("\n")
 
 	return b.String()
@@ -82,39 +82,39 @@ func (m ResponsePane) renderLoadTestLatency() string {
 	b.WriteString(strings.Repeat("─", 60) + "\n\n")
 
 	// Min
-	b.WriteString(responseLabelStyle.Render("Min"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Min"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.MinDuration.Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.MinDuration.Round(time.Millisecond).String()))
 	b.WriteString("\n\n")
 
 	// p50
-	b.WriteString(responseLabelStyle.Render("p50"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("p50"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.Percentiles.Percentile(50).Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.Percentiles.Percentile(50).Round(time.Millisecond).String()))
 	b.WriteString("\n\n")
 
 	// p90
-	b.WriteString(responseLabelStyle.Render("p90"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("p90"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.Percentiles.Percentile(90).Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.Percentiles.Percentile(90).Round(time.Millisecond).String()))
 	b.WriteString("\n\n")
 
 	// p95
-	b.WriteString(responseLabelStyle.Render("p95"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("p95"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.Percentiles.Percentile(95).Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.Percentiles.Percentile(95).Round(time.Millisecond).String()))
 	b.WriteString("\n\n")
 
 	// p99
-	b.WriteString(responseLabelStyle.Render("p99"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("p99"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.Percentiles.Percentile(99).Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.Percentiles.Percentile(99).Round(time.Millisecond).String()))
 	b.WriteString("\n\n")
 
 	// Max
-	b.WriteString(responseLabelStyle.Render("Max"))
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Max"))
 	b.WriteString(":    ")
-	b.WriteString(responseValueStyle.Render(stats.MaxDuration.Round(time.Millisecond).String()))
+	b.WriteString(m.styles.Text.Value.Render(stats.MaxDuration.Round(time.Millisecond).String()))
 	b.WriteString("\n")
 
 	return b.String()
@@ -132,9 +132,9 @@ func (m ResponsePane) renderLoadTestErrors() string {
 	b.WriteString(strings.Repeat("─", 60) + "\n\n")
 
 	if len(stats.Errors) == 0 {
-		b.WriteString(responseValueStyle.Render("No errors encountered!"))
+		b.WriteString(m.styles.Text.Value.Render("No errors encountered!"))
 		b.WriteString("\n\n")
-		b.WriteString(faintStyle.Render("All requests completed successfully."))
+		b.WriteString(m.styles.Text.Faint.Render("All requests completed successfully."))
 		b.WriteString("\n\n")
 	} else {
 		classes := make([]string, 0, len(stats.Errors))
@@ -143,15 +143,15 @@ func (m ResponsePane) renderLoadTestErrors() string {
 		}
 		sort.Strings(classes)
 		for _, class := range classes {
-			b.WriteString(responseKeyStyle.Render(apperror.ErrorClassLabel(class)))
+			b.WriteString(m.styles.Text.ResponseKey.Render(apperror.ErrorClassLabel(class)))
 			b.WriteString(": ")
-			b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d occurrences", stats.Errors[class])))
+			b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d occurrences", stats.Errors[class])))
 			b.WriteString("\n\n")
 		}
 	}
 
 	if len(stats.StatusCodes) > 0 {
-		b.WriteString(responseLabelStyle.Render("HTTP Status Codes"))
+		b.WriteString(m.styles.Text.ResponseLabel.Render("HTTP Status Codes"))
 		b.WriteString("\n")
 		statuses := make([]int, 0, len(stats.StatusCodes))
 		for status := range stats.StatusCodes {
@@ -159,9 +159,9 @@ func (m ResponsePane) renderLoadTestErrors() string {
 		}
 		sort.Ints(statuses)
 		for _, status := range statuses {
-			b.WriteString(responseKeyStyle.Render(fmt.Sprintf("%d", status)))
+			b.WriteString(m.styles.Text.ResponseKey.Render(fmt.Sprintf("%d", status)))
 			b.WriteString(": ")
-			b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d responses", stats.StatusCodes[status])))
+			b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d responses", stats.StatusCodes[status])))
 			b.WriteString("\n")
 		}
 	}

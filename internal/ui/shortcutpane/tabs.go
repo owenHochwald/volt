@@ -2,7 +2,6 @@ package shortcutpane
 
 import (
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 const (
@@ -35,9 +34,9 @@ func (m ShortcutPane) renderTabBar(tabs []string) string {
 
 	for i, tab := range tabs {
 		if i == m.activeTab {
-			renderedTabs = append(renderedTabs, ui.ActiveTab.Render(tab))
+			renderedTabs = append(renderedTabs, m.styles.Tabs.Active.Render(tab))
 		} else {
-			renderedTabs = append(renderedTabs, ui.InactiveTab.Render(tab))
+			renderedTabs = append(renderedTabs, m.styles.Tabs.Inactive.Render(tab))
 		}
 	}
 	renderedTabs = append(renderedTabs, "\n")

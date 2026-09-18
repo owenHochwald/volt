@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -51,7 +50,7 @@ func (m ResponsePane) View() string {
 func (m ResponsePane) renderSaveToFilePrompt() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		ui.LabelStyle.Render("Save raw response body to file:"),
+		m.styles.Text.Label.Render("Save raw response body to file:"),
 		m.filenameInput.View(),
 		"",
 		footerHelpStyle.MaxWidth(max(m.width, 1)).Render("enter: save · esc: cancel"),
@@ -64,7 +63,7 @@ func (m ResponsePane) renderSaveToFilePrompt() string {
 // whole pane, so the response content (and any highlighted matches - see
 // highlightMatches) stays visible and scrollable while typing.
 func (m ResponsePane) renderSearchInputLine() string {
-	return lipgloss.JoinHorizontal(lipgloss.Left, ui.LabelStyle.Render("/"), m.searchInput.View())
+	return lipgloss.JoinHorizontal(lipgloss.Left, m.styles.Text.Label.Render("/"), m.searchInput.View())
 }
 
 // footerHint renders this pane's pinned one-line key hint below the
@@ -105,7 +104,7 @@ func (m ResponsePane) renderNormalView() (head, trailer string) {
 	// sent.
 	var statusBar string
 	if m.Response.Error != "" {
-		statusBar = errorStyle.Render("ERROR")
+		statusBar = m.styles.Badge.Error.Render("ERROR")
 	} else {
 		statusBar = m.renderHeaderBar()
 	}
@@ -184,10 +183,10 @@ func (m ResponsePane) renderLoadTestView() string {
 	} else {
 		status += "Complete"
 	}
-	statusBar := loadTestStatusStyle.Render(status)
+	statusBar := m.styles.Badge.Live.Render(status)
 	if m.LoadTestStats.FailedRequests > 0 {
 		status = fmt.Sprintf("%s • %d failed", status, m.LoadTestStats.FailedRequests)
-		statusBar = errorStyle.Render(status)
+		statusBar = m.styles.Badge.Error.Render(status)
 	}
 	b.WriteString(statusBar)
 	b.WriteString("\n")
@@ -208,7 +207,7 @@ func (m ResponsePane) renderLoadTestView() string {
 
 // renderHeaderBar renders the status bar for normal responses
 func (m ResponsePane) renderHeaderBar() string {
-	statusStyle := utils.MapStatusCodeToColor(m.Response.StatusCode)
+	statusStyle := m.styles.Status.ForCode(m.Response.StatusCode)
 	status := statusStyle.Render(m.Response.Status)
 	duration := fmt.Sprintf(" %d ms", m.Response.Duration.Milliseconds())
 	if m.Response.RoundTrip {

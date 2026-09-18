@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -122,7 +123,8 @@ type ResponsePane struct {
 	// requestpane.RequestPane.DB already is.
 	DB *storage.SQLiteStorage
 
-	keys keybindings.KeyMap
+	keys   keybindings.KeyMap
+	styles design.Styles
 }
 
 // Init initializes the response pane

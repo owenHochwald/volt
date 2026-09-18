@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -11,7 +12,12 @@ import (
 // default values. db may be nil (as in tests) - the only effect is that
 // a picked body style (see style_picker.go) won't be persisted or
 // restored across restarts.
-func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap) ResponsePane {
+func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) ResponsePane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "response.json"
 	filenameInput.CharLimit = 500
@@ -41,5 +47,6 @@ func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Respo
 		bodyStyleName:  bodyStyleName,
 		DB:             db,
 		keys:           keys,
+		styles:         styles,
 	}
 }

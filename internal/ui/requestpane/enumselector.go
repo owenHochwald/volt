@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // EnumSelector is a fixed-choice field for a body param whose OpenAPI
@@ -117,9 +116,9 @@ func (e *EnumSelector) Blur() {
 }
 
 func (e *EnumSelector) View() string {
-	style := ui.UnfocusedButton
+	style := unfocusedButtonStyle
 	if e.focused {
-		style = ui.FocusedButton
+		style = focusedButtonStyle
 	}
 	display := e.Value()
 	if display == "" {

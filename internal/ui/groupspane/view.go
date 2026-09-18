@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 var (
@@ -13,7 +12,23 @@ var (
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	boxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	// labelStyle mirrors the removed ui.LabelStyle - main has no
+	// equivalent for this package (groupspane doesn't exist there), so it
+	// stays a plain local style rather than moving into design.Styles.
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	focusColor   = lipgloss.Color("205")
+	unfocusColor = lipgloss.Color("240")
 )
+
+// applyFocus mirrors the removed ui.ApplyFocus, same rationale as
+// labelStyle above.
+func applyFocus(style lipgloss.Style, focus bool) lipgloss.Style {
+	if focus {
+		return style.BorderForeground(focusColor).Bold(true)
+	}
+	return style.BorderForeground(unfocusColor)
+}
 
 func (m GroupsPane) View() string {
 	modalStyle := lipgloss.NewStyle().
@@ -72,8 +87,8 @@ func (m GroupsPane) View() string {
 }
 
 func (m GroupsPane) renderBrowse() string {
-	groupsBox := ui.ApplyFocus(boxStyle, m.target == focusGroups).Render(m.groups.View())
-	serversBox := ui.ApplyFocus(boxStyle, m.target == focusServers).Render(m.servers.View())
+	groupsBox := applyFocus(boxStyle, m.target == focusGroups).Render(m.groups.View())
+	serversBox := applyFocus(boxStyle, m.target == focusServers).Render(m.servers.View())
 	return lipgloss.JoinHorizontal(lipgloss.Top, groupsBox, "  ", serversBox)
 }
 
@@ -82,7 +97,7 @@ func (m GroupsPane) renderGroupForm(title string) string {
 		lipgloss.Left,
 		lipgloss.NewStyle().Bold(true).Render(title),
 		"",
-		ui.LabelStyle.Render("Name:"),
+		labelStyle.Render("Name:"),
 		m.nameInput.View(),
 	)
 }
@@ -91,11 +106,11 @@ func (m GroupsPane) renderServerForm(title string, showURL bool) string {
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Render(title),
 		"",
-		ui.LabelStyle.Render("Name:"),
+		labelStyle.Render("Name:"),
 		m.nameInput.View(),
 	}
 	if showURL {
-		lines = append(lines, "", ui.LabelStyle.Render("Base URL:"), m.urlInput.View())
+		lines = append(lines, "", labelStyle.Render("Base URL:"), m.urlInput.View())
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -105,7 +120,7 @@ func (m GroupsPane) renderURLForm(title string) string {
 		lipgloss.Left,
 		lipgloss.NewStyle().Bold(true).Render(title),
 		"",
-		ui.LabelStyle.Render("Base URL:"),
+		labelStyle.Render("Base URL:"),
 		m.urlInput.View(),
 	)
 }
@@ -115,7 +130,7 @@ func (m GroupsPane) renderHeadersForm(title string) string {
 		lipgloss.Left,
 		lipgloss.NewStyle().Bold(true).Render(title),
 		"",
-		ui.LabelStyle.Render("Headers (key = value, one per line):"),
+		labelStyle.Render("Headers (key = value, one per line):"),
 		m.headersInput.View(),
 	)
 }

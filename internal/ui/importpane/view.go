@@ -6,7 +6,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/cli"
-	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 var (
@@ -15,6 +14,10 @@ var (
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	// labelStyle mirrors the removed ui.LabelStyle - main has no equivalent
+	// for this package (importpane doesn't exist there), so it stays a
+	// plain local style rather than moving into design.Styles.
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	// focusedFieldStyle highlights the force toggle when it's the focused
 	// field - the toggle has no textinput.Model of its own to lean on for
 	// that (unlike pathInput/groupInput/baseURLInput, which show focus via
@@ -68,16 +71,16 @@ func (m ImportPane) renderForm() string {
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		ui.LabelStyle.Render("Spec file path:"),
+		labelStyle.Render("Spec file path:"),
 		m.pathInput.View(),
 		"",
-		ui.LabelStyle.Render("Group (optional - created if missing):"),
+		labelStyle.Render("Group (optional - created if missing):"),
 		m.groupInput.View(),
 		"",
-		ui.LabelStyle.Render("Base URL (optional - sets the group's/default server):"),
+		labelStyle.Render("Base URL (optional - sets the group's/default server):"),
 		m.baseURLInput.View(),
 		"",
-		ui.LabelStyle.Render("Force (space to toggle):"),
+		labelStyle.Render("Force (space to toggle):"),
 		forceLine,
 		"",
 		status,

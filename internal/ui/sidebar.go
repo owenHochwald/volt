@@ -9,8 +9,17 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
+
+const sidebarCommandWindow = 10
+
+// HelpStyle wraps the group filter/help/command-trail line with the same
+// margin the rest of the sidebar's chrome used to share (see the removed
+// internal/ui/styles.go) - purely layout, not a themed color, so it stays
+// a plain local style rather than moving into design.Styles.
+var HelpStyle = lipgloss.NewStyle().Margin(1, 2)
 
 type RequestItem struct {
 	title, desc, group string
@@ -46,6 +55,8 @@ type SidebarPane struct {
 	desiredCursorIndex int
 	navigationCount    int
 	hasNavigationCount bool
+	pendingCommand     string
+	commandTrail       string
 
 	// allRequests/groupNames hold the last load's full, unfiltered request
 	// set and its group-id-to-name lookup, kept around so cycling the group
@@ -83,8 +94,9 @@ type SidebarPane struct {
 	// than acted on immediately.
 	pendingDelete *RequestItem
 
-	db   *storage.SQLiteStorage
-	keys keybindings.KeyMap
+	db     *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	styles design.Styles
 }
 
 // allGroupsOption is the group filter's choice for "show every request,
@@ -144,6 +156,19 @@ func (s *SidebarPane) renderHelpText() string {
 		return HelpStyle.MaxWidth(s.width).Render(
 			lipgloss.NewStyle().Foreground(lipgloss.Color("196")).MaxWidth(s.contentWidth()).
 				Render(fmt.Sprintf("Delete %q? y/enter=yes, any other key=no", s.pendingDelete.title)),
+		)
+	}
+	// A recorded vim-motion trail (see recordCommand) - "3j", "d", etc. -
+	// takes over this line while there's one to show, the same way a
+	// pending delete confirmation above does; it's this pane's answer to
+	// vim/less' own bottom-left command echo.
+	if trail := s.commandTrailText(); trail != "" {
+		return HelpStyle.MaxWidth(s.width).Render(
+			lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				s.styles.Text.Muted.Render("› "),
+				s.styles.Action.Primary.Render(trail),
+			),
 		)
 	}
 	return HelpStyle.MaxWidth(s.width).Render("/ to search • [/]: group filter • ? for help")
@@ -364,6 +389,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 		}
 
 		if keybindings.Matches(msg, s.keys.NavCount) {
+			s.pendingCommand += string(msg.Code)
 			s.appendNavigationDigit(msg.Code)
 			return s, nil
 		}
@@ -377,6 +403,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 			break
 		}
 		if keybindings.Matches(msg, s.keys.DeleteRequest) {
+			s.recordCommand("d")
 			s.clearNavigationCount()
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
@@ -422,19 +449,23 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 		//    slice and panics). Using >=/< instead of == self-corrects in
 		//    a single press no matter how far off the cursor already is.
 		if keybindings.Matches(msg, s.keys.NavUp) {
+			s.recordCommand(s.pendingCommand + "k")
 			s.moveSelection(-s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavDown) {
+			s.recordCommand(s.pendingCommand + "j")
 			s.moveSelection(s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavFirst) {
+			s.recordCommand("g")
 			s.clearNavigationCount()
 			s.requestsList.Select(0)
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavLast) {
+			s.recordCommand("G")
 			s.clearNavigationCount()
 			if itemCount := len(s.requestsList.Items()); itemCount > 0 {
 				s.requestsList.Select(itemCount - 1)
@@ -486,6 +517,26 @@ func (s *SidebarPane) consumeNavigationCount() int {
 func (s *SidebarPane) clearNavigationCount() {
 	s.navigationCount = 0
 	s.hasNavigationCount = false
+	s.pendingCommand = ""
+}
+
+func (s *SidebarPane) recordCommand(command string) {
+	if command == "" {
+		return
+	}
+	if s.commandTrail != "" {
+		s.commandTrail += " "
+	}
+	s.commandTrail += command
+	s.commandTrail = trailingRunes(s.commandTrail, sidebarCommandWindow)
+}
+
+func trailingRunes(value string, limit int) string {
+	runes := []rune(value)
+	if limit <= 0 || len(runes) <= limit {
+		return value
+	}
+	return string(runes[len(runes)-limit:])
 }
 
 func (s *SidebarPane) moveSelection(delta int) {
@@ -513,6 +564,22 @@ func (s *SidebarPane) View() string {
 	)
 }
 
+// commandTrailText joins commandTrail (recorded past commands - see
+// recordCommand) with pendingCommand (a navigation count still being
+// typed), trimmed to the same trailing window recordCommand itself uses,
+// so the two never independently drift past sidebarCommandWindow.
+func (s *SidebarPane) commandTrailText() string {
+	trail := s.commandTrail
+	if s.pendingCommand != "" {
+		if trail != "" {
+			trail += " "
+		}
+		trail += s.pendingCommand
+		trail = trailingRunes(trail, sidebarCommandWindow)
+	}
+	return trail
+}
+
 func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 	if item := s.requestsList.SelectedItem(); item != nil {
 		if reqItem, ok := item.(RequestItem); ok {
@@ -528,7 +595,12 @@ func (s *SidebarPane) SetSize(width, height int) {
 	s.requestsList.SetSize(s.listWidth(), s.listHeight())
 }
 
-func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane {
+func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) *SidebarPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	loadingItems := []list.Item{
 		RequestItem{
 			title:   "Loading...",
@@ -548,6 +620,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 		width:                  10,
 		db:                     db,
 		keys:                   keys,
+		styles:                 styles,
 		requestsList:           list.New(loadingItems, list.NewDefaultDelegate(), 0, 0),
 		groupOptions:           []string{allGroupsOption},
 		pendingGroupFilterName: pendingGroupFilterName,

@@ -3,6 +3,10 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
+	"github.com/alecthomas/assert/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 func TestHeaderDisplaysInjectedVersion(t *testing.T) {
@@ -24,4 +28,15 @@ func TestHeaderDisplaysInjectedVersion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHeaderUsesInjectedSemanticStyles(t *testing.T) {
+	theme := design.DefaultTheme()
+	theme.Colors.Brand = lipgloss.Color("#010203")
+	theme.Colors.TextMuted = lipgloss.Color("#040506")
+
+	header := SetupHeader("dev", design.NewStyles(theme))
+
+	assert.Equal(t, theme.Colors.Brand, header.styles.Header.Logo.GetForeground())
+	assert.Equal(t, theme.Colors.TextMuted, header.styles.Header.Metadata.GetForeground())
 }

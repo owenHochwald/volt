@@ -181,9 +181,9 @@ func (c *ArrayCountControl) Blur() {
 }
 
 func (c *ArrayCountControl) View() string {
-	style := ui.UnfocusedButton
+	style := unfocusedButtonStyle
 	if c.focused {
-		style = ui.FocusedButton
+		style = focusedButtonStyle
 	}
 	return style.Render(fmt.Sprintf("‹ %d item(s) › (←/→ add/remove)", len(c.array.Items)))
 }

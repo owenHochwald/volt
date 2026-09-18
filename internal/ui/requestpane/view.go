@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 // footerHelpStyle renders this pane's pinned help hint without
@@ -56,7 +57,7 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
-	pathParamsBlock, pathOffsets := renderParamSection("Path Params", m.PathParams, m.ShowRequiredErrors)
+	pathParamsBlock, pathOffsets := renderParamSection(m.styles, "Path Params", m.PathParams, m.ShowRequiredErrors)
 
 	nameLabel := fieldGroupLabelStyle.Render("Name ")
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Left, nameLabel, m.NameInput.View())
@@ -73,12 +74,12 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	var bodyBlock string
 	var bodyOffsets []fieldOffset
 	if len(m.BodyParams) > 0 {
-		bodyBlock, bodyOffsets = renderParamSection("Body Params", m.BodyParams, m.ShowRequiredErrors)
+		bodyBlock, bodyOffsets = renderParamSection(m.styles, "Body Params", m.BodyParams, m.ShowRequiredErrors)
 	} else if len(m.ArrayParams) == 0 {
 		bodyLabel := fieldGroupLabelStyle.Render("Body    ")
 		bodyBlock = lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 	}
-	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.ArrayParams, m.ShowRequiredErrors)
+	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.styles, m.ArrayParams, m.ShowRequiredErrors)
 
 	// Field order: server, name, method+URL, path params, body params,
 	// array params, headers, then mode-specific content (load-test config
@@ -151,19 +152,19 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	elements = append(elements, "", headersLine)
 
 	if m.LoadTestMode {
-		ltConcurrencyLabel := ui.LabelStyle.Render("Concurrency:    ")
+		ltConcurrencyLabel := m.styles.Text.Label.Render("Concurrency:    ")
 		ltConcurrencyLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltConcurrencyLabel, m.LoadTestConcurrency.View())
 
-		ltTotalLabel := ui.LabelStyle.Render("Total Requests: ")
+		ltTotalLabel := m.styles.Text.Label.Render("Total Requests: ")
 		ltTotalLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltTotalLabel, m.LoadTestTotalReqs.View())
 
-		ltQPSLabel := ui.LabelStyle.Render("QPS (limit):    ")
+		ltQPSLabel := m.styles.Text.Label.Render("QPS (limit):    ")
 		ltQPSLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltQPSLabel, m.LoadTestQPS.View())
 
-		ltTimeoutLabel := ui.LabelStyle.Render("Timeout:        ")
+		ltTimeoutLabel := m.styles.Text.Label.Render("Timeout:        ")
 		ltTimeoutLine := lipgloss.JoinHorizontal(lipgloss.Left,
 			ltTimeoutLabel, m.LoadTestTimeout.View())
 
@@ -241,25 +242,25 @@ func (m *RequestPane) ensureLineVisible(line int) {
 // those change, which used to only blur pgup/pgdown's jump size but now
 // would also throw off scrollToFocused's exact positioning.
 func (m RequestPane) renderFooter() string {
+	styles := m.styles
+
 	// Render button based on state
 	var button string
 	var stopwatchCount string
 	if m.RequestInProgress {
 		if m.LoadTestMode {
-			button = ui.FocusedButton.Render("Running Load Test...")
+			button = styles.Action.Busy.Render("ϟ Running Load Test...")
 		} else {
-			button = ui.FocusedButton.Render("Sending...")
+			button = styles.Action.Busy.Render("ϟ Sending...")
 			elapsed := m.Stopwatch.Elapsed()
 			milliseconds := elapsed.Milliseconds()
 			seconds := float64(milliseconds) / 1000.0
-			stopwatchCount = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("241")).
-				Render(fmt.Sprintf("%.3fs", seconds))
+			stopwatchCount = styles.Text.Muted.Render(fmt.Sprintf("%.3fs", seconds))
 		}
 	} else if m.SubmitButton.IsFocused() {
-		button = ui.FocusedButton.Render("→ Send")
+		button = styles.Action.Focused.Render("→ SEND")
 	} else {
-		button = ui.UnfocusedButton.Render("→ Send")
+		button = styles.Action.Primary.Render("→ SEND")
 	}
 
 	// Render mode-specific help hint, capped to m.Width via MaxWidth (which
@@ -335,10 +336,19 @@ func (m RequestPane) View() string {
 // pane (Server, Name, Path Params, Body/Body Params, Array Params,
 // Headers - not Method+URL, which already gets its own per-method
 // coloring, and not an individual param's own label inside one of these
-// sections, which stays in the dimmer ui.LabelStyle) - so they read as a
+// sections, which stays in the dimmer styles.Text.Label) - so they read as a
 // distinct, scannable column of names down the pane instead of blending
 // into the same dim gray as everything else.
 var fieldGroupLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("140")).Bold(true)
+
+// focusedButtonStyle/unfocusedButtonStyle render a cycled "‹ value ›"
+// control (EnumSelector, ArrayCountControl) - main has no equivalent
+// (neither type exists there), so these stay plain package-level styles
+// rather than moving into design.Styles.
+var (
+	focusedButtonStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	unfocusedButtonStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+)
 
 // requiredFieldStyle marks a required field's label - shown this way at all
 // times as a hint regardless of whether it's currently empty (unlike
@@ -349,7 +359,7 @@ var requiredFieldStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bo
 // when the field is required so it's always visually distinct from an
 // optional one - not just once it's flagged empty at send time (see
 // RequiredFieldErrors).
-func paramLabel(name, fieldType string, required bool) string {
+func paramLabel(styles design.Styles, name, fieldType string, required bool) string {
 	text := name
 	if fieldType != "" {
 		text += " (" + fieldType + ")"
@@ -357,7 +367,7 @@ func paramLabel(name, fieldType string, required bool) string {
 	if required {
 		return requiredFieldStyle.Render(text + " ")
 	}
-	return ui.LabelStyle.Render(text + " ")
+	return styles.Text.Label.Render(text + " ")
 }
 
 // renderParamSection renders a titled block with one "name [input]" line
@@ -368,7 +378,7 @@ func paramLabel(name, fieldType string, required bool) string {
 // the caller to translate into absolute lines within the full fieldsContent
 // (see fieldsContent). showRequired is RequestPane.ShowRequiredErrors,
 // threaded through to fieldError - see its doc comment.
-func renderParamSection(title string, params []Param, showRequired bool) (string, []fieldOffset) {
+func renderParamSection(styles design.Styles, title string, params []Param, showRequired bool) (string, []fieldOffset) {
 	if len(params) == 0 {
 		return "", nil
 	}
@@ -376,7 +386,7 @@ func renderParamSection(title string, params []Param, showRequired bool) (string
 	lines = append(lines, fieldGroupLabelStyle.Render(title+":"))
 	offsets := make([]fieldOffset, len(params))
 	for i, p := range params {
-		label := "  " + paramLabel(p.Name, p.DisplayType(), p.Required)
+		label := "  " + paramLabel(styles, p.Name, p.DisplayType(), p.Required)
 
 		var field, comment string
 		var focusable ui.Focusable
@@ -419,7 +429,7 @@ func renderParamSection(title string, params []Param, showRequired bool) (string
 // The returned offsets are relative to this block's own first line (0).
 // showRequired is RequestPane.ShowRequiredErrors, threaded through to
 // fieldError - see its doc comment.
-func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []fieldOffset) {
+func renderArrayParamSection(styles design.Styles, arrays []ArrayParam, showRequired bool) (string, []fieldOffset) {
 	if len(arrays) == 0 {
 		return "", nil
 	}
@@ -437,7 +447,7 @@ func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []
 		for ii, item := range a.Items {
 			if a.IsSimple() {
 				f := item.Fields[0]
-				label := ui.LabelStyle.Render(fmt.Sprintf("  Item %d: ", ii+1))
+				label := styles.Text.Label.Render(fmt.Sprintf("  Item %d: ", ii+1))
 
 				var field, comment string
 				var focusable ui.Focusable
@@ -458,10 +468,10 @@ func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []
 				continue
 			}
 
-			lines = append(lines, "", ui.LabelStyle.Render(fmt.Sprintf("  Item %d:", ii+1)))
+			lines = append(lines, "", styles.Text.Label.Render(fmt.Sprintf("  Item %d:", ii+1)))
 			line += 2
 			for fi, f := range item.Fields {
-				label := "    " + paramLabel(f.Name, f.DisplayType(), f.Required)
+				label := "    " + paramLabel(styles, f.Name, f.DisplayType(), f.Required)
 
 				var field, comment string
 				var focusable ui.Focusable

@@ -144,7 +144,7 @@ func (m *ResponsePane) effectiveBodyStyle() string {
 // this pane's own View() keeps rendering normally alongside it, live-
 // previewing whatever the list's cursor sits on (see effectiveBodyStyle).
 func (m ResponsePane) StylePickerListView() string {
-	header := ui.LabelStyle.Render(fmt.Sprintf("Body syntax style (current: %s)", m.bodyStyleName))
+	header := m.styles.Text.Label.Render(fmt.Sprintf("Body syntax style (current: %s)", m.bodyStyleName))
 	hint := footerHelpStyle.Render("enter: apply & save · esc: cancel · /: filter")
 	return lipgloss.JoinVertical(lipgloss.Left, header, m.styleList.View(), hint)
 }

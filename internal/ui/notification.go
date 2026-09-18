@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/apperror"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 type NotificationLevel string
@@ -51,26 +52,31 @@ func NotifyErrorCmd(err *apperror.Error) tea.Cmd {
 	}
 }
 
-func (n Notification) View(width int) string {
+func (n Notification) View(width int, optionalStyles ...design.Styles) string {
 	if strings.TrimSpace(n.Text) == "" {
 		return ""
 	}
 
-	label := strings.ToUpper(string(n.Level))
-	color := lipgloss.Color("39")
-	switch n.Level {
-	case NotificationSuccess:
-		color = lipgloss.Color("42")
-	case NotificationWarning:
-		color = lipgloss.Color("214")
-	case NotificationError:
-		color = lipgloss.Color("196")
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
 	}
 
-	prefix := lipgloss.NewStyle().Bold(true).Foreground(color).Render(" " + label + " ")
+	label := strings.ToUpper(string(n.Level))
+	prefixStyle := styles.Notice.Info
+	switch n.Level {
+	case NotificationSuccess:
+		prefixStyle = styles.Notice.Success
+	case NotificationWarning:
+		prefixStyle = styles.Notice.Warning
+	case NotificationError:
+		prefixStyle = styles.Notice.Error
+	}
+
+	prefix := prefixStyle.Render(" " + label + " ")
 	content := lipgloss.JoinHorizontal(lipgloss.Left, prefix, " ", n.Text)
 	if strings.TrimSpace(n.Hint) != "" {
-		hint := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(" · " + n.Hint)
+		hint := styles.Text.Muted.Render(" · " + n.Hint)
 		content = lipgloss.JoinHorizontal(lipgloss.Left, content, hint)
 	}
 	return lipgloss.NewStyle().
