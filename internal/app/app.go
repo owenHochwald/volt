@@ -68,7 +68,7 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	}
 	theme := appearance.Theme
 	styles := design.NewStyles(theme)
-	responsePane := responsepane.SetupResponsePane(db, keys, styles)
+	responsePane := responsepane.SetupResponsePane(keys, styles)
 	shortcutPane := shortcutpane.SetupShortcutPane(keys, db, styles)
 	importPane := importpane.SetupImportPane(db, keys)
 	requestPane := requestpane.SetupRequestPane(db, keys, styles)

@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 )
 
 type RequestsLoadingMsg struct {
@@ -91,17 +92,16 @@ func SaveLastGroupFilterCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
 	}
 }
 
-// SaveBodyStyleCmd persists name (see storage.SaveBodyStyle) as the
+// SaveBodyStyleCmd persists name (see design.SaveBodyStyle) as the
 // response pane's Body tab syntax highlighting style to restore on the
 // app's next start - fire-and-forget, same rationale as
 // SaveLastGroupFilterCmd: a failure here only affects what the *next*
 // restart restores, not anything the user needs interrupted about right
-// now. A nil db (as in tests) is a no-op.
-func SaveBodyStyleCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
+// now. Saved to the same config.yaml the general UI theme selection lives
+// in, not the database - see design.AppConfig.
+func SaveBodyStyleCmd(name string) tea.Cmd {
 	return func() tea.Msg {
-		if db != nil {
-			_ = db.SaveBodyStyle(name)
-		}
+		_ = design.SaveBodyStyle(name)
 		return nil
 	}
 }

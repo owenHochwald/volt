@@ -27,7 +27,7 @@ func TestResponseTabNavigationKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+			pane := SetupResponsePane(keybindings.DefaultKeyMap())
 			pane.activeTab = int(tt.start)
 
 			updated, _ := pane.Update(tt.key)

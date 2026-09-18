@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoadTestOverviewTreatsHTTPFailuresAsFailures(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(failingLoadTestStats())
 
 	overview := pane.renderLoadTestOverview()
@@ -28,7 +28,7 @@ func TestLoadTestOverviewTreatsHTTPFailuresAsFailures(t *testing.T) {
 }
 
 func TestLoadTestErrorsIncludeSortedStatusBreakdown(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(failingLoadTestStats())
 
 	rendered := pane.renderLoadTestErrors()
@@ -50,7 +50,7 @@ func TestLoadTestErrorsIncludeSortedStatusBreakdown(t *testing.T) {
 }
 
 func TestLoadTestStatusCallsOutFailures(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(failingLoadTestStats())
 
 	rendered := ansi.Strip(pane.renderLoadTestView())
@@ -60,7 +60,7 @@ func TestLoadTestStatusCallsOutFailures(t *testing.T) {
 }
 
 func TestLoadTestStatsBuildBoundedIntervalLatencySeries(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	start := time.Now()
 
 	for i := 1; i <= maxLatencySamples+5; i++ {
@@ -81,7 +81,7 @@ func TestLoadTestStatsBuildBoundedIntervalLatencySeries(t *testing.T) {
 }
 
 func TestLoadTestStatsPreserveSelectedTabDuringLiveUpdates(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	start := time.Now()
 	pane.SetLoadTestStats(&http.LoadTestStats{
 		StartTime:     start,
@@ -102,7 +102,7 @@ func TestLoadTestStatsPreserveSelectedTabDuringLiveUpdates(t *testing.T) {
 }
 
 func TestLiveLoadTestRendersProgressMetricsAndLatencySignal(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	start := time.Now().Add(-2 * time.Second)
 	pane.SetLoadTestStats(&http.LoadTestStats{
@@ -130,7 +130,7 @@ func TestLiveLoadTestRendersProgressMetricsAndLatencySignal(t *testing.T) {
 }
 
 func TestCompletedLoadTestUsesExplicitOutcomeState(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(failingLoadTestStats())
 
 	rendered := pane.renderLoadTestView()

@@ -55,7 +55,7 @@ func TestResponsePane_Search_FindsMatchInRawBody(t *testing.T) {
 // otherwise miss matches whose characters fall under different color
 // spans (see searchMatchLines's use of ansi.Strip).
 func TestResponsePane_Search_FindsMatchInPrettyBody(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	pane.SetHeight(20)
 	pane.SetResponse(&http.Response{
@@ -100,7 +100,7 @@ func TestResponsePane_Search_NoMatches_ReportsStatus(t *testing.T) {
 // single match, the same as a line with just one occurrence - each
 // occurrence must be its own, independently countable/navigable match.
 func TestResponsePane_Search_CountsEachOccurrenceOnALineSeparately(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	pane.SetHeight(20)
 	pane.SetResponse(&http.Response{
@@ -348,7 +348,7 @@ func TestResponsePane_Search_ResetsWhenContentChanges(t *testing.T) {
 // view re-indents it (see formatJSON), so its raw and pretty text still
 // genuinely differ and toggling between them must still reset a search.
 func TestResponsePane_Search_ResetsWhenTogglingRawChangesJSONContent(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	pane.SetHeight(20)
 	pane.SetResponse(&http.Response{
@@ -472,7 +472,7 @@ func TestResponsePane_Search_HighlightsMatches(t *testing.T) {
 // line (everything besides the query itself) must stay as plain,
 // unstyled text.
 func TestResponsePane_Search_HighlightsOnlyThePattern(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(20)
 	pane.SetResponse(&http.Response{
@@ -535,7 +535,7 @@ func TestResponsePane_Search_SupportsRegexMetacharacters(t *testing.T) {
 // string instead of the search silently producing zero matches or the
 // pane crashing on a regexp.MustCompile panic.
 func TestResponsePane_Search_InvalidRegexFallsBackToLiteral(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	pane.SetHeight(20)
 	pane.SetResponse(&http.Response{

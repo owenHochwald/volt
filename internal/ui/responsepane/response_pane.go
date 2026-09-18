@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
-	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -106,7 +105,7 @@ type ResponsePane struct {
 	// request) tab's pretty rendering (see formatContentByType) -
 	// defaultBodyStyle ("onedark") unless a different one was ever picked
 	// (see style_picker.go's "t" picker) and persisted (see
-	// storage.SaveBodyStyle/LoadBodyStyle, loaded once at SetupResponsePane).
+	// design.SaveBodyStyle/LoadBodyStyle, loaded once at SetupResponsePane).
 	bodyStyleName string
 
 	// Style picker (style_picker.go): pickingStyle/styleList drive the "t"
@@ -131,12 +130,6 @@ type ResponsePane struct {
 	pickingStyle                        bool
 	styleList                           list.Model
 	stylePickerWidth, stylePickerHeight int
-
-	// DB persists the picked body style across restarts (see
-	// storage.SaveBodyStyle) - nil-safe (a nil DB, as in tests, just means
-	// picking a style doesn't survive a restart) the same way
-	// requestpane.RequestPane.DB already is.
-	DB *storage.SQLiteStorage
 
 	keys   keybindings.KeyMap
 	styles design.Styles

@@ -28,7 +28,7 @@ func keyRunes(s string) tea.KeyPressMsg {
 // see highlightRawBody - must still be the exact, unformatted bytes;
 // only pretty gets reformatted/re-indented - see formatJSON).
 func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{
@@ -68,7 +68,7 @@ func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *tes
 // itself (ANSI codes stripped) must stay byte-for-byte what was
 // received.
 func TestResponsePane_RawBody_IsSyntaxHighlightedButNotReformatted(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	compact := `{"a":1,"b":2}`
@@ -96,7 +96,7 @@ func TestResponsePane_RawBody_IsSyntaxHighlightedButNotReformatted(t *testing.T)
 // Headers/Timing/Request, which don't go through formatContentByType at
 // all.
 func TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: `{"a":1}`}, &http.Request{Method: http.GET, URL: "http://x"})
@@ -117,7 +117,7 @@ func TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab(t *testing.T) {
 // it always saves the *raw* bytes, even while the pretty/formatted view
 // is what's currently on screen (rawBody == false).
 func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	rawBody := `{"a":1,"b":2}`
@@ -178,7 +178,7 @@ func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
 // TestResponsePane_SaveToFile_EscCancelsWithoutSaving verifies pressing
 // esc closes the prompt without dispatching any save.
 func TestResponsePane_SaveToFile_EscCancelsWithoutSaving(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})

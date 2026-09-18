@@ -382,27 +382,6 @@ func TestSQLiteStorage_LastSentRequest_OverwritesPrevious(t *testing.T) {
 	assert.Equal(t, "https://b.example.com", got.URL)
 }
 
-// TestSQLiteStorage_BodyStyle_RoundTrips verifies SaveBodyStyle/
-// LoadBodyStyle preserve a chroma style name, and that a fresh database
-// returns "" (not an error) - the caller's own default applies then.
-func TestSQLiteStorage_BodyStyle_RoundTrips(t *testing.T) {
-	db := setupTestDB(t)
-
-	got, err := db.LoadBodyStyle()
-	assert.NoError(t, err)
-	assert.Equal(t, "", got)
-
-	assert.NoError(t, db.SaveBodyStyle("dracula"))
-	got, err = db.LoadBodyStyle()
-	assert.NoError(t, err)
-	assert.Equal(t, "dracula", got)
-
-	assert.NoError(t, db.SaveBodyStyle("nord"))
-	got, err = db.LoadBodyStyle()
-	assert.NoError(t, err)
-	assert.Equal(t, "nord", got)
-}
-
 // TestSQLiteStorage_LastGroupFilter_RoundTrips verifies
 // SaveLastGroupFilter/LoadLastGroupFilter preserve a group name, and that
 // a fresh database returns "" (not an error) - "All groups", the ordinary

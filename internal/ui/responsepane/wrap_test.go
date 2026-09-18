@@ -14,7 +14,7 @@ import (
 // scroll available) - useful for reading something like a minified page
 // without scrolling sideways through it.
 func TestResponsePane_ToggleWrap_WrapsLongLines(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(40)
 	pane.SetHeight(20)
 

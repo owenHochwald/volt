@@ -22,7 +22,7 @@ func formatJSON(content string) string {
 // defaultBodyStyle is the chroma style used for the Body tab's pretty
 // rendering until the user picks a different one (see the "t" style
 // picker) - restored on every app start unless something else was saved
-// (see storage.SaveBodyStyle/LoadBodyStyle).
+// (see design.SaveBodyStyle/LoadBodyStyle).
 const defaultBodyStyle = "onedark"
 
 // highlightContent applies syntax highlighting using chroma's styleName

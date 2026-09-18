@@ -6,13 +6,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
-	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
-func setupPaneWithResponse(t *testing.T, db *storage.SQLiteStorage) *ResponsePane {
+func setupPaneWithResponse(t *testing.T) *ResponsePane {
 	t.Helper()
-	pane := SetupResponsePane(db, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(120)
 	pane.SetHeight(30)
 	// The style picker's list is sized from the request pane's own box
@@ -33,7 +33,7 @@ func setupPaneWithResponse(t *testing.T, db *storage.SQLiteStorage) *ResponsePan
 // persisted style (a nil DB, or a DB nothing's ever been saved to)
 // starts on defaultBodyStyle ("onedark") - the requested default.
 func TestResponsePane_DefaultBodyStyle_IsOnedark(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	if pane.bodyStyleName != defaultBodyStyle {
 		t.Errorf("expected the default body style to be %q, got %q", defaultBodyStyle, pane.bodyStyleName)
 	}
@@ -47,7 +47,7 @@ func TestResponsePane_DefaultBodyStyle_IsOnedark(t *testing.T) {
 // picker's list out of this pane's own box in the first place (see the
 // package doc on ResponsePane.pickingStyle).
 func TestResponsePane_PickBodyStyle_OpensPicker(t *testing.T) {
-	pane := setupPaneWithResponse(t, nil)
+	pane := setupPaneWithResponse(t)
 
 	model, _ := pane.Update(keyRunes("t"))
 	result := model
@@ -72,7 +72,7 @@ func TestResponsePane_PickBodyStyle_OpensPicker(t *testing.T) {
 // moves, using whatever style it's currently on (see effectiveBodyStyle)
 // - without ever touching bodyStyleName until confirmed.
 func TestResponsePane_StylePicker_LivePreviewsAsCursorMoves(t *testing.T) {
-	pane := setupPaneWithResponse(t, nil)
+	pane := setupPaneWithResponse(t)
 	original := pane.bodyStyleName
 
 	model, _ := pane.Update(keyRunes("t"))
@@ -103,16 +103,12 @@ func TestResponsePane_StylePicker_LivePreviewsAsCursorMoves(t *testing.T) {
 // TestResponsePane_ConfirmStylePicker_AppliesAndPersists is a regression
 // test for a real feature request: picking a style from the app must
 // both apply it immediately (the Body tab re-renders with it) and
-// persist it (see storage.SaveBodyStyle) so the next app start restores
-// it (see storage's own round-trip test for the load half of that).
+// persist it (see design.SaveBodyStyle) so the next app start restores
+// it (see design's own round-trip test for the load half of that).
 func TestResponsePane_ConfirmStylePicker_AppliesAndPersists(t *testing.T) {
-	db, err := storage.NewSQLiteStorage(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create sqlite storage: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	pane := setupPaneWithResponse(t, db)
+	pane := setupPaneWithResponse(t)
 
 	model, _ := pane.Update(keyRunes("t"))
 	opened := model
@@ -150,7 +146,7 @@ func TestResponsePane_ConfirmStylePicker_AppliesAndPersists(t *testing.T) {
 	}
 	cmd()
 
-	saved, err := db.LoadBodyStyle()
+	saved, err := design.LoadBodyStyle()
 	if err != nil {
 		t.Fatalf("unexpected error loading style: %v", err)
 	}
@@ -164,7 +160,7 @@ func TestResponsePane_ConfirmStylePicker_AppliesAndPersists(t *testing.T) {
 // to be sitting on - browsing is only ever a live preview (see
 // effectiveBodyStyle), never a mutation, until enter confirms it.
 func TestResponsePane_CancelStylePicker_LeavesStyleUnchanged(t *testing.T) {
-	pane := setupPaneWithResponse(t, nil)
+	pane := setupPaneWithResponse(t)
 	original := pane.bodyStyleName
 
 	model, _ := pane.Update(keyRunes("t"))
@@ -190,7 +186,7 @@ func TestResponsePane_CancelStylePicker_LeavesStyleUnchanged(t *testing.T) {
 // pressed while browsing styles (outside of the list's own "/" filter
 // input, where "q" is a perfectly ordinary character to type).
 func TestResponsePane_StylePicker_QDoesNotQuitTheApp(t *testing.T) {
-	pane := setupPaneWithResponse(t, nil)
+	pane := setupPaneWithResponse(t)
 
 	model, _ := pane.Update(keyRunes("t"))
 	opened := model

@@ -14,7 +14,7 @@ import (
 // content for exercising vim/less-style navigation and search against.
 func setupPaneWithLines(t *testing.T, n int) *ResponsePane {
 	t.Helper()
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(100)
 	pane.SetHeight(20)
 

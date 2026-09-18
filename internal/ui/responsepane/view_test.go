@@ -22,7 +22,7 @@ import (
 // only cue that pgup/pgdn would reveal anything more) and the footer hint
 // (how users discover "r"/"s"/"y"/"/"/"gg" etc in the first place).
 func TestResponsePane_View_TrailerSurvivesLargeScrollableBody(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 

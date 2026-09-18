@@ -5,11 +5,15 @@ const ThemeSchemaVersion = 1
 type ColorValue string
 
 // AppConfig selects a theme and motion preference from Volt's user
-// configuration file.
+// configuration file. BodyStyle is the response pane's chroma syntax
+// style (see responsepane's style picker) - stored alongside the theme
+// rather than in the database, since both are the same kind of thing:
+// a user's persisted display preference, not application data.
 type AppConfig struct {
-	Version int        `yaml:"version"`
-	Theme   string     `yaml:"theme"`
-	Motion  MotionMode `yaml:"motion"`
+	Version   int        `yaml:"version"`
+	Theme     string     `yaml:"theme"`
+	Motion    MotionMode `yaml:"motion"`
+	BodyStyle string     `yaml:"body_style,omitempty"`
 }
 
 // ThemeConfig is the parsed, unresolved representation of a user theme.

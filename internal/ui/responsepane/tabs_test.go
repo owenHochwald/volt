@@ -12,7 +12,7 @@ import (
 )
 
 func TestResponsePane_RequestTab_ShowsSentRequest(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	// Wide/tall enough that nothing wraps or clips - content now goes
 	// through the viewport (see renderActiveTabContent), sized the same
 	// way a real terminal would be; the default test dimensions (width 20,
@@ -58,7 +58,7 @@ func TestResponsePane_RequestTab_ShowsSentRequest(t *testing.T) {
 // renderActiveTabContent) since the bug was specifically in View()'s own
 // override.
 func TestResponsePane_RequestTab_ShowsSentRequestEvenOnConnectionError(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(200)
 	pane.SetHeight(50)
 
@@ -93,7 +93,7 @@ func TestResponsePane_RequestTab_ShowsSentRequestEvenOnConnectionError(t *testin
 // really nothing was ever measured. The Timing tab should say so plainly
 // instead.
 func TestResponsePane_TimingTab_ExplainsFailedSendInsteadOfZeroDuration(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{Error: `dial tcp 127.0.0.1:1: connect: connection refused`}, &http.Request{Method: http.POST, URL: "http://x"})
@@ -111,7 +111,7 @@ func TestResponsePane_TimingTab_ExplainsFailedSendInsteadOfZeroDuration(t *testi
 }
 
 func TestResponsePane_RequestTab_NoSentRequestYet(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.activeTab = int(TabRequest)
 	pane.Response = &http.Response{StatusCode: 200, Status: "200 OK"}
 	pane.updateViewportForActiveTab()
@@ -123,7 +123,7 @@ func TestResponsePane_RequestTab_NoSentRequestYet(t *testing.T) {
 }
 
 func TestResponsePane_DirectTab4_SwitchesToRequestTab(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK"}, &http.Request{Method: http.GET, URL: "http://x"})
 
 	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("4")[0], Text: "4"}))
@@ -134,7 +134,7 @@ func TestResponsePane_DirectTab4_SwitchesToRequestTab(t *testing.T) {
 }
 
 func TestResponsePane_DirectTab4_IgnoredDuringLoadTest(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(&http.LoadTestStats{TotalRequests: 10})
 
 	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("4")[0], Text: "4"}))
@@ -174,7 +174,7 @@ func TestResponsePane_AllFourTabs_ScrollWhenContentOverflows(t *testing.T) {
 	}
 	bigBody += "}"
 
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	// Deliberately tiny - not enough for 40 headers/fields, nor even
 	// Timing's fixed handful of lines.
@@ -227,7 +227,7 @@ func TestResponsePane_AllFourTabs_ScrollWhenContentOverflows(t *testing.T) {
 }
 
 func TestResponsePane_ScrollIndicator_EmptyWhenContentFits(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(50)
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: `{"ok":true}`}, &http.Request{Method: http.GET, URL: "http://x"})
@@ -238,7 +238,7 @@ func TestResponsePane_ScrollIndicator_EmptyWhenContentFits(t *testing.T) {
 }
 
 func TestResponsePane_MaxTabs(t *testing.T) {
-	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	if got := pane.getMaxTabs(); got != 4 {
 		t.Errorf("expected 4 tabs in normal mode (Body/Headers/Timing/Request), got %d", got)
 	}
@@ -252,7 +252,7 @@ func TestResponsePane_MaxTabs(t *testing.T) {
 func TestResponseTabLabelsFollowConfiguredBinding(t *testing.T) {
 	keys := keybindings.DefaultKeyMap()
 	keys.DirectTab = key.NewBinding(key.WithKeys("a", "b", "c"))
-	pane := SetupResponsePane(nil, keys)
+	pane := SetupResponsePane(keys)
 
 	rendered := pane.renderTabs()
 	for _, expected := range []string{"[a] Body", "[b] Headers", "[c] Timing"} {

@@ -114,14 +114,14 @@ func (m *ResponsePane) handleStylePickerKey(msg tea.KeyPressMsg) (*ResponsePane,
 
 // confirmStylePicker applies the list's currently selected style,
 // re-renders the real content with it, and persists it (see
-// storage.SaveBodyStyle) so the next app start restores it too.
+// design.SaveBodyStyle) so the next app start restores it too.
 func (m *ResponsePane) confirmStylePicker() tea.Cmd {
 	if it, ok := m.styleList.SelectedItem().(styleItem); ok {
 		m.bodyStyleName = string(it)
 	}
 	m.pickingStyle = false
 	m.updateViewportForActiveTab()
-	return ui.SaveBodyStyleCmd(m.DB, m.bodyStyleName)
+	return ui.SaveBodyStyleCmd(m.bodyStyleName)
 }
 
 // effectiveBodyStyle is what formatContentByType should actually
