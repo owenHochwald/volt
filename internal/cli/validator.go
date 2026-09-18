@@ -31,11 +31,20 @@ func (c *BenchConfig) Validate() error {
 		return errors.New("concurrency must be > 0")
 	}
 
-	// Duration and TotalRequests are mutually exclusive
-	if c.Duration == 0 && c.TotalRequests == 0 {
+	if c.Duration < 0 {
+		return errors.New("duration must be >= 0")
+	}
+	if c.TotalRequests < 0 {
+		return errors.New("total requests must be >= 0")
+	}
+
+	// Exactly one positive execution bound is required.
+	durationMode := c.Duration > 0
+	requestCountMode := c.TotalRequests > 0
+	if !durationMode && !requestCountMode {
 		return errors.New("must specify either -d (duration) or -n (total requests)")
 	}
-	if c.Duration > 0 && c.TotalRequests > 0 {
+	if durationMode && requestCountMode {
 		return errors.New("-d and -n are mutually exclusive")
 	}
 

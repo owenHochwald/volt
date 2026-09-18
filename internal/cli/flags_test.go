@@ -25,6 +25,18 @@ func TestParseBenchFlags(t *testing.T) {
 				if c.Concurrency != 50 {
 					t.Errorf("Concurrency = %d, want 50", c.Concurrency)
 				}
+				if !c.KeepAlive {
+					t.Error("KeepAlive should default to true")
+				}
+			},
+		},
+		{
+			name: "disable keepalive",
+			args: []string{"-url", "http://example.com", "-no-keepalive"},
+			check: func(t *testing.T, c *BenchConfig) {
+				if c.KeepAlive {
+					t.Error("KeepAlive should be false")
+				}
 			},
 		},
 		{
