@@ -89,3 +89,39 @@ func TestZoom_ResetsWhenFocusLeavesResponsePanel(t *testing.T) {
 		t.Error("expected leaving the response panel to un-zoom it")
 	}
 }
+
+// TestZoom_RestoresRequestPaneSizeWhenLeavingViaPanelSwitch is a
+// regression test for a real bug: un-zooming (see
+// TestZoom_ResetsWhenFocusLeavesResponsePanel above) cleared
+// zoomedResponse but never re-applied the layout - the request pane's
+// own Height stayed stuck at the near-zero value applyLayout gave it
+// while zoomed (currentLayout sets requestHeight to 0 whenever
+// zoomedResponse is true), so switching straight back to it (ctrl+e/
+// alt+h - PreviousPanel, not just esc back to the sidebar) showed
+// almost nothing of it - just its first field - until some *other*
+// resize happened to come along.
+func TestZoom_RestoresRequestPaneSizeWhenLeavingViaPanelSwitch(t *testing.T) {
+	m := newTestModel(t)
+	m.width, m.height = 160, 45
+	m.applyLayout(m.currentLayout())
+	m.setFocusedPanel(utils.ResponsePanel)
+
+	model, _ := m.Update(zKeyMsg())
+	zoomed := model.(Model)
+	if !zoomed.zoomedResponse {
+		t.Fatal("test setup error: expected \"z\" to zoom the response panel")
+	}
+	zoomedHeight := zoomed.requestPane.Height
+
+	model2, _ := zoomed.Update(appKeyPress('e', "", tea.ModCtrl)) // PreviousPanel: response -> request
+	result, ok := model2.(Model)
+	if !ok {
+		t.Fatalf("expected Model, got %T", model2)
+	}
+	if result.focusedPanel != utils.RequestPanel {
+		t.Fatalf("test setup error: expected ctrl+e to move focus to the request panel, got %v", result.focusedPanel)
+	}
+	if result.requestPane.Height <= zoomedHeight {
+		t.Errorf("expected the request pane's own Height restored above its zoomed value (%d), got %d", zoomedHeight, result.requestPane.Height)
+	}
+}

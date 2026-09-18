@@ -22,9 +22,16 @@ func (m *Model) setFocusedPanel(panel utils.Panel) {
 	// zoom off - esc, a panel switch, loading a request from the sidebar,
 	// a response arriving while zoomed, ...) reliably un-zooms it, so a
 	// zoomed response never silently stays zoomed once focus has moved on
-	// (see zoomedResponse/ToggleZoomResponse).
-	if panel != utils.ResponsePanel {
+	// (see zoomedResponse/ToggleZoomResponse). Un-zooming has to
+	// re-apply the layout too, the same way ToggleZoomResponse's own "z"
+	// handler already does - otherwise the request pane's own Height
+	// stayed stuck at the near-zero value applyLayout gave it while
+	// zoomed (currentLayout sets requestHeight to 0 whenever
+	// zoomedResponse is true), showing almost nothing of it - just its
+	// first field - until some *other* resize happened to come along.
+	if panel != utils.ResponsePanel && m.zoomedResponse {
 		m.zoomedResponse = false
+		m.resizeContentPanels()
 	}
 }
 
