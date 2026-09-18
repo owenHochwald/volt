@@ -141,6 +141,16 @@ func (m *RequestPane) resetToBlank() {
 
 // reinitRequestPane reinits the request pane with a new request
 func (m *RequestPane) reinitRequestPane(request *http.Request) {
+	// Blur whatever's currently focused before rebuilding FocusManager
+	// below - NameInput/URLInput/etc. are reused across requests, not
+	// recreated, so skipping this left the previously focused field
+	// still marked focused (cursor still blinking) even after focus
+	// moved to method+URL, showing as two simultaneously blinking
+	// cursors once a different request was loaded/reset while a field
+	// like Name was focused.
+	if m.FocusManager != nil {
+		m.FocusManager.Current().Blur()
+	}
 	m.Request = request
 	// A request loaded/reset/cleared fresh hasn't had a send attempted
 	// against *it* yet - carrying this over from whatever was loaded before

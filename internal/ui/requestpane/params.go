@@ -331,10 +331,19 @@ func paramFocusables(params []Param) []ui.Focusable {
 // rebuildFocusManager recreates the focus cycle, keeping focus where it
 // currently is (clamped to the new, possibly different, field count).
 // Called whenever PathParams or BodyParams changes shape.
+//
+// Blurs the old FocusManager's current component first - the underlying
+// *textinput.Model/*textarea.Model objects (NameInput, a PathParam's
+// Input, etc.) are reused across rebuilds, not recreated, so skipping
+// this left whichever one was focused before still marked focused (its
+// cursor still blinking) even once the new FocusManager moved focus
+// elsewhere - visible as two simultaneously blinking cursors whenever
+// the rebuild also happened to land the new index on a different field.
 func (m *RequestPane) rebuildFocusManager() {
 	currentIndex := 0
 	if m.FocusManager != nil {
 		currentIndex = m.FocusManager.CurrentIndex()
+		m.FocusManager.Current().Blur()
 	}
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, currentIndex)
 }
