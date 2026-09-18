@@ -100,8 +100,14 @@ func TestGroupsPane_DeleteGroup_ConfirmDeletes(t *testing.T) {
 
 func TestGroupsPane_DeleteServer_ConfirmDeletes(t *testing.T) {
 	pane, db := setupTestPane(t)
+	if _, err := db.GetOrCreateGroup("testgroup"); err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
 	if _, err := db.UpsertServer("testserver", "http://localhost:9999"); err != nil {
 		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := db.AddGroupServer("testgroup", "testserver"); err != nil {
+		t.Fatalf("failed to add server to group: %v", err)
 	}
 	pane.Open()
 	pane.target = focusServers

@@ -6,44 +6,36 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	hintStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	boxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
-	// labelStyle mirrors the removed ui.LabelStyle - main has no
-	// equivalent for this package (groupspane doesn't exist there), so it
-	// stays a plain local style rather than moving into design.Styles.
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+// boxStyle is the bare (unfocused-color-agnostic) frame around each of the
+// browse view's two lists - applyFocus below fills in the actual border
+// color from m.styles, matching whichever list currently has focus.
+var boxStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 
-	focusColor   = lipgloss.Color("205")
-	unfocusColor = lipgloss.Color("240")
-)
-
-// applyFocus mirrors the removed ui.ApplyFocus, same rationale as
-// labelStyle above.
-func applyFocus(style lipgloss.Style, focus bool) lipgloss.Style {
+// applyFocus colors box's border using the same focused/unfocused panel
+// colors every other pane's own boxes use (see design.Styles.Panel), so
+// the Groups surface reads as part of the same app instead of a visually
+// distinct modal bolted on the side.
+func applyFocus(box, panelFocused, panelBase lipgloss.Style, focus bool) lipgloss.Style {
 	if focus {
-		return style.BorderForeground(focusColor).Bold(true)
+		return box.BorderForeground(panelFocused.GetBorderLeftForeground()).Bold(true)
 	}
-	return style.BorderForeground(unfocusColor)
+	return box.BorderForeground(panelBase.GetBorderLeftForeground())
 }
 
 func (m GroupsPane) View() string {
 	modalStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("205")).
+		BorderForeground(m.styles.Panel.Focused.GetBorderLeftForeground()).
 		Padding(1, 2).
 		Width(m.width).
 		Height(m.height)
 
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		titleStyle.Render("Groups & Servers"),
+		m.styles.Text.Logo.Render("Groups & Servers"),
 		"",
 		m.ViewContent(),
-		hintStyle.Render(m.footerHint()),
+		m.styles.Text.Muted.Render(m.footerHint()),
 	)
 
 	return modalStyle.Render(modalContent)
@@ -69,8 +61,6 @@ func (m GroupsPane) ViewContent() string {
 		body = m.renderURLForm(fmt.Sprintf("Update base URL for %q", m.renamingName))
 	case modeEditServerHeaders:
 		body = m.renderHeadersForm(fmt.Sprintf("Default headers for %q", m.renamingName))
-	case modeAssignServer:
-		body = m.renderAssignServer()
 	default:
 		body = m.renderBrowse()
 	}
@@ -81,11 +71,11 @@ func (m GroupsPane) ViewContent() string {
 		if m.pendingDelete.kind == pendingDeleteServer {
 			kind = "server"
 		}
-		status = errStyle.Render(fmt.Sprintf("Delete %s %q? y/enter=yes, any other key=no", kind, m.pendingDelete.name))
+		status = m.styles.Notice.Error.Render(fmt.Sprintf("Delete %s %q? y/enter=yes, any other key=no", kind, m.pendingDelete.name))
 	} else if m.statusMsg != "" {
-		style := okStyle
+		style := m.styles.Notice.Success
 		if m.statusErr {
-			style = errStyle
+			style = m.styles.Notice.Error
 		}
 		status = style.Render(m.statusMsg)
 	}
@@ -94,30 +84,30 @@ func (m GroupsPane) ViewContent() string {
 }
 
 func (m GroupsPane) renderBrowse() string {
-	groupsBox := applyFocus(boxStyle, m.target == focusGroups).Render(m.groups.View())
-	serversBox := applyFocus(boxStyle, m.target == focusServers).Render(m.servers.View())
+	groupsBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusGroups).Render(m.groups.View())
+	serversBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusServers).Render(m.servers.View())
 	return lipgloss.JoinHorizontal(lipgloss.Top, groupsBox, "  ", serversBox)
 }
 
 func (m GroupsPane) renderGroupForm(title string) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render(title),
+		m.styles.Text.Logo.Render(title),
 		"",
-		labelStyle.Render("Name:"),
+		m.styles.Text.Label.Render("Name:"),
 		m.nameInput.View(),
 	)
 }
 
 func (m GroupsPane) renderServerForm(title string, showURL bool) string {
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Render(title),
+		m.styles.Text.Logo.Render(title),
 		"",
-		labelStyle.Render("Name:"),
+		m.styles.Text.Label.Render("Name:"),
 		m.nameInput.View(),
 	}
 	if showURL {
-		lines = append(lines, "", labelStyle.Render("Base URL:"), m.urlInput.View())
+		lines = append(lines, "", m.styles.Text.Label.Render("Base URL:"), m.urlInput.View())
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -125,9 +115,9 @@ func (m GroupsPane) renderServerForm(title string, showURL bool) string {
 func (m GroupsPane) renderURLForm(title string) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render(title),
+		m.styles.Text.Logo.Render(title),
 		"",
-		labelStyle.Render("Base URL:"),
+		m.styles.Text.Label.Render("Base URL:"),
 		m.urlInput.View(),
 	)
 }
@@ -135,19 +125,10 @@ func (m GroupsPane) renderURLForm(title string) string {
 func (m GroupsPane) renderHeadersForm(title string) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render(title),
+		m.styles.Text.Logo.Render(title),
 		"",
-		labelStyle.Render("Headers (key = value, one per line):"),
+		m.styles.Text.Label.Render("Headers (key = value, one per line):"),
 		m.headersInput.View(),
-	)
-}
-
-func (m GroupsPane) renderAssignServer() string {
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Assign a server to %q", m.assigningGroup)),
-		"",
-		m.servers.View(),
 	)
 }
 
@@ -167,9 +148,7 @@ func (m GroupsPane) footerHint() string {
 		return "enter: save · esc: cancel"
 	case modeEditServerHeaders:
 		return "ctrl+s: save · esc: cancel"
-	case modeAssignServer:
-		return "enter: assign · esc: cancel"
 	default:
-		return "tab: switch list · n: new · r: rename · u: server url · H: server headers · enter: assign server (on a group) · d: delete · q/esc: close"
+		return "tab: switch list · n: new · r: rename · u: server url · H: server headers · d: delete · q/esc: close"
 	}
 }

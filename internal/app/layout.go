@@ -43,8 +43,8 @@ func calculateLayout(width, height int) terminalLayout {
 	layout := terminalLayout{
 		width:       max(width, 0),
 		height:      max(height, 0),
-		modalWidth:  clamp(width-8, 30, 72),
-		modalHeight: clamp(height-4, 12, 30),
+		modalWidth:  clamp(width-8, 30, 100),
+		modalHeight: clamp(height-4, 12, 40),
 	}
 	if width < minTerminalWidth || height < minTerminalHeight {
 		layout.mode = layoutTooSmall

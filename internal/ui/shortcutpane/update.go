@@ -31,6 +31,29 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 					m.activeTab = int(Request)
 				case "4":
 					m.activeTab = int(Response)
+				case "5":
+					m.activeTab = int(Groups)
+				case "6":
+					m.activeTab = int(Import)
+				}
+				m.helpViewport.GotoTop()
+				return m, nil
+			}
+
+			// A different category's shortcut list starts scrolled to the
+			// top, not wherever the previous category happened to be
+			// scrolled to.
+			if m.surface == SurfaceHelp && (keybindings.Matches(msg, m.keys.PageUp) || keybindings.Matches(msg, m.keys.PageDown)) {
+				// SetContent first: helpViewport's content is only ever
+				// set in View() (value receiver - never persisted back -
+				// see helpViewport's own field comment), so without this
+				// refresh every page scroll would see empty content and
+				// PageUp/PageDown would be a permanent no-op.
+				m.helpViewport.SetContent(m.renderShortcutList())
+				if keybindings.Matches(msg, m.keys.PageUp) {
+					m.helpViewport.PageUp()
+				} else {
+					m.helpViewport.PageDown()
 				}
 				return m, nil
 			}
@@ -60,6 +83,7 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 				return m, m.moveTheme(-1)
 			}
 			m.activeTab = (m.activeTab - 1 + m.getMaxTabs()) % m.getMaxTabs()
+			m.helpViewport.GotoTop()
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.NavDown) {
@@ -67,6 +91,7 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 				return m, m.moveTheme(1)
 			}
 			m.activeTab = (m.activeTab + 1) % m.getMaxTabs()
+			m.helpViewport.GotoTop()
 			return m, nil
 		}
 

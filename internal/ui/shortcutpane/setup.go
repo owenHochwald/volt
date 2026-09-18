@@ -24,7 +24,7 @@ func SetupShortcutPane(keys keybindings.KeyMap, db *storage.SQLiteStorage, optio
 		keys:       keys,
 		tabs:       GetShortcutTabs(keys),
 		styles:     styles,
-		groupsPane: groupspane.SetupGroupsPane(db, keys),
+		groupsPane: groupspane.SetupGroupsPane(db, keys, styles),
 	}
 
 }

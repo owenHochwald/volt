@@ -214,7 +214,7 @@ func DefaultRegistry() Registry {
 		{ActionCloseHelp, []Context{ContextHelp}, []string{"q", "?"}, "q/?", "close help", 80},
 		{ActionPreviousHelpTab, []Context{ContextHelp}, []string{"h"}, "h", "previous section", 70},
 		{ActionNextHelpTab, []Context{ContextHelp}, []string{"l"}, "l", "next section", 70},
-		{ActionDirectHelpTab, []Context{ContextHelp}, []string{"1", "2", "3", "4"}, "1-4", "jump to section", 60},
+		{ActionDirectHelpTab, []Context{ContextHelp}, []string{"1", "2", "3", "4", "5", "6"}, "1-6", "jump to section", 60},
 
 		{ActionOpenGroups, []Context{ContextGlobal}, []string{"ctrl+g"}, "ctrl+g", "groups & servers", 40},
 		{ActionOpenImport, []Context{ContextGlobal}, []string{"ctrl+n"}, "ctrl+n", "import OpenAPI spec", 35},

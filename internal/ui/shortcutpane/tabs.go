@@ -9,6 +9,8 @@ const (
 	Sidebar
 	Request
 	Response
+	Groups
+	Import
 )
 
 // TabIndex represents a tab position

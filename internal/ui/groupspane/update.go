@@ -27,8 +27,6 @@ func (m GroupsPane) Update(msg tea.Msg) (GroupsPane, tea.Cmd) {
 		return m.handleServerFormKey(keyMsg)
 	case modeEditServerHeaders:
 		return m.handleServerHeadersFormKey(keyMsg)
-	case modeAssignServer:
-		return m.handleAssignServerKey(keyMsg)
 	default:
 		return m.handleBrowseKey(keyMsg)
 	}
@@ -76,16 +74,28 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		return m, nil
 	}
 	if keybindings.Matches(msg, m.keys.CreateItem) {
+		if m.target == focusGroups {
+			m.statusMsg = ""
+			m.nameInput.SetValue("")
+			m.nameInput.Focus()
+			m.mode = modeCreateGroup
+			return m, nil
+		}
+		// A new server is always connected to whichever group is
+		// currently selected (see handleServerFormKey's modeCreateServer
+		// case) - there's no server that exists outside of some group's
+		// scope from this UI, so creating one needs a group to attach it
+		// to first.
+		if _, ok := m.selectedGroup(); !ok {
+			m.statusMsg, m.statusErr = "create a group first", true
+			return m, nil
+		}
 		m.statusMsg = ""
 		m.nameInput.SetValue("")
 		m.nameInput.Focus()
-		if m.target == focusGroups {
-			m.mode = modeCreateGroup
-		} else {
-			m.urlInput.SetValue("")
-			m.formFocusURL = false
-			m.mode = modeCreateServer
-		}
+		m.urlInput.SetValue("")
+		m.formFocusURL = false
+		m.mode = modeCreateServer
 		return m, nil
 	}
 	if keybindings.Matches(msg, m.keys.RenameItem) {
@@ -151,19 +161,14 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if msg.String() == "enter" && m.target == focusGroups {
-		item, ok := m.selectedGroup()
-		if !ok {
-			return m, nil
-		}
-		m.assigningGroup = item.group.Name
-		m.mode = modeAssignServer
-		return m, nil
-	}
-
 	var cmd tea.Cmd
 	if m.target == focusGroups {
 		m.groups, cmd = m.groups.Update(msg)
+		// The Servers list only ever shows the selected group's own
+		// servers (see refreshGroupServers) - a keypress that moved the
+		// Groups cursor (up/down, filtering, ...) needs it re-derived for
+		// whichever group is selected now.
+		m.refreshGroupServers()
 	} else {
 		m.servers, cmd = m.servers.Update(msg)
 	}
@@ -233,8 +238,15 @@ func (m GroupsPane) handleServerFormKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cm
 				m.statusMsg, m.statusErr = "name and base URL are both required", true
 				return m, nil
 			}
-			_, err = m.db.UpsertServer(name, url)
-			successMsg = fmt.Sprintf("Saved server %q", name)
+			group, ok := m.selectedGroup()
+			if !ok {
+				m.statusMsg, m.statusErr = "create a group first", true
+				return m, nil
+			}
+			if _, err = m.db.UpsertServer(name, url); err == nil {
+				err = m.db.AddGroupServer(group.group.Name, name)
+			}
+			successMsg = fmt.Sprintf("Saved server %q for group %q", name, group.group.Name)
 		case modeRenameServer:
 			name := strings.TrimSpace(m.nameInput.Value())
 			if name == "" {
@@ -301,26 +313,6 @@ func (m GroupsPane) handleServerHeadersFormKey(msg tea.KeyPressMsg) (GroupsPane,
 
 	var cmd tea.Cmd
 	m.headersInput, cmd = m.headersInput.Update(msg)
-	return m, cmd
-}
-
-func (m GroupsPane) handleAssignServerKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
-	if msg.String() == "esc" {
-		m.mode = modeBrowse
-		return m, nil
-	}
-	if msg.String() == "enter" {
-		if item, ok := m.selectedServer(); ok {
-			err := m.db.SetGroupServer(m.assigningGroup, item.server.Name)
-			m.setStatus(err, fmt.Sprintf("%q now points at %q", m.assigningGroup, item.server.Name))
-		}
-		m.mode = modeBrowse
-		m.reload()
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.servers, cmd = m.servers.Update(msg)
 	return m, cmd
 }
 

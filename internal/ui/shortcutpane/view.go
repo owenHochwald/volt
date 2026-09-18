@@ -23,13 +23,14 @@ func (m ShortcutPane) View() string {
 	var content, footerText string
 	switch m.surface {
 	case SurfaceHelp:
+		m.helpViewport.SetContent(m.renderShortcutList())
 		content = lipgloss.JoinVertical(
 			lipgloss.Left,
 			m.renderTabs(),
 			"",
-			m.renderShortcutList(),
+			m.helpViewport.View(),
 		)
-		footerText = "h/l section • j/k category • 1-4 jump • q/? close"
+		footerText = "h/l section • j/k category • 1-6 jump • pgup/pgdn scroll • q/? close"
 	case SurfaceGroups:
 		content = m.groupsPane.ViewContent()
 		footerText = "h/l section • " + m.groupsPane.FooterHint()

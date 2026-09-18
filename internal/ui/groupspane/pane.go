@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -28,7 +29,6 @@ const (
 	modeRenameServer
 	modeEditServerURL
 	modeEditServerHeaders
-	modeAssignServer
 )
 
 // pendingDeleteKind distinguishes what a pending delete confirmation applies
@@ -56,13 +56,21 @@ type GroupsPane struct {
 	width, height int
 	Focused       bool
 
-	keys keybindings.KeyMap
-	db   *storage.SQLiteStorage
+	keys   keybindings.KeyMap
+	db     *storage.SQLiteStorage
+	styles design.Styles
 
 	target focusTarget
 	mode   mode
 
-	groups  list.Model
+	groups list.Model
+	// servers shows only the servers belonging to whichever group is
+	// currently selected/highlighted in groups (see refreshGroupServers)
+	// - what browsing displays, and what rename/delete/URL/headers edits
+	// operate on. A server created here ("n" while target==focusServers)
+	// is likewise always connected to that selected group right away
+	// (see handleServerFormKey) - there's no server that exists outside
+	// of some group's scope from this UI's perspective.
 	servers list.Model
 
 	nameInput    textinput.Model
@@ -75,11 +83,10 @@ type GroupsPane struct {
 	// utils.ParseKeyValuePairs/ParseMapToString.
 	headersInput textarea.Model
 
-	// renamingName/assigningGroup remember which item a rename/URL-edit/
-	// server-assignment in progress applies to (captured by name, since
-	// SQLite CRUD here is keyed by name, not id).
-	renamingName   string
-	assigningGroup string
+	// renamingName remembers which item a rename/URL-edit in progress
+	// applies to (captured by name, since SQLite CRUD here is keyed by
+	// name, not id).
+	renamingName string
 
 	// pendingDelete holds the group/server awaiting a y/n confirmation after
 	// DeleteItem ('d') was pressed, or nil when nothing is pending. Deleting
@@ -101,7 +108,12 @@ func newTextInput(placeholder string, charLimit, width int) textinput.Model {
 
 // SetupGroupsPane constructs an unopened GroupsPane; call Open() to load
 // data and make it ready to display.
-func SetupGroupsPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) GroupsPane {
+func SetupGroupsPane(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyles ...design.Styles) GroupsPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	groups := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 	groups.Title = "Groups"
 	groups.SetShowHelp(false)
@@ -119,12 +131,20 @@ func SetupGroupsPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) GroupsP
 		width:        70,
 		keys:         keys,
 		db:           db,
+		styles:       styles,
 		groups:       groups,
 		servers:      servers,
 		nameInput:    newTextInput("name", 40, 40),
 		urlInput:     newTextInput("http://host:port", 200, 40),
 		headersInput: headersInput,
 	}
+}
+
+// SetStyles updates the theme-derived styles this pane renders with (see
+// design.Styles) - called whenever the app's theme changes, the same way
+// every other pane picks up a live theme switch.
+func (m *GroupsPane) SetStyles(styles design.Styles) {
+	m.styles = styles
 }
 
 func (m GroupsPane) Init() tea.Cmd {
@@ -146,10 +166,10 @@ func (m *GroupsPane) Open() {
 
 func (m *GroupsPane) reload() {
 	groups, _ := m.db.ListGroups()
-	servers, _ := m.db.ListServers()
+	allServers, _ := m.db.ListServers()
 
-	serverNames := make(map[int64]string, len(servers))
-	for _, s := range servers {
+	serverNames := make(map[int64]string, len(allServers))
+	for _, s := range allServers {
 		serverNames[s.ID] = s.Name
 	}
 
@@ -166,12 +186,29 @@ func (m *GroupsPane) reload() {
 	m.groups.SetItems(groupItems)
 	m.groups.Title = fmt.Sprintf("Groups (%d)", len(groupItems))
 
+	m.refreshGroupServers()
+}
+
+// refreshGroupServers repopulates the Servers list from whichever group is
+// currently selected/highlighted in Groups (see db.ListGroupServers) -
+// browsing only ever shows that group's own servers, not every server in
+// the database. Called after reload and after any keystroke that could
+// have moved the Groups selection (see handleBrowseKey), so the two never
+// drift out of sync.
+func (m *GroupsPane) refreshGroupServers() {
+	group, ok := m.selectedGroup()
+	if !ok {
+		m.servers.SetItems(nil)
+		m.servers.Title = "Servers (0)"
+		return
+	}
+	servers, _ := m.db.ListGroupServers(group.group.ID)
 	serverItems := make([]list.Item, 0, len(servers))
 	for _, s := range servers {
 		serverItems = append(serverItems, serverItem{server: s})
 	}
 	m.servers.SetItems(serverItems)
-	m.servers.Title = fmt.Sprintf("Servers (%d)", len(serverItems))
+	m.servers.Title = fmt.Sprintf("Servers (%d) · %s", len(serverItems), group.group.Name)
 }
 
 // IsEditing reports whether a create/rename/edit form is currently
