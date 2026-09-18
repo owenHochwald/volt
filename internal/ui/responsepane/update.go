@@ -208,6 +208,18 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 		}
 	}
 
+	// The style picker's list filters asynchronously - the "/" query typed
+	// in handleStylePickerKey above only starts the match (bubbles' own
+	// list.Model returns a tea.Cmd that resolves to a FilterMatchesMsg,
+	// not a tea.KeyPressMsg), so that reply has to reach styleList.Update
+	// here too, not just the key that triggered it - otherwise the query
+	// text updates but the visible list never actually narrows.
+	if m.pickingStyle {
+		m.styleList, cmd = m.styleList.Update(msg)
+		m.updateViewportForActiveTab()
+		return m, cmd
+	}
+
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 

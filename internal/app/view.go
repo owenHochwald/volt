@@ -122,7 +122,16 @@ func (m Model) focusedView(layout terminalLayout, header string) string {
 			)
 		}
 	case utils.ResponsePanel:
-		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, m.responsePane.View())
+		// wideView gives the style picker its own slot alongside the
+		// response panel (see StylePickerListView) - a focused/narrow
+		// layout only has room for one box, so the picker takes over this
+		// one instead, the same way it takes priority over a zoomed
+		// response panel there.
+		content := m.responsePane.View()
+		if m.responsePane.IsPickingStyle() {
+			content = m.responsePane.StylePickerListView()
+		}
+		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, content)
 	default:
 		panel = m.renderPanel(m.styles.Panel.Sidebar, true, false, layout.width, layout.contentHeight, m.sidebarPane.View())
 	}
