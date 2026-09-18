@@ -58,4 +58,11 @@ var (
 	// "r: raw/pretty · s: save to file · y: copy"), dim so it stays out of
 	// the way of the actual response content above it.
 	footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	// currentMatchStyle/otherMatchStyle highlight a search's matching
+	// lines (see highlightMatches) - currentMatchStyle for whichever one
+	// "n"/"b" would move away from, otherMatchStyle (more subdued) for
+	// every other match, so the current one is unambiguous at a glance.
+	currentMatchStyle = lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Bold(true)
+	otherMatchStyle   = lipgloss.NewStyle().Background(lipgloss.Color("58")).Foreground(lipgloss.Color("255"))
 )

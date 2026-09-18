@@ -1,6 +1,7 @@
 package requestpane
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -78,8 +79,9 @@ func TestValidateParams_SkipsEnumFields(t *testing.T) {
 
 // TestRequestPane_HandleSubmit_BlocksSendOnConstraintViolation is an
 // end-to-end check that a body param violating its schema's constraints
-// actually prevents sending (RequestInProgress never becomes true) and
-// surfaces a reason in ParseErrors.
+// actually prevents sending (RequestInProgress never becomes true) - the
+// reason is shown inline next to the field itself (see renderParamSection),
+// not listed separately anywhere.
 func TestRequestPane_HandleSubmit_BlocksSendOnConstraintViolation(t *testing.T) {
 	pane, _ := setupTestPane(t)
 
@@ -103,8 +105,9 @@ func TestRequestPane_HandleSubmit_BlocksSendOnConstraintViolation(t *testing.T) 
 	if result.RequestInProgress {
 		t.Error("expected the out-of-range value to block sending")
 	}
-	if len(result.ParseErrors) == 0 {
-		t.Error("expected a ParseErrors entry explaining why the send was blocked")
+	msg, ok := ValidateParam(result.BodyParams[0])
+	if ok || msg == "" {
+		t.Errorf("expected the out-of-range value to still be invalid with a reason, got msg=%q ok=%v", msg, ok)
 	}
 }
 
@@ -194,8 +197,49 @@ func TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredField(t *testing.T)
 	if result.RequestInProgress {
 		t.Error("expected the missing required field to block sending")
 	}
-	if len(result.ParseErrors) == 0 {
-		t.Error("expected a ParseErrors entry explaining why the send was blocked")
+	if !result.ShowRequiredErrors {
+		t.Error("expected the blocked send to switch on inline required-field errors")
+	}
+	if msg, ok := fieldError(result.BodyParams[0], result.ShowRequiredErrors); ok || msg == "" {
+		t.Errorf("expected the empty required field to now render inline as an error, got msg=%q ok=%v", msg, ok)
+	}
+}
+
+// TestRequestPane_BlockedSend_ShowsErrorInlineNotInFooter is a regression
+// test for a real feature request: a blocked send used to list its reasons
+// in the footer, below the Send button - now that same reason renders
+// inline right next to the offending field instead (see fieldError/
+// renderParamSection), and the footer no longer repeats it, freeing up the
+// vertical space the footer's error block used to take.
+func TestRequestPane_BlockedSend_ShowsErrorInlineNotInFooter(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.SetWidth(100)
+	pane.SetHeight(40)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"name": {Type: "string", Required: true},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.PanelFocused = true
+	// name left empty on purpose - never typed into.
+
+	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
+	result, ok := model.(*RequestPane)
+	if !ok {
+		t.Fatalf("expected *RequestPane, got %T", model)
+	}
+
+	rendered := result.View()
+	if !strings.Contains(rendered, "! required") {
+		t.Errorf("expected the blocked field's error to render inline, got:\n%s", rendered)
+	}
+	footer := result.renderFooter()
+	if strings.Contains(footer, "! required") {
+		t.Errorf("expected the footer to no longer repeat the field error, got:\n%s", footer)
+	}
+	if len(result.ParseErrors) != 0 {
+		t.Errorf("expected ParseErrors to stay empty for a required-field-only block, got %v", result.ParseErrors)
 	}
 }
 

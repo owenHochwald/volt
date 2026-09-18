@@ -19,10 +19,24 @@ func formatJSON(content string) string {
 	return pretty.String()
 }
 
-// highlightContent applies syntax highlighting using chroma
-func highlightContent(content, lexer string) string {
+// defaultBodyStyle is the chroma style used for the Body tab's pretty
+// rendering until the user picks a different one (see the "t" style
+// picker) - restored on every app start unless something else was saved
+// (see storage.SaveBodyStyle/LoadBodyStyle).
+const defaultBodyStyle = "onedark"
+
+// highlightContent applies syntax highlighting using chroma's styleName
+// (see ResponsePane.bodyStyleName) - falling back to defaultBodyStyle for
+// an empty/unrecognized name, the same fallback chroma's own styles.Get
+// already applies internally, spelled out here since callers building
+// live previews (see style_picker.go) want that same behavior without
+// going through a full ResponsePane.
+func highlightContent(content, lexer, styleName string) string {
+	if styleName == "" {
+		styleName = defaultBodyStyle
+	}
 	var buf bytes.Buffer
-	err := quick.Highlight(&buf, content, lexer, "terminal256", "monokai")
+	err := quick.Highlight(&buf, content, lexer, "terminal256", styleName)
 	if err != nil {
 		return content
 	}
@@ -45,24 +59,25 @@ func getContentLexer(contentType string) string {
 	}
 }
 
-// formatContentByType formats response body based on content type
-func formatContentByType(body, contentType string) string {
+// formatContentByType formats response body based on content type,
+// syntax-highlighted with styleName (see ResponsePane.bodyStyleName).
+func formatContentByType(body, contentType, styleName string) string {
 	switch {
 	case strings.Contains(contentType, "application/json"):
 		formatted := formatJSON(body)
-		return highlightContent(formatted, "json")
+		return highlightContent(formatted, "json", styleName)
 
 	case strings.Contains(contentType, "image/jpeg"), strings.Contains(contentType, "image/"):
 		return fmt.Sprintf("Sorry, we don't support %s yet!", contentType)
 
 	case strings.Contains(contentType, "text/html"):
-		return highlightContent(body, "html")
+		return highlightContent(body, "html", styleName)
 
 	case strings.Contains(contentType, "text/plain"):
-		return highlightContent(body, "plaintext")
+		return highlightContent(body, "plaintext", styleName)
 
 	case strings.Contains(contentType, "application/xml"), strings.Contains(contentType, "text/xml"):
-		return highlightContent(body, "xml")
+		return highlightContent(body, "xml", styleName)
 
 	case strings.Contains(contentType, "application/graphql"):
 		return "Sorry, we don't support GraphQL yet!"
@@ -73,4 +88,20 @@ func formatContentByType(body, contentType string) string {
 	default:
 		return fmt.Sprintf("Unhandled Content-Type: %s\n", contentType)
 	}
+}
+
+// highlightRawBody applies syntax highlighting to body exactly as
+// received, for ToggleRawBody's ("r") raw view - unlike
+// formatContentByType, it never reformats/re-indents first (see
+// formatJSON), since "raw" means the bytes as received, just recolored
+// rather than left flat and unstyled the way it used to be. Content
+// types with no recognized lexer (see getContentLexer - a binary image,
+// say) fall back to body completely untouched, same as raw view already
+// did for everything before this.
+func highlightRawBody(body, contentType, styleName string) string {
+	lexer := getContentLexer(contentType)
+	if lexer == "" {
+		return body
+	}
+	return highlightContent(body, lexer, styleName)
 }

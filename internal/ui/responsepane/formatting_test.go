@@ -132,7 +132,7 @@ func TestFormatContentByType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatContentByType(tt.body, tt.contentType)
+			got := formatContentByType(tt.body, tt.contentType, defaultBodyStyle)
 			if !strings.Contains(got, tt.wantContain) {
 				t.Errorf("formatContentByType() = %v, want to contain %v", got, tt.wantContain)
 			}

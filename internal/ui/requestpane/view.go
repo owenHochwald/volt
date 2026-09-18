@@ -43,12 +43,12 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	methodRendered := m.MethodSelector.GetStyle().Render(m.MethodSelector.Current())
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
-	pathParamsBlock, pathOffsets := renderParamSection("Path Params", m.PathParams)
+	pathParamsBlock, pathOffsets := renderParamSection("Path Params", m.PathParams, m.ShowRequiredErrors)
 
-	nameLabel := ui.LabelStyle.Render("Name ")
+	nameLabel := fieldGroupLabelStyle.Render("Name ")
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Left, nameLabel, m.NameInput.View())
 
-	headersLabel := ui.LabelStyle.Render("Headers ")
+	headersLabel := fieldGroupLabelStyle.Render("Headers ")
 	headersLine := lipgloss.JoinHorizontal(lipgloss.Left, headersLabel, m.Headers.View())
 
 	// An imported request with a known JSON body schema gets structured,
@@ -60,18 +60,24 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	var bodyBlock string
 	var bodyOffsets []fieldOffset
 	if len(m.BodyParams) > 0 {
-		bodyBlock, bodyOffsets = renderParamSection("Body Params", m.BodyParams)
+		bodyBlock, bodyOffsets = renderParamSection("Body Params", m.BodyParams, m.ShowRequiredErrors)
 	} else if len(m.ArrayParams) == 0 {
-		bodyLabel := ui.LabelStyle.Render("Body    ")
+		bodyLabel := fieldGroupLabelStyle.Render("Body    ")
 		bodyBlock = lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 	}
-	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.ArrayParams)
+	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.ArrayParams, m.ShowRequiredErrors)
 
-	// Field order: server, method+URL, name, path params, body params,
+	// Field order: server, name, method+URL, path params, body params,
 	// array params, headers, then mode-specific content (load-test config
-	// fields, or nothing). Each present block is separated from the next by
-	// a blank line; pathParamsBlock/bodyBlock/arrayParamsBlock are each
-	// skipped entirely (no double blank line) when there's nothing to show.
+	// fields, or nothing). Server, then name, then the request itself -
+	// name is rarely touched once a request is built from an imported
+	// schema, so it sits above the fields that actually matter each time,
+	// reachable with one shift+tab if it's ever needed (see
+	// reinitRequestPane's defaultFocusIndex, which starts focus on
+	// method+URL, not here, for the same reason). Each present block is
+	// separated from the next by a blank line; pathParamsBlock/bodyBlock/
+	// arrayParamsBlock are each skipped entirely (no double blank line)
+	// when there's nothing to show.
 	//
 	// offsets is built alongside elements, converting each block's own
 	// (relative to its own first line) offsets to absolute line numbers by
@@ -88,19 +94,21 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	var elements []string
 	var offsets []fieldOffset
 	if m.ShowServerSelector() {
-		serverLabel := ui.LabelStyle.Render("Server ")
+		serverLabel := fieldGroupLabelStyle.Render("Server ")
 		serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
-		elements = []string{"", serverLine, "", primaryLine, "", nameLine}
+		elements = []string{serverLine, "", nameLine, "", primaryLine}
 		offsets = []fieldOffset{
-			{m.ServerSelector, 1},
-			{m.MethodSelector, 3},
-			{m.URLInput, 3},
+			{m.ServerSelector, 0},
+			{m.NameInput, 2},
+			{m.MethodSelector, 4},
+			{m.URLInput, 4},
 		}
 	} else {
-		elements = []string{"", primaryLine, "", nameLine}
+		elements = []string{nameLine, "", primaryLine}
 		offsets = []fieldOffset{
-			{m.MethodSelector, 1},
-			{m.URLInput, 1},
+			{m.NameInput, 0},
+			{m.MethodSelector, 2},
+			{m.URLInput, 2},
 		}
 	}
 	lineCount := func() int { return lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, elements...)) }
@@ -270,7 +278,22 @@ func (m RequestPane) renderFooter() string {
 		errorsBlock = "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, "", button, stopwatchCount, errorsBlock, helpText)
+	// stopwatchCount/errorsBlock are joined only when they actually have
+	// something to show - each is otherwise "" (not sending, no parse
+	// errors, the common case), and including an empty string as its own
+	// JoinVertical element still renders it as a blank line, same as any
+	// other element - so unconditionally including both used to leave two
+	// blank lines between the button and helpText whenever neither had
+	// anything to say.
+	elements := []string{"", button}
+	if stopwatchCount != "" {
+		elements = append(elements, stopwatchCount)
+	}
+	if errorsBlock != "" {
+		elements = append(elements, errorsBlock)
+	}
+	elements = append(elements, helpText)
+	return lipgloss.JoinVertical(lipgloss.Left, elements...)
 }
 
 // View renders the request pane
@@ -295,7 +318,14 @@ func (m RequestPane) View() string {
 	)
 }
 
-var paramSectionTitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("140")).Bold(true)
+// fieldGroupLabelStyle marks every top-level field/section name in the
+// pane (Server, Name, Path Params, Body/Body Params, Array Params,
+// Headers - not Method+URL, which already gets its own per-method
+// coloring, and not an individual param's own label inside one of these
+// sections, which stays in the dimmer ui.LabelStyle) - so they read as a
+// distinct, scannable column of names down the pane instead of blending
+// into the same dim gray as everything else.
+var fieldGroupLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("140")).Bold(true)
 
 // requiredFieldStyle marks a required field's label - shown this way at all
 // times as a hint regardless of whether it's currently empty (unlike
@@ -323,13 +353,14 @@ func paramLabel(name, fieldType string, required bool) string {
 // the plain fields around them, visually distinct from each other. The
 // returned offsets are relative to this block's own first line (0), for
 // the caller to translate into absolute lines within the full fieldsContent
-// (see fieldsContent).
-func renderParamSection(title string, params []Param) (string, []fieldOffset) {
+// (see fieldsContent). showRequired is RequestPane.ShowRequiredErrors,
+// threaded through to fieldError - see its doc comment.
+func renderParamSection(title string, params []Param, showRequired bool) (string, []fieldOffset) {
 	if len(params) == 0 {
 		return "", nil
 	}
 	lines := make([]string, 0, len(params)+1)
-	lines = append(lines, paramSectionTitleStyle.Render(title+":"))
+	lines = append(lines, fieldGroupLabelStyle.Render(title+":"))
 	offsets := make([]fieldOffset, len(params))
 	for i, p := range params {
 		label := "  " + paramLabel(p.Name, p.DisplayType(), p.Required)
@@ -349,7 +380,7 @@ func renderParamSection(title string, params []Param) (string, []fieldOffset) {
 			// recorded for scrollToFocused must be the *real* one
 			// paramFocusables hands the focus cycle (&params[i].Input),
 			// not &p.Input (a copy's address, matching nothing).
-			if msg, ok := ValidateParam(p); !ok {
+			if msg, ok := fieldError(p, showRequired); !ok {
 				p.Input.TextStyle = errorTextStyle
 				comment = errorTextStyle.Render("  ! " + msg)
 			}
@@ -373,7 +404,9 @@ func renderParamSection(title string, params []Param) (string, []fieldOffset) {
 // label would otherwise say separately. Both cases get the same inline
 // red-highlight/comment treatment invalid fields get in renderParamSection.
 // The returned offsets are relative to this block's own first line (0).
-func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
+// showRequired is RequestPane.ShowRequiredErrors, threaded through to
+// fieldError - see its doc comment.
+func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []fieldOffset) {
 	if len(arrays) == 0 {
 		return "", nil
 	}
@@ -383,7 +416,7 @@ func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
 	for ai := range arrays {
 		a := &arrays[ai]
 		lines := make([]string, 0, 2+len(a.Items)*3)
-		lines = append(lines, paramSectionTitleStyle.Render(fmt.Sprintf("%s (array of %s):", a.Name, a.itemLabel())))
+		lines = append(lines, fieldGroupLabelStyle.Render(fmt.Sprintf("%s (array of %s):", a.Name, a.itemLabel())))
 		lines = append(lines, "  "+a.CountControl.View())
 		offsets = append(offsets, fieldOffset{a.CountControl, blockStart + 1})
 
@@ -399,7 +432,7 @@ func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
 					field = f.Enum.View()
 					focusable = f.Enum
 				} else {
-					if msg, ok := ValidateParam(f); !ok {
+					if msg, ok := fieldError(f, showRequired); !ok {
 						f.Input.TextStyle = errorTextStyle
 						comment = errorTextStyle.Render("  ! " + msg)
 					}
@@ -423,7 +456,7 @@ func renderArrayParamSection(arrays []ArrayParam) (string, []fieldOffset) {
 					field = f.Enum.View()
 					focusable = f.Enum
 				} else {
-					if msg, ok := ValidateParam(f); !ok {
+					if msg, ok := fieldError(f, showRequired); !ok {
 						f.Input.TextStyle = errorTextStyle
 						comment = errorTextStyle.Render("  ! " + msg)
 					}

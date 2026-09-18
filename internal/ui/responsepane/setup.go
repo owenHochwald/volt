@@ -3,20 +3,31 @@ package responsepane
 import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
-// SetupResponsePane creates and initializes a new ResponsePane with default values
-func SetupResponsePane(keys keybindings.KeyMap) ResponsePane {
+// SetupResponsePane creates and initializes a new ResponsePane with
+// default values. db may be nil (as in tests) - the only effect is that
+// a picked body style (see style_picker.go) won't be persisted or
+// restored across restarts.
+func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap) ResponsePane {
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "response.json"
 	filenameInput.CharLimit = 500
 	filenameInput.Width = 50
 
 	searchInput := textinput.New()
-	searchInput.Placeholder = "search query"
+	searchInput.Placeholder = "search query (regex)"
 	searchInput.CharLimit = 500
 	searchInput.Width = 50
+
+	bodyStyleName := defaultBodyStyle
+	if db != nil {
+		if saved, err := db.LoadBodyStyle(); err == nil && saved != "" {
+			bodyStyleName = saved
+		}
+	}
 
 	return ResponsePane{
 		viewport:       viewport.New(20, 10),
@@ -27,6 +38,8 @@ func SetupResponsePane(keys keybindings.KeyMap) ResponsePane {
 		filenameInput:  filenameInput,
 		searchInput:    searchInput,
 		searchMatchIdx: -1,
+		bodyStyleName:  bodyStyleName,
+		DB:             db,
 		keys:           keys,
 	}
 }

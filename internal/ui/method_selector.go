@@ -9,10 +9,14 @@ import (
 )
 
 var (
+	// methodStyleBase deliberately carries no border - it used to, but
+	// that cost 2 extra vertical lines (top/bottom) for what's really
+	// just a short label, in a pane that's often tight on height. Focus
+	// is shown with Reverse (see GetStyle) instead of a border color
+	// change.
 	methodStyleBase = lipgloss.NewStyle().
 			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.NormalBorder())
+			Bold(true)
 
 	getMethodStyle    = methodStyleBase.Foreground(lipgloss.Color("42"))  // Green
 	postMethodStyle   = methodStyleBase.Foreground(lipgloss.Color("214")) // Orange
@@ -72,13 +76,7 @@ func (m *MethodSelector) GetStyle() lipgloss.Style {
 		methodStyle = methodStyleBase
 	}
 
-	if m.focused {
-		methodStyle = methodStyle.BorderForeground(focusColor)
-	} else {
-		methodStyle = methodStyle.BorderForeground(unfocusColor)
-	}
-
-	return methodStyle
+	return methodStyle.Reverse(m.focused)
 }
 
 func (m *MethodSelector) SetCurrentIndex(method string) {

@@ -244,8 +244,14 @@ func TestRequestPane_ServerSelector_CyclesViaFocusManager(t *testing.T) {
 	pane.reinitRequestPane(req)
 	pane.PanelFocused = true
 
+	// reinitRequestPane defaults focus to method+URL (see
+	// defaultFocusIndex), not the server field (index 0) - move there
+	// explicitly; what this test actually exercises is cycling the
+	// currently-focused field via the real input path, not which field
+	// ends up focused by default.
+	pane.FocusManager.FocusIndex(0)
 	if pane.FocusManager.CurrentIndex() != 0 {
-		t.Fatalf("expected the server selector (first field) focused initially, got index %d", pane.FocusManager.CurrentIndex())
+		t.Fatalf("expected the server selector (first field) focused, got index %d", pane.FocusManager.CurrentIndex())
 	}
 
 	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyRight})

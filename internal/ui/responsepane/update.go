@@ -54,6 +54,12 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchInputKey(msg)
 		}
 
+		// The style picker (see PickBodyStyle) claims every key while
+		// open, same reason as the filename prompt above.
+		if m.pickingStyle {
+			return m.handleStylePickerKey(msg)
+		}
+
 		// gg (go to top) / {n}g (go to line n) - see navigation.go. Armed
 		// by a bare "g" below; while armed, every key either continues the
 		// sequence or cancels it and falls through to be handled normally.
@@ -71,7 +77,9 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// "/" search, "n"/"b" cycle through its matches - see search.go.
+		// "/" search, "n"/"b" cycle through its matches from wherever the
+		// last search move left off, "N"/"P" instead from wherever the
+		// view is currently scrolled to - see search.go.
 		if keybindings.Matches(msg, m.keys.SearchResponse) {
 			return m, m.openSearch()
 		}
@@ -81,6 +89,24 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keybindings.Matches(msg, m.keys.SearchPrev) {
 			m.advanceSearchMatch(-1)
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.SearchNextFromPosition) {
+			m.jumpToNearestMatch(true)
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.SearchPrevFromPosition) {
+			m.jumpToNearestMatch(false)
+			return m, nil
+		}
+
+		// "t" opens the body syntax style picker - see style_picker.go.
+		// Meaningless in load-test mode (nothing there ever goes through
+		// chroma), same guard ToggleRawBody/SaveResponseRaw already use.
+		if keybindings.Matches(msg, m.keys.PickBodyStyle) {
+			if !m.isLoadTest {
+				m.openStylePicker()
+			}
 			return m, nil
 		}
 
@@ -132,6 +158,16 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keybindings.Matches(msg, m.keys.ToggleRawBody) {
 			if m.Response != nil && !m.isLoadTest && TabIndex(m.activeTab) == TabBody {
 				m.rawBody = !m.rawBody
+				m.updateViewportForActiveTab()
+			}
+			return m, nil
+		}
+
+		// Wrap toggle - applies to whatever's currently displayed on any
+		// tab (see setViewportContent), not just Body.
+		if keybindings.Matches(msg, m.keys.ToggleWrap) {
+			if !m.isLoadTest {
+				m.wrapBody = !m.wrapBody
 				m.updateViewportForActiveTab()
 			}
 			return m, nil
@@ -244,10 +280,10 @@ func (m *ResponsePane) updateViewportForActiveTab() {
 		case m.Response.Error != "":
 			content = m.Response.Error
 		case m.rawBody:
-			content = m.Response.Body
+			content = highlightRawBody(m.Response.Body, m.Response.ParseContentType(), m.effectiveBodyStyle())
 		default:
 			contentType := m.Response.ParseContentType()
-			content = formatContentByType(m.Response.Body, contentType)
+			content = formatContentByType(m.Response.Body, contentType, m.effectiveBodyStyle())
 		}
 	case TabHeaders:
 		content = m.renderHeaders()

@@ -16,6 +16,13 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ui.SetRequestPaneRequestMsg:
 		m.reinitRequestPane(msg.Request)
+		// Unlike reinitRequestPane's own default (method+URL - see
+		// defaultFocusIndex), a request picked from the sidebar was
+		// picked *for* its method and URL, already visible right there in
+		// the list - so focus skips past them to whatever's actually left
+		// to fill in (see focusIndexAfterURL).
+		m.FocusManager.FocusIndex(m.focusIndexAfterURL())
+		m.scrollToFocused()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -134,6 +141,11 @@ func (m *RequestPane) resetToBlank() {
 // reinitRequestPane reinits the request pane with a new request
 func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	m.Request = request
+	// A request loaded/reset/cleared fresh hasn't had a send attempted
+	// against *it* yet - carrying this over from whatever was loaded before
+	// would show every still-empty required field as an error before the
+	// user has done anything with this request.
+	m.ShowRequiredErrors = false
 
 	m.MethodSelector.SetCurrentIndex(request.Method)
 	m.URLInput.SetValue(request.URL)
@@ -157,14 +169,17 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// them onto, and before the rebuildFocusManager below, since applying
 	// array item counts can itself change the focus cycle's shape.
 	m.applyParamValues(request.ParamValues)
-	// rebuildServerSelector always replaces m.ServerSelector with a fresh
-	// instance, but syncPathParams/syncBodyParams only rebuild the focus
-	// cycle when their own field set actually changed (e.g. a request with
-	// no path or body params is a no-op for both) - so without this,
-	// loading such a request would leave FocusManager still pointing at
-	// the *previous*, now-orphaned ServerSelector instead of the new one,
-	// and cycling it (h/l) would silently do nothing.
-	m.rebuildFocusManager()
+	// Every reinitRequestPane call starts a request fresh - not just
+	// rebuildFocusManager's usual "keep focus where it currently is"
+	// (used when a request's own field set merely changes shape, e.g. an
+	// array item added) - so focus always lands on method+URL (see
+	// defaultFocusIndex), regardless of whatever was focused in whatever
+	// was loaded before. This also covers what rebuildFocusManager exists
+	// for elsewhere: rebuildServerSelector always replaces
+	// m.ServerSelector with a fresh instance, so FocusManager must be
+	// rebuilt against it too, or cycling it (h/l) would silently do
+	// nothing.
+	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, m.defaultFocusIndex())
 	// FieldsViewport is a persistent field, not rebuilt per request - without
 	// this, loading a short request after scrolling deep into a long one
 	// left FieldsViewport still scrolled to that old position, hiding the

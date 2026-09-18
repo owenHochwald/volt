@@ -197,8 +197,8 @@ func TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredPathParam(t *testin
 	if result.RequestInProgress {
 		t.Error("expected the missing required path param to block sending")
 	}
-	if len(result.ParseErrors) == 0 {
-		t.Error("expected a ParseErrors entry explaining why the send was blocked")
+	if !result.ShowRequiredErrors {
+		t.Error("expected the blocked send to switch on inline required-field errors")
 	}
 
 	current, ok := result.FocusManager.Current().(*textinput.Model)

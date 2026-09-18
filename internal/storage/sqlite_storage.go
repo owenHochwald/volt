@@ -390,6 +390,75 @@ func (s *SQLiteStorage) LoadLastGroupFilter() (string, error) {
 	return value, nil
 }
 
+// bodyStyleKey is the app_state row SaveBodyStyle/LoadBodyStyle read and
+// write - the chroma style name used for the response pane's Body tab
+// pretty-printing (see responsepane.ResponsePane.bodyStyleName), so the
+// next app start reopens on whatever style was last picked (see
+// responsepane's style picker, "t") instead of always resetting to the
+// built-in default.
+const bodyStyleKey = "body_style"
+
+// SaveBodyStyle persists name (a chroma style name, e.g. "monokai" or
+// "dracula") as the Body tab's syntax highlighting style to restore on
+// the next app start - overwriting whatever was saved before, since only
+// the most recently picked style matters.
+func (s *SQLiteStorage) SaveBodyStyle(name string) error {
+	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+	_, err := s.db.Exec(q, bodyStyleKey, name)
+	return err
+}
+
+// LoadBodyStyle returns the style name saved by SaveBodyStyle, or ("",
+// nil) if nothing's been saved yet (a fresh database, or one from before
+// this existed) - not an error, since that's the ordinary starting state
+// (the caller falls back to its own default, e.g. "monokai").
+func (s *SQLiteStorage) LoadBodyStyle() (string, error) {
+	q := `SELECT value FROM app_state WHERE key = ?`
+	var value string
+	if err := s.db.QueryRow(q, bodyStyleKey).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return value, nil
+}
+
+// showHeaderKey is the app_state row SaveShowHeader/LoadShowHeader read
+// and write - whether the top banner (logo + help hint) is shown (see
+// app.Model.showHeader/ToggleHeader, "f4"), so the next app start
+// reopens with whatever visibility was last chosen instead of always
+// resetting to shown.
+const showHeaderKey = "show_header"
+
+// SaveShowHeader persists show as the header's visibility to restore on
+// the next app start - overwriting whatever was saved before, since only
+// the most recent choice matters.
+func (s *SQLiteStorage) SaveShowHeader(show bool) error {
+	value := "1"
+	if !show {
+		value = "0"
+	}
+	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+	_, err := s.db.Exec(q, showHeaderKey, value)
+	return err
+}
+
+// LoadShowHeader returns the visibility saved by SaveShowHeader, or
+// (true, nil) if nothing's been saved yet (a fresh database, or one from
+// before this existed) - shown is the header's ordinary starting state.
+func (s *SQLiteStorage) LoadShowHeader() (bool, error) {
+	q := `SELECT value FROM app_state WHERE key = ?`
+	var value string
+	if err := s.db.QueryRow(q, showHeaderKey).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return true, nil
+		}
+		return true, err
+	}
+	return value != "0", nil
+}
+
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
 	q := `SELECT DISTINCT url FROM requests`
 	rows, err := s.db.Query(q)

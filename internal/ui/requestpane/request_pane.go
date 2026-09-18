@@ -72,6 +72,15 @@ type RequestPane struct {
 
 	ParseErrors []string
 
+	// ShowRequiredErrors switches on the required-empty half of the inline
+	// per-field error display (see fieldError/renderParamSection) - set once
+	// a send has actually been blocked on a still-empty required field (see
+	// handleSubmit in mode_normal.go/mode_loadtest.go), and cleared again by
+	// reinitRequestPane, so a freshly loaded/reset/cleared request never
+	// starts out with fields already flagged red before anything's been
+	// attempted.
+	ShowRequiredErrors bool
+
 	HeadersExpanded bool
 	BodyExpanded    bool
 

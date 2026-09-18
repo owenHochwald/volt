@@ -11,7 +11,7 @@ import (
 
 // TestNormalMode_ComponentsMatchRenderOrder locks in that tab order follows
 // the same top-to-bottom sequence fieldsContent() renders in view.go
-// (method+URL, name, path params, body params, headers, submit - no
+// (name, method+URL, path params, body params, headers, submit - no
 // server field here, since this request has no group - see
 // ShowServerSelector/TestNormalMode_ComponentsMatchRenderOrder_Grouped).
 // The two lists drifting apart previously made tab jump around the screen
@@ -37,9 +37,9 @@ func TestNormalMode_ComponentsMatchRenderOrder(t *testing.T) {
 	components := nm.components(&pane)
 
 	want := []ui.Focusable{
+		pane.NameInput,
 		pane.MethodSelector,
 		pane.URLInput,
-		pane.NameInput,
 		&pane.PathParams[0].Input,
 		&pane.BodyParams[0].Input,
 		&pane.BodyParams[1].Input,
@@ -67,9 +67,9 @@ func TestNormalMode_ComponentsMatchRenderOrder_Grouped(t *testing.T) {
 
 	want := []ui.Focusable{
 		pane.ServerSelector,
+		pane.NameInput,
 		pane.MethodSelector,
 		pane.URLInput,
-		pane.NameInput,
 		pane.Body,
 		pane.Headers,
 		pane.SubmitButton,
@@ -91,9 +91,9 @@ func TestLoadTestMode_ComponentsMatchRenderOrder(t *testing.T) {
 	components := ltm.components(&pane)
 
 	want := []ui.Focusable{
+		pane.NameInput,
 		pane.MethodSelector,
 		pane.URLInput,
-		pane.NameInput,
 		&pane.PathParams[0].Input,
 		&pane.BodyParams[0].Input,
 		&pane.BodyParams[1].Input,
@@ -126,9 +126,9 @@ func TestNormalMode_ComponentsFallsBackToFreeformBody(t *testing.T) {
 	components := nm.components(&pane)
 
 	want := []ui.Focusable{
+		pane.NameInput,
 		pane.MethodSelector,
 		pane.URLInput,
-		pane.NameInput,
 		&pane.PathParams[0].Input,
 		pane.Body,
 		pane.Headers,

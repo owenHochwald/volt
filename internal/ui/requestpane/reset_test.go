@@ -3,8 +3,10 @@ package requestpane
 import (
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // TestRequestPane_ResetRequest_ReturnsToBlankState is a regression test
@@ -120,5 +122,57 @@ func TestRequestPane_ResetRequest_ExitsLoadTestMode(t *testing.T) {
 	}
 	if result.LoadTestMode {
 		t.Error("expected reset to exit load test mode")
+	}
+}
+
+// TestRequestPane_DefaultFocus_IsMethodURL is a regression test for a
+// real feature request: a freshly set up pane, and a reset one, should
+// both start focus on the method+URL line, not the Name field ahead of
+// it (see fieldsContent's new order: server, name, method+URL, ...) -
+// schemas rarely need their Name touched, so landing there by default
+// would just be in the way; shift+tab reaches it in one step if it ever
+// is needed.
+func TestRequestPane_DefaultFocus_IsMethodURL(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	if _, ok := pane.FocusManager.Current().(*ui.MethodSelector); !ok {
+		t.Fatalf("expected SetupRequestPane to start focus on MethodSelector, got %T", pane.FocusManager.Current())
+	}
+
+	// Move focus elsewhere (Name), then reset - it must land back on
+	// method+URL, not wherever it happened to be before the reset.
+	pane.FocusManager.FocusIndex(0)
+	if _, ok := pane.FocusManager.Current().(*textinput.Model); !ok {
+		t.Fatalf("test setup error: expected NameInput focused, got %T", pane.FocusManager.Current())
+	}
+	pane.PanelFocused = true
+
+	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	result, ok := model.(RequestPane)
+	if !ok {
+		t.Fatalf("expected RequestPane, got %T", model)
+	}
+	if _, ok := result.FocusManager.Current().(*ui.MethodSelector); !ok {
+		t.Errorf("expected reset to focus MethodSelector, got %T", result.FocusManager.Current())
+	}
+}
+
+// TestRequestPane_ReinitRequestPane_DefaultsFocusToMethodURL verifies
+// loading a different request (e.g. selecting one from the sidebar) also
+// defaults focus to method+URL, regardless of whatever was focused in
+// whatever request was open before.
+func TestRequestPane_ReinitRequestPane_DefaultsFocusToMethodURL(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.FocusManager.FocusIndex(0) // Name, on the default blank request
+
+	req := &http.Request{
+		Method:  http.POST,
+		URL:     "https://api.example.com/hosts/{id}",
+		Name:    "getHost",
+		Headers: map[string]string{},
+	}
+	pane.reinitRequestPane(req)
+
+	if _, ok := pane.FocusManager.Current().(*ui.MethodSelector); !ok {
+		t.Errorf("expected loading a request to default focus to MethodSelector, got %T", pane.FocusManager.Current())
 	}
 }

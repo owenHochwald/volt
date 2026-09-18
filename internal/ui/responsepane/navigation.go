@@ -13,6 +13,17 @@ func (m *ResponsePane) scrollToLine(line int) {
 	m.viewport.SetYOffset(line - m.viewport.Height/2)
 }
 
+// isLineVisible reports whether line (0-based) is within the viewport's
+// currently visible range - used by jumpToNearestMatch (see search.go) to
+// tell an ordinary scroll (j/k, pgup/pgdn - the previously found match
+// stays on screen) apart from a real jump elsewhere (gg/G/{n}g - it
+// doesn't).
+func (m *ResponsePane) isLineVisible(line int) bool {
+	top := m.viewport.YOffset
+	bottom := top + m.viewport.VisibleLineCount()
+	return line >= top && line < bottom
+}
+
 // beginGoto arms gPending on a bare "g" keypress (see GotoTop) - the next
 // keystroke decides what happens: another "g" goes straight to the top
 // ("gg"), digits are buffered (see continueGoto) toward a "{n}g" jump to

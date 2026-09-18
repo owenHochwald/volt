@@ -56,7 +56,11 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 	}
 
 	m.rebuildServerSelector()
-	m.FocusManager = normalMode.GetFocusManager(&m)
+	// Starts on method+URL (see defaultFocusIndex), not index 0 (NameInput
+	// - there's no group yet for a brand-new default request, so no
+	// ServerSelector ahead of it either) - matches reinitRequestPane's own
+	// default for exactly the same reason.
+	m.FocusManager = normalMode.GetFocusManagerWithIndex(&m, m.defaultFocusIndex())
 
 	return m
 }

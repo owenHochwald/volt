@@ -158,8 +158,9 @@ func TestRequestPane_ArrayCountControl_CyclesViaFocusManager(t *testing.T) {
 	pane.PanelFocused = true
 
 	// Tab order (this request has no group, so no ServerSelector - see
-	// ShowServerSelector): Method, URL, Name -> ArrayCountControl.
-	for i := 0; i < 3; i++ {
+	// ShowServerSelector): Name, Method, URL -> ArrayCountControl. Focus
+	// starts on Method (see defaultFocusIndex), not Name.
+	for i := 0; i < 2; i++ {
 		pane.FocusManager.Next()
 	}
 	if _, ok := pane.FocusManager.Current().(*ArrayCountControl); !ok {

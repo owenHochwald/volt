@@ -91,6 +91,34 @@ func SaveLastGroupFilterCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
 	}
 }
 
+// SaveBodyStyleCmd persists name (see storage.SaveBodyStyle) as the
+// response pane's Body tab syntax highlighting style to restore on the
+// app's next start - fire-and-forget, same rationale as
+// SaveLastGroupFilterCmd: a failure here only affects what the *next*
+// restart restores, not anything the user needs interrupted about right
+// now. A nil db (as in tests) is a no-op.
+func SaveBodyStyleCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
+	return func() tea.Msg {
+		if db != nil {
+			_ = db.SaveBodyStyle(name)
+		}
+		return nil
+	}
+}
+
+// SaveShowHeaderCmd persists show (see storage.SaveShowHeader) as the
+// top header banner's visibility to restore on the app's next start -
+// fire-and-forget, same rationale as SaveBodyStyleCmd. A nil db (as in
+// tests) is a no-op.
+func SaveShowHeaderCmd(db *storage.SQLiteStorage, show bool) tea.Cmd {
+	return func() tea.Msg {
+		if db != nil {
+			_ = db.SaveShowHeader(show)
+		}
+		return nil
+	}
+}
+
 func LoadRequestsCmd(db *storage.SQLiteStorage) tea.Cmd {
 	return func() tea.Msg {
 		requests, err := db.Load()

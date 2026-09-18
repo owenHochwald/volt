@@ -73,7 +73,7 @@ func TestRequestPane_SendThenConnectionError_StillShowsBodyAndTiming(t *testing.
 	// with every other field at its zero value.
 	errResp := &http.Response{Error: `Post "http://127.0.0.1:1/host": dial tcp 127.0.0.1:1: connect: connection refused`}
 
-	rp := responsepane.SetupResponsePane(keybindings.DefaultKeyMap())
+	rp := responsepane.SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	rp.SetWidth(200)
 	rp.SetHeight(50)
 	// Mirrors internal/app/update.go's http.ResultMsg case exactly:

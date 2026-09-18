@@ -9,7 +9,11 @@ import (
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
-// View renders the response pane
+// View renders the response pane - including its own normal Body/etc.
+// content while the style picker (see PickBodyStyle) is open, live-
+// previewing whatever style the picker's list cursor sits on (see
+// effectiveBodyStyle) - the list itself is rendered separately, by
+// app/view.go, in the request pane's own box (see StylePickerListView).
 func (m ResponsePane) View() string {
 	if m.isLoadTest {
 		return m.renderLoadTestView()
@@ -23,24 +27,22 @@ func (m ResponsePane) View() string {
 		return m.renderSaveToFilePrompt()
 	}
 
-	if m.searching {
-		return m.renderSearchPrompt()
-	}
-
-	// footer is joined on AFTER body's own MaxHeight clip below, not as
-	// one of body's own elements - body's exact rendered height is only
-	// ever an estimate (SetHeight's viewport.Height reservation, the tab
-	// bar's own internal spacing, etc. all have to line up exactly for it
-	// to not drift), so when body ran even one line over budget, this
-	// footer - the key-binding hint, i.e. the single most useful line when
-	// the pane is otherwise full of scrollable content - was silently the
-	// one that got clipped off, being the last line of one single combined
-	// block under one MaxHeight. Clipping body alone and unconditionally
-	// appending footer after guarantees it survives regardless of how
-	// body's own height estimate drifts.
-	body, footer := m.renderNormalView()
-	clippedBody := lipgloss.NewStyle().MaxHeight(max(m.height-1, 0)).Render(body)
-	return clippedBody + "\n" + footer
+	// trailer (scroll indicator, save/search status, footer hint) is
+	// joined on AFTER head's own MaxHeight clip below, not as part of head
+	// itself - head's exact rendered height is only ever an estimate
+	// (SetHeight's viewport.Height reservation, the tab bar's own internal
+	// spacing, etc. all have to line up exactly for it to not drift), so
+	// whenever head ran even a line or two over budget, whatever came
+	// after it in one single combined block under one MaxHeight was
+	// silently what got clipped off the bottom - the scroll indicator
+	// ("more below"), then the footer hint (the key-binding reminder) once
+	// that overflow itself grew. Both are exactly the lines you need most
+	// when the pane is otherwise full of scrollable content, so clipping
+	// head alone and unconditionally appending trailer after guarantees
+	// they survive regardless of how head's own height estimate drifts.
+	head, trailer := m.renderNormalView()
+	clippedHead := lipgloss.NewStyle().MaxHeight(max(m.height-lipgloss.Height(trailer), 0)).Render(head)
+	return clippedHead + "\n" + trailer
 }
 
 // renderSaveToFilePrompt renders the filename entry overlay opened by
@@ -56,16 +58,13 @@ func (m ResponsePane) renderSaveToFilePrompt() string {
 	)
 }
 
-// renderSearchPrompt renders the search entry overlay opened by
-// SearchResponse ("/") - mirrors renderSaveToFilePrompt above.
-func (m ResponsePane) renderSearchPrompt() string {
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		ui.LabelStyle.Render("Search:"),
-		m.searchInput.View(),
-		"",
-		footerHelpStyle.MaxWidth(max(m.width, 1)).Render("enter: search · esc: cancel"),
-	)
+// renderSearchInputLine renders the "/" search prompt inline, in place of
+// footerHint, right where the pinned key-binding hint normally sits -
+// unlike renderSaveToFilePrompt, this deliberately does NOT take over the
+// whole pane, so the response content (and any highlighted matches - see
+// highlightMatches) stays visible and scrollable while typing.
+func (m ResponsePane) renderSearchInputLine() string {
+	return lipgloss.JoinHorizontal(lipgloss.Left, ui.LabelStyle.Render("/"), m.searchInput.View())
 }
 
 // footerHint renders this pane's pinned one-line key hint below the
@@ -78,18 +77,23 @@ func (m ResponsePane) footerHint() string {
 	if m.rawBody {
 		rawHint = "r: pretty view"
 	}
-	hint := fmt.Sprintf("%s · s: save to file · y: copy · /: search · gg/G: top/bottom", rawHint)
+	wrapHint := "w: wrap"
+	if m.wrapBody {
+		wrapHint = "w: unwrap"
+	}
+	hint := fmt.Sprintf("%s · %s · s: save to file · y: copy · /: search (regex) · gg/G: top/bottom · t: style", rawHint, wrapHint)
 	if m.searchQuery != "" && len(m.searchMatches) > 0 {
-		hint = fmt.Sprintf("/%s (%d/%d) · n: next · b: prev · %s", m.searchQuery, m.searchMatchIdx+1, len(m.searchMatches), hint)
+		hint = fmt.Sprintf("/%s (%d/%d) · n/b: next/prev · N/P: next/prev from here · %s", m.searchQuery, m.searchMatchIdx+1, len(m.searchMatches), hint)
 	}
 	return hint
 }
 
 // renderNormalView renders the normal response view's status bar, tabs,
-// and content (body) separately from its pinned footer hint (footer) -
-// kept apart so View() can clip body alone rather than the two together
-// (see View()'s own comment for why that split matters).
-func (m ResponsePane) renderNormalView() (body, footer string) {
+// and content (head) separately from everything pinned below them -
+// scroll indicator, save/search status, footer hint (trailer) - kept
+// apart so View() can clip head alone rather than the two together (see
+// View()'s own comment for why that split matters).
+func (m ResponsePane) renderNormalView() (head, trailer string) {
 	// The viewport's content is populated per-tab by
 	// updateViewportForActiveTab (called from SetResponse and on every tab
 	// switch) - it already puts the raw error message in the Body tab and
@@ -108,24 +112,38 @@ func (m ResponsePane) renderNormalView() (body, footer string) {
 
 	tabHeader := m.renderTabs()
 	tabContent := m.renderActiveTabContent()
+	// Deliberately no blank line between statusBar and tabHeader - an
+	// earlier version joined them with a literal "\n" element meant as a
+	// single blank-line separator, but lipgloss.JoinVertical splits that
+	// element on its own internal newline too, rendering it as *two*
+	// blank lines instead of one.
+	head = lipgloss.JoinVertical(lipgloss.Left, statusBar, tabHeader, tabContent)
 
-	elements := []string{statusBar, "\n", tabHeader, tabContent}
+	var trailerLines []string
 	if indicator := m.scrollIndicator(); indicator != "" {
-		elements = append(elements, indicator)
+		trailerLines = append(trailerLines, indicator)
 	}
 	if m.saveStatusMsg != "" {
 		style := successTextStyle
 		if m.saveStatusErr {
 			style = errorTextStyle
 		}
-		elements = append(elements, style.MaxWidth(max(m.width, 1)).Render(m.saveStatusMsg))
+		trailerLines = append(trailerLines, style.MaxWidth(max(m.width, 1)).Render(m.saveStatusMsg))
 	}
 	if m.searchStatusMsg != "" {
-		elements = append(elements, errorTextStyle.MaxWidth(max(m.width, 1)).Render(m.searchStatusMsg))
+		trailerLines = append(trailerLines, errorTextStyle.MaxWidth(max(m.width, 1)).Render(m.searchStatusMsg))
 	}
-	body = lipgloss.JoinVertical(lipgloss.Left, elements...)
-	footer = footerHelpStyle.MaxWidth(max(m.width, 1)).Render(m.footerHint())
-	return body, footer
+	// While the "/" prompt is open (see openSearch), it takes the footer
+	// hint's usual spot instead of appearing alongside it - both are
+	// one-line, pinned-below-content fixtures, so there's no room (or
+	// need) for both at once.
+	if m.searching {
+		trailerLines = append(trailerLines, m.renderSearchInputLine())
+	} else {
+		trailerLines = append(trailerLines, footerHelpStyle.MaxWidth(max(m.width, 1)).Render(m.footerHint()))
+	}
+	trailer = lipgloss.JoinVertical(lipgloss.Left, trailerLines...)
+	return head, trailer
 }
 
 // scrollIndicator renders a hint below the tab content when there's more to

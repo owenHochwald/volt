@@ -77,7 +77,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// did nothing (moving focus away entirely, not just skipping a
 		// field).
 		if keybindings.Matches(msg, m.keys.CyclePanel) && m.focusedPanel != utils.RequestPanel {
-			m.focusedPanel = (m.focusedPanel + 1) % 3
+			m.focusPanel((m.focusedPanel + 1) % 3)
 			return m, nil
 		}
 		// f1/f2/f3 jump directly to a panel from anywhere, including
@@ -85,31 +85,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// which the request pane also needs for its own PrevField and so
 		// can't reliably reach a panel switch from there.
 		if keybindings.Matches(msg, m.keys.FocusSidebar) && noModalOpen {
-			m.focusedPanel = utils.SidebarPanel
+			m.focusPanel(utils.SidebarPanel)
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.FocusRequest) && noModalOpen {
-			m.focusedPanel = utils.RequestPanel
+			m.focusPanel(utils.RequestPanel)
 			return m, nil
 		}
 		if keybindings.Matches(msg, m.keys.FocusResponse) && noModalOpen {
-			m.focusedPanel = utils.ResponsePanel
+			m.focusPanel(utils.ResponsePanel)
 			return m, nil
+		}
+		// "f4" shows/hides the top banner from anywhere, the panels below
+		// it taking over whatever space it frees (see layout.go's
+		// headerHeight) - persisted so the next app start restores
+		// whatever visibility was last chosen.
+		if keybindings.Matches(msg, m.keys.ToggleHeader) && noModalOpen {
+			m.showHeader = !m.showHeader
+			m.resizeContentPanels()
+			return m, ui.SaveShowHeaderCmd(m.db, m.showHeader)
 		}
 		if keybindings.Matches(msg, m.keys.Quit) {
 			return m, tea.Quit
 		}
+		// "z" expands the response panel to the whole right column,
+		// hiding the request panel, while focused on it - the same key
+		// (checked before the panel-switch bindings above so it doesn't
+		// need its own noModalOpen/focus juggling) un-zooms it again, and
+		// so does leaving the response panel any other way (see
+		// focusPanel). Meaningless (and left unhandled) anywhere else.
+		if keybindings.Matches(msg, m.keys.ToggleZoomResponse) && noModalOpen && m.focusedPanel == utils.ResponsePanel {
+			m.zoomedResponse = !m.zoomedResponse
+			return m, nil
+		}
+		// "t" (PickBodyStyle) puts the style picker's list in the request
+		// pane's own slot (see view.go, responsepane.ResponsePane.
+		// StylePickerListView) - a zoomed response panel has no such slot
+		// to show it in, so un-zoom first. Deliberately doesn't return -
+		// the key still needs to reach responsePane.Update below (via the
+		// normal routing at the bottom of this function), which is what
+		// actually opens the picker.
+		if keybindings.Matches(msg, m.keys.PickBodyStyle) && m.focusedPanel == utils.ResponsePanel {
+			m.zoomedResponse = false
+			// Un-zooming just now (above) only takes effect in
+			// requestHeight/requestWidth's own math starting this line -
+			// the next WindowSizeMsg (a real terminal resize) would
+			// eventually recompute this anyway, but that might be a long
+			// time from now, and the picker needs it sized correctly the
+			// instant it opens.
+			m.responsePane.SetStylePickerSize(m.requestWidth(), m.requestHeight())
+		}
 		if keybindings.Matches(msg, m.keys.EscapePanel) {
 			if m.focusedPanel == utils.RequestPanel {
-				m.focusedPanel = utils.SidebarPanel
+				m.focusPanel(utils.SidebarPanel)
 				return m, nil
 			}
-			// Esc's own save-to-file/search prompts (see SaveResponseRaw/
-			// SearchResponse) take priority over the panel switch below -
-			// otherwise esc could never actually cancel either, since this
-			// would always intercept it first and switch panels instead.
-			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() && !m.responsePane.IsSearching() {
-				m.focusedPanel = utils.RequestPanel
+			// Esc's own save-to-file/search/style-picker overlays (see
+			// SaveResponseRaw/SearchResponse/PickBodyStyle) take priority
+			// over the panel switch below - otherwise esc could never
+			// actually cancel any of them, since this would always
+			// intercept it first and switch panels instead.
+			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() && !m.responsePane.IsSearching() && !m.responsePane.IsPickingStyle() {
+				m.focusPanel(utils.RequestPanel)
 				return m, nil
 			}
 		}
@@ -119,7 +156,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// instead of immediately loading whatever's selected.
 			if m.focusedPanel == utils.SidebarPanel {
 				if item, ok := m.sidebarPane.SelectedItem(); ok {
-					m.focusedPanel = utils.RequestPanel
+					m.focusPanel(utils.RequestPanel)
 					return m, ui.SetRequestPaneRequestCmd(item.Request)
 				}
 			}
@@ -151,7 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
 		m.responsePane.SetResponse(msg.Response, msg.Request)
-		m.focusedPanel = utils.ResponsePanel
+		m.focusPanel(utils.ResponsePanel)
 		return m, nil
 
 	case ui.RequestSavedMsg:
@@ -203,7 +240,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.responsePane.SetLoadTestStats(msg.Stats)
 		}
 		m.requestPane.ExitLoadTestMode()
-		m.focusedPanel = utils.ResponsePanel // Switch focus to results
+		m.focusPanel(utils.ResponsePanel) // Switch focus to results
 		return m, nil
 
 	case http.LoadTestErrorMsg:
@@ -231,23 +268,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.importPane.SetWidth(modalWidth)
 		m.importPane.SetHeight(modalHeight)
 
-		// Existing size handling for other panels. sidebarWidth/
-		// sidebarContentHeight are shared with view.go's rendering (see
-		// layout.go) - they must match the box the sidebar is actually
-		// rendered into, otherwise the list wraps its content to fit a
-		// differently-sized box than it thinks it has, so the wrapped line
-		// count (and therefore the sidebar's rendered height) drifts as
-		// different items are selected, visibly shifting the right panel.
-		m.sidebarPane.SetSize(m.sidebarWidth(), m.sidebarContentHeight())
-
-		// requestPane.Height/Width/FieldsViewport are plain value fields,
-		// unlike its *textinput.Model etc. fields - view.go's calls to
-		// SetHeight/SetWidth only ever mutate View()'s own local, discarded
-		// copy (value receiver), so without this, requestPane.Update() (a
-		// pgup/pgdown scroll, say) would always see FieldsViewport at its
-		// zero value and be unable to scroll at all.
-		m.requestPane.SetHeight(m.requestHeight())
-		m.requestPane.SetWidth(m.requestWidth())
+		m.resizeContentPanels()
 	}
 
 	// Existing panel update routing (only when no modal is open)

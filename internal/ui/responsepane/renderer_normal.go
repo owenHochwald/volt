@@ -17,7 +17,7 @@ func (m ResponsePane) renderBody() string {
 	}
 
 	contentType := m.Response.ParseContentType()
-	return formatContentByType(m.Response.Body, contentType)
+	return formatContentByType(m.Response.Body, contentType, m.effectiveBodyStyle())
 }
 
 // renderHeaders renders the response headers in a sorted, styled format
@@ -102,7 +102,7 @@ func (m ResponsePane) renderRequest() string {
 	if req.Body == "" || req.Body == "{}" {
 		b.WriteString(faintStyle.Render("  (empty)"))
 	} else {
-		b.WriteString(formatContentByType(req.Body, "application/json"))
+		b.WriteString(formatContentByType(req.Body, "application/json", m.effectiveBodyStyle()))
 	}
 
 	return b.String()

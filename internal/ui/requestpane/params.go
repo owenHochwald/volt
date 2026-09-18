@@ -153,6 +153,24 @@ func ValidateParam(p Param) (string, bool) {
 	return "", true
 }
 
+// fieldError combines ValidateParam's type/format/range check with the
+// required-empty check (see RequiredFieldErrors), for the inline per-field
+// display in renderParamSection/renderArrayParamSection. The required half
+// is gated on showRequired (true once a send has actually been blocked on
+// it - see RequestPane.ShowRequiredErrors) so an empty required field isn't
+// flagged as wrong while a form is still being filled in for the first
+// time; the type/format half stays live regardless, same as ValidateParam
+// always was.
+func fieldError(p Param, showRequired bool) (string, bool) {
+	if msg, ok := ValidateParam(p); !ok {
+		return msg, false
+	}
+	if showRequired && p.Required && p.Value() == "" {
+		return "required", false
+	}
+	return "", true
+}
+
 // ValidateParams checks every param with ValidateParam, returning one
 // "name: reason" message per violation, or nil if everything's within
 // bounds. Called before a request is actually sent (see mode_normal.go and
@@ -193,13 +211,14 @@ func RequiredFieldErrors(params []Param) []string {
 // to be with only the ParseErrors list under the button to notice. The
 // index matches NormalMode/LoadTestMode's shared components() prefix:
 // ServerSelector (only for a grouped request - see ShowServerSelector),
-// MethodSelector, URLInput, NameInput, then PathParams start - both
-// modes' components() must keep that same prefix for this to stay
-// correct. ok is false when nothing in PathParams/BodyParams/ArrayParams
-// has a problem - e.g. the block came from a malformed Headers line
-// instead, which has no single field to jump to.
+// NameInput, MethodSelector, URLInput, then PathParams start - both
+// modes' components() must keep that same prefix (length 3, or 4 with a
+// server - order among them doesn't matter here, only the count) for
+// this to stay correct. ok is false when nothing in PathParams/
+// BodyParams/ArrayParams has a problem - e.g. the block came from a
+// malformed Headers line instead, which has no single field to jump to.
 func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
-	focusPrefixLen := 3 // MethodSelector, URLInput, NameInput
+	focusPrefixLen := 3 // NameInput, MethodSelector, URLInput
 	if m.ShowServerSelector() {
 		focusPrefixLen++
 	}
@@ -318,4 +337,34 @@ func (m *RequestPane) rebuildFocusManager() {
 		currentIndex = m.FocusManager.CurrentIndex()
 	}
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, currentIndex)
+}
+
+// defaultFocusIndex is components()'s index for MethodSelector - where a
+// freshly loaded request (see reinitRequestPane, and SetupRequestPane's
+// very first one) starts focus, rather than at index 0 (NameInput, or
+// ServerSelector for a grouped request). A request built from an
+// imported schema rarely needs its Name touched, so there's no reason to
+// land there by default every time - one shift+tab reaches it if it ever
+// is needed (see components' order: server, name, method, url, ...).
+func (m *RequestPane) defaultFocusIndex() int {
+	idx := 0
+	if m.ShowServerSelector() {
+		idx++
+	}
+	idx++ // NameInput
+	return idx
+}
+
+// focusIndexAfterURL is defaultFocusIndex()+2 - past MethodSelector and
+// URLInput, to whatever comes right after them (see components' order):
+// the first PathParams field, the first BodyParams/ArrayParams field, or
+// the freeform Body textarea - components() always has at least one of
+// those there (its own "else" fallback to Body when there are no
+// PathParams/BodyParams/ArrayParams guarantees it), so this is always a
+// valid index. Used when loading a request picked from the sidebar (see
+// SetRequestPaneRequestMsg) - unlike a blank/reset request, its method
+// and URL are already exactly what you picked it *for*, so there's
+// nothing to check there before moving on to actually filling it in.
+func (m *RequestPane) focusIndexAfterURL() int {
+	return m.defaultFocusIndex() + 2
 }

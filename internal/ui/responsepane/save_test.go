@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -18,9 +19,12 @@ func keyRunes(s string) tea.KeyMsg {
 // TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted is a
 // regression test for a real feature request: the Body tab always showed
 // the pretty-printed/highlighted version (see formatContentByType), with
-// no way to see the response body exactly as received.
+// no way to see the response body exactly as received (raw's own text,
+// stripped of the syntax-highlighting ANSI codes both views now carry -
+// see highlightRawBody - must still be the exact, unformatted bytes;
+// only pretty gets reformatted/re-indented - see formatJSON).
 func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *testing.T) {
-	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{
@@ -41,9 +45,9 @@ func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *tes
 		t.Fatalf("expected *ResponsePane, got %T", model)
 	}
 
-	raw := result.View()
+	raw := ansi.Strip(result.View())
 	if !strings.Contains(raw, `{"a":1,"b":2}`) {
-		t.Errorf("expected the raw view to contain the exact response body, got:\n%s", raw)
+		t.Errorf("expected the raw view to contain the exact, unformatted response body, got:\n%s", raw)
 	}
 
 	// Toggling back must return to the formatted view.
@@ -57,12 +61,44 @@ func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *tes
 	}
 }
 
+// TestResponsePane_RawBody_IsSyntaxHighlightedButNotReformatted is a
+// regression test for a real feature request: raw view used to show
+// completely unstyled, flat text - now it's highlighted (see
+// highlightRawBody) the same as pretty, using whatever style is
+// currently applied (see effectiveBodyStyle), just without pretty's own
+// reformatting/re-indentation step (see formatJSON) - the raw text
+// itself (ANSI codes stripped) must stay byte-for-byte what was
+// received.
+func TestResponsePane_RawBody_IsSyntaxHighlightedButNotReformatted(t *testing.T) {
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
+	pane.SetWidth(150)
+	pane.SetHeight(30)
+	compact := `{"a":1,"b":2}`
+	pane.SetResponse(&http.Response{
+		StatusCode: 200,
+		Status:     "200 OK",
+		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Body:       compact,
+	}, &http.Request{Method: http.GET, URL: "http://x"})
+
+	model, _ := pane.Update(keyRunes("r"))
+	result := model.(*ResponsePane)
+
+	raw := result.View()
+	if !strings.Contains(raw, "\x1b[") {
+		t.Errorf("expected the raw view to carry syntax highlighting (ANSI escapes), got plain text:\n%s", raw)
+	}
+	if !strings.Contains(ansi.Strip(raw), compact) {
+		t.Errorf("expected the raw view's text to stay exactly as received (no re-indentation), got:\n%s", ansi.Strip(raw))
+	}
+}
+
 // TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab verifies "r" is a
 // no-op on any tab other than Body - there's nothing for it to toggle on
 // Headers/Timing/Request, which don't go through formatContentByType at
 // all.
 func TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab(t *testing.T) {
-	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: `{"a":1}`}, &http.Request{Method: http.GET, URL: "http://x"})
@@ -89,7 +125,7 @@ func TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab(t *testing.T) {
 // it always saves the *raw* bytes, even while the pretty/formatted view
 // is what's currently on screen (rawBody == false).
 func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
-	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	rawBody := `{"a":1,"b":2}`
@@ -157,7 +193,7 @@ func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
 // TestResponsePane_SaveToFile_EscCancelsWithoutSaving verifies pressing
 // esc closes the prompt without dispatching any save.
 func TestResponsePane_SaveToFile_EscCancelsWithoutSaving(t *testing.T) {
-	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})

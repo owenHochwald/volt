@@ -27,6 +27,18 @@ type KeyMap struct {
 	FocusRequest  key.Binding
 	FocusResponse key.Binding
 
+	// ToggleZoomResponse ("z") expands the response panel to the right
+	// column's full height, hiding the request panel, while focused on
+	// the response panel - the same key un-zooms it again, and so does
+	// leaving the response panel any other way (see app.Model.focusPanel).
+	ToggleZoomResponse key.Binding
+
+	// ToggleHeader ("f4") shows/hides the top banner (logo + help hint),
+	// freeing that space for the panels below - persisted (see
+	// storage.SaveShowHeader/LoadShowHeader) so the next app start
+	// restores whatever visibility was last chosen.
+	ToggleHeader key.Binding
+
 	// Sidebar
 	LoadRequest   key.Binding
 	DeleteRequest key.Binding
@@ -49,6 +61,7 @@ type KeyMap struct {
 	// Response Pane
 	CopyResponse    key.Binding
 	ToggleRawBody   key.Binding
+	ToggleWrap      key.Binding
 	SaveResponseRaw key.Binding
 	TabNavNext      key.Binding
 	TabNavPrev      key.Binding
@@ -72,10 +85,22 @@ type KeyMap struct {
 
 	// SearchResponse opens a less/vim-style "/" search prompt over
 	// whatever's currently in the viewport; SearchNext/SearchPrev ("n"/"b")
-	// cycle through the matches it finds, wrapping around.
-	SearchResponse key.Binding
-	SearchNext     key.Binding
-	SearchPrev     key.Binding
+	// cycle through the matches it finds, wrapping around from wherever
+	// the *last search move* (a search, "n", "b", "N", or "P") left off.
+	// SearchNextFromPosition/SearchPrevFromPosition ("N"/"P") do the same
+	// forward/backward search, but relative to wherever the view is
+	// currently scrolled to instead - e.g. after "gg"/"G"/"{n}g" moved the
+	// view somewhere the remembered match sequence knows nothing about.
+	SearchResponse         key.Binding
+	SearchNext             key.Binding
+	SearchPrev             key.Binding
+	SearchNextFromPosition key.Binding
+	SearchPrevFromPosition key.Binding
+
+	// PickBodyStyle ("t") opens a fuzzy-filterable list of every syntax
+	// highlighting style chroma ships, applied live as the list cursor
+	// moves - see responsepane's style_picker.go.
+	PickBodyStyle key.Binding
 
 	// Help Modal
 	CloseHelp key.Binding
@@ -117,6 +142,14 @@ func DefaultKeyMap() KeyMap {
 		FocusResponse: key.NewBinding(
 			key.WithKeys("f3"),
 			key.WithHelp("f3", "focus response"),
+		),
+		ToggleZoomResponse: key.NewBinding(
+			key.WithKeys("z"),
+			key.WithHelp("z", "zoom response"),
+		),
+		ToggleHeader: key.NewBinding(
+			key.WithKeys("f4"),
+			key.WithHelp("f4", "toggle header"),
 		),
 		// EscapePanel steps back one panel at a time (response -> request
 		// -> sidebar), the same direction as the panel layout itself reads
@@ -224,6 +257,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("r"),
 			key.WithHelp("r", "toggle raw body"),
 		),
+		// ToggleWrap switches long lines between wrapping (see
+		// ResponsePane.wrapBody) and the viewport's own default of
+		// truncating them to the pane's width with horizontal scroll
+		// available instead.
+		ToggleWrap: key.NewBinding(
+			key.WithKeys("w"),
+			key.WithHelp("w", "toggle wrap"),
+		),
 		// SaveResponseRaw opens a filename prompt (see ResponsePane's
 		// savingToFile) to save the response body - always the raw bytes
 		// as received, regardless of ToggleRawBody's current display
@@ -278,6 +319,18 @@ func DefaultKeyMap() KeyMap {
 		SearchPrev: key.NewBinding(
 			key.WithKeys("b"),
 			key.WithHelp("b", "previous match"),
+		),
+		SearchNextFromPosition: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "next match from here"),
+		),
+		SearchPrevFromPosition: key.NewBinding(
+			key.WithKeys("P"),
+			key.WithHelp("P", "previous match from here"),
+		),
+		PickBodyStyle: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "pick body style"),
 		),
 
 		// Help Modal

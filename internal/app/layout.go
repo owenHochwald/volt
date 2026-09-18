@@ -1,5 +1,18 @@
 package app
 
+import "github.com/charmbracelet/lipgloss"
+
+// headerHeight returns the top banner's actual rendered height (see
+// view.go's headerView) - 0 when hidden (see showHeader/ToggleHeader),
+// freeing that space for mainHeight/sidebarContentHeight below rather
+// than leaving it as blank space once the header disappears.
+func (m Model) headerHeight() int {
+	if !m.showHeader {
+		return 0
+	}
+	return lipgloss.Height(m.headerView(m.width))
+}
+
 // sidebarWidth returns the sidebar's column width, scaled with the
 // terminal but clamped so it never gets unusably narrow on small terminals
 // or wastes space on very wide ones.
@@ -20,7 +33,7 @@ func (m Model) sidebarWidth() int {
 // diverging is exactly what caused the right panel to visibly shift while
 // navigating a long list, so both now go through this single calculation.
 func (m Model) sidebarContentHeight() int {
-	contentHeight := m.height - 5
+	contentHeight := m.height - m.headerHeight() + 3
 	mainHeight := contentHeight - 2
 	return mainHeight - 4
 }
@@ -32,8 +45,14 @@ func (m Model) mainWidth() int {
 }
 
 // mainHeight returns the height available to the request+response column.
+// The "+3" alongside headerHeight (not just "m.height - headerHeight()")
+// preserves the exact vertical budget this whole layout.go was already
+// tuned against back when the header's height was always a fixed 8 lines
+// (see headerHeight, and the "-5" this replaced) - so hiding the header
+// (headerHeight 8 -> 0) hands mainHeight back exactly the 8 lines the
+// header used to occupy, rather than shifting the whole layout's tuning.
 func (m Model) mainHeight() int {
-	contentHeight := m.height - 5
+	contentHeight := m.height - m.headerHeight() + 3
 	return contentHeight - 2
 }
 
@@ -62,6 +81,13 @@ func (m Model) rightColumnHeight() int {
 // sees a FieldsViewport sized to match what's actually on screen, rather
 // than the zero value.
 func (m Model) requestHeight() int {
+	// Zoomed (see zoomedResponse/ToggleZoomResponse), the request panel
+	// isn't rendered at all - view.go skips it entirely rather than
+	// giving it this 0, which is really just for whichever WindowSizeMsg
+	// handling still touches it while hidden.
+	if m.zoomedResponse {
+		return 0
+	}
 	// ~35% of the right column's content height goes to the request editor;
 	// responseHeight takes what's left (not a fixed proportion of its own),
 	// so the two always sum to rightColumnHeight exactly - no leftover gap
@@ -76,8 +102,13 @@ func (m Model) requestWidth() int {
 
 // responseHeight/responseWidth are the box dimensions view.go renders the
 // response pane into - see requestHeight for why this is "whatever's left"
-// rather than its own independent proportion.
+// rather than its own independent proportion. Zoomed, the response panel
+// is the only box in the right column, so it gets the whole thing minus
+// just its own border lines (not two boxes' worth).
 func (m Model) responseHeight() int {
+	if m.zoomedResponse {
+		return m.rightColumnHeight() - boxBorderLines
+	}
 	content := m.rightColumnHeight() - 2*boxBorderLines
 	return content - m.requestHeight()
 }

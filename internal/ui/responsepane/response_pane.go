@@ -1,10 +1,12 @@
 package responsepane
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -30,6 +32,15 @@ type ResponsePane struct {
 	// (formatContentByType) and the response body exactly as received -
 	// see updateViewportForActiveTab's TabBody case.
 	rawBody bool
+
+	// wrapBody, toggled by ToggleWrap ("w"), switches long lines between
+	// wrapping (see setViewportContent's use of ansi.Wrap) and the
+	// viewport's own default behavior otherwise - truncating them to the
+	// pane's width with horizontal scroll available (see bubbles
+	// viewport's own Cut-based visibleLines, driven by ScrollLeft/
+	// ScrollRight) - off by default, preserving that existing behavior for
+	// anyone who hasn't asked for wrapping.
+	wrapBody bool
 
 	// savingToFile/filenameInput drive the "save raw body to file"
 	// prompt (see SaveResponseRaw ("s")) - a mode+textinput overlay
@@ -63,12 +74,53 @@ type ResponsePane struct {
 	searchMatchIdx  int
 	searchStatusMsg string
 
+	// searchOrigin snapshots search state from right before "/" was
+	// pressed (see openSearch) - restored verbatim by cancelSearch (esc),
+	// and what liveSearch's incremental matching searches forward from.
+	searchOrigin searchSnapshot
+
 	// gPending/gotoLineBuffer implement vim/less-style "gg" (go to top) and
 	// "{n}g" (go to line n) - see navigation.go. gPending is armed by a
 	// bare "g" keypress (see GotoTop) and cleared by whatever key resolves
 	// or cancels the sequence.
 	gPending       bool
 	gotoLineBuffer string
+
+	// bodyStyleName is the chroma style used for the Body (and sent-
+	// request) tab's pretty rendering (see formatContentByType) -
+	// defaultBodyStyle ("onedark") unless a different one was ever picked
+	// (see style_picker.go's "t" picker) and persisted (see
+	// storage.SaveBodyStyle/LoadBodyStyle, loaded once at SetupResponsePane).
+	bodyStyleName string
+
+	// Style picker (style_picker.go): pickingStyle/styleList drive the "t"
+	// picker - a fuzzy-filterable list of every style chroma ships (see
+	// chroma/v2/styles.Names), rendered by app/view.go in the request
+	// pane's own box (see StylePickerListView) rather than inside this
+	// pane - so it never has to fight this pane's own fixed-size box for
+	// room the way an earlier version, cramming a live-preview snippet in
+	// here too, once did. The live preview instead just reuses this pane's
+	// own normal Body rendering (see effectiveBodyStyle), which already
+	// knows how to safely handle arbitrarily long real response lines
+	// (unlike that snippet, which didn't and could blow out the layout on
+	// something like a minified HTML page). Browsing the list only ever
+	// changes what effectiveBodyStyle returns, never bodyStyleName itself
+	// - so esc cancelling has nothing to undo, and only enter (see
+	// confirmStylePicker) actually applies and persists (see DB below) the
+	// selection. stylePickerWidth/Height are the request pane's own box
+	// dimensions (set by app/update.go's WindowSizeMsg handling, the same
+	// way requestPane.SetHeight/SetWidth already are - see
+	// SetStylePickerSize), since that's the box the list is sized to fill,
+	// not this pane's own width/height.
+	pickingStyle                        bool
+	styleList                           list.Model
+	stylePickerWidth, stylePickerHeight int
+
+	// DB persists the picked body style across restarts (see
+	// storage.SaveBodyStyle) - nil-safe (a nil DB, as in tests, just means
+	// picking a style doesn't survive a restart) the same way
+	// requestpane.RequestPane.DB already is.
+	DB *storage.SQLiteStorage
 
 	keys keybindings.KeyMap
 }
@@ -98,6 +150,15 @@ func (m *ResponsePane) IsSavingToFile() bool {
 // panel-switch swallowing it before the prompt ever sees it.
 func (m *ResponsePane) IsSearching() bool {
 	return m.searching
+}
+
+// IsPickingStyle reports whether the body style picker (see
+// style_picker.go's "t") is currently open - checked by app/update.go for
+// the same reason as IsSavingToFile/IsSearching: so esc closes the
+// picker first instead of the panel-switch swallowing it before the
+// picker ever sees it.
+func (m *ResponsePane) IsPickingStyle() bool {
+	return m.pickingStyle
 }
 
 // SetResponse updates the response pane with a new HTTP response and the
@@ -133,20 +194,36 @@ func (m *ResponsePane) ClearLoadTestStats() {
 // SetHeight sets the height of the response pane
 func (m *ResponsePane) SetHeight(height int) {
 	m.height = height
-	// Viewport needs to be smaller to account for the status bar, blank
-	// separator, tab bar, and the pinned footer hint renderNormalView
-	// always appends below it (see footerHint) - the scroll indicator and
-	// save-status line are each only sometimes present, so they aren't
-	// chased precisely here; View()'s own MaxHeight clip is the backstop
-	// against those (or this estimate) ever pushing the pane's rendered
-	// height past what's actually been allocated for it, which - unlike a
-	// plain lipgloss.Height() - only pads short content and would
-	// otherwise silently corrupt the whole layout around it.
-	m.viewport.Height = max(height-6, 1)
+	// Viewport needs to be smaller to account for the status bar, tab
+	// bar, and the pinned footer hint renderNormalView always appends
+	// below it (see footerHint) - the scroll indicator and save-status
+	// line are each only sometimes present, so they aren't chased
+	// precisely here; View()'s own MaxHeight clip is the backstop against
+	// those (or this estimate) ever pushing the pane's rendered height
+	// past what's actually been allocated for it, which - unlike a plain
+	// lipgloss.Height() - only pads short content and would otherwise
+	// silently corrupt the whole layout around it.
+	m.viewport.Height = max(height-4, 1)
 }
 
 // SetWidth sets the width of the response pane
 func (m *ResponsePane) SetWidth(width int) {
 	m.width = width
 	m.viewport.Width = width
+}
+
+// SetStylePickerSize sizes the style picker's list (see
+// StylePickerListView) to width/height - the request pane's own box
+// dimensions (app/view.go renders the list there while picking, not in
+// this pane's own box - see IsPickingStyle), called from app/update.go's
+// WindowSizeMsg handling the same way requestPane.SetHeight/SetWidth
+// already are. Stored regardless of whether the picker is open right
+// now, so openStylePicker has a real size to start from instead of
+// whatever the zero value would size the list to.
+func (m *ResponsePane) SetStylePickerSize(width, height int) {
+	m.stylePickerWidth = width
+	m.stylePickerHeight = height
+	if m.pickingStyle {
+		m.resizeStyleList()
+	}
 }

@@ -37,7 +37,7 @@ func TestRequestPane_ScrollFieldsDown_RevealsFieldsBeyondTheBox(t *testing.T) {
 	pane.SetWidth(150)
 	// A deliberately short box - enough for the method/URL line and Name,
 	// not enough to also fit the Body Params section without scrolling.
-	pane.SetHeight(11)
+	pane.SetHeight(7)
 	pane.PanelFocused = true
 
 	before := pane.View()
@@ -90,8 +90,9 @@ func TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem(t *testing.T) {
 	pane.PanelFocused = true
 
 	// Tab order (this request has no group, so no ServerSelector - see
-	// ShowServerSelector): Method, URL, Name, ArrayCountControl.
-	for i := 0; i < 3; i++ {
+	// ShowServerSelector): Name, Method, URL, ArrayCountControl. Focus
+	// starts on Method (see defaultFocusIndex), not Name.
+	for i := 0; i < 2; i++ {
 		pane.FocusManager.Next()
 	}
 	if _, ok := pane.FocusManager.Current().(*ArrayCountControl); !ok {

@@ -89,7 +89,11 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
 		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
 		if len(errs) > 0 {
-			m.ParseErrors = append(m.ParseErrors, errs...)
+			// Shown inline next to each offending field instead (see
+			// renderParamSection/renderArrayParamSection) - ShowRequiredErrors
+			// switches on the required-empty half of that display; the
+			// type/format half (ValidateParam) already always shows live.
+			m.ShowRequiredErrors = true
 			if idx, ok := m.firstErrorFocusIndex(); ok {
 				m.FocusManager.FocusIndex(idx)
 				m.scrollToFocused()
@@ -112,7 +116,7 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyMsg) (tea.Model
 
 // components lists this mode's focusable fields in tab order. This must
 // match fieldsContent()'s render order in view.go (server - only for a
-// grouped request, see ShowServerSelector - method+URL, name, path
+// grouped request, see ShowServerSelector - name, method+URL, path
 // params, body params, headers, load-test config, submit) - otherwise
 // tab visits fields in a different order than they're drawn in, and the
 // cursor appears to jump up and down the screen instead of moving straight
@@ -122,7 +126,7 @@ func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
 	if m.ShowServerSelector() {
 		components = append(components, m.ServerSelector)
 	}
-	components = append(components, m.MethodSelector, m.URLInput, m.NameInput)
+	components = append(components, m.NameInput, m.MethodSelector, m.URLInput)
 	components = append(components, paramFocusables(m.PathParams)...)
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
