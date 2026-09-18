@@ -6,6 +6,16 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Footer hint text for the Help/Settings surfaces - shared between View
+// (what's actually rendered) and contentArea (how much room that leaves,
+// see shortcut_pane.go's applySizing) so the two can never drift apart.
+// Groups' own footer comes from groupsPane.FooterHint() instead, since it
+// changes with GroupsPane's mode.
+const (
+	helpFooterText     = "h/l section • j/k category • 1-6 jump • ctrl+u/ctrl+d scroll • q/? close"
+	settingsFooterText = "h/l section • j/k select • enter save • esc cancel"
+)
+
 func (m ShortcutPane) View() string {
 	modalStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -30,13 +40,13 @@ func (m ShortcutPane) View() string {
 			"",
 			m.helpViewport.View(),
 		)
-		footerText = "h/l section • j/k category • 1-6 jump • pgup/pgdn scroll • q/? close"
+		footerText = helpFooterText
 	case SurfaceGroups:
 		content = m.groupsPane.ViewContent()
 		footerText = "h/l section • " + m.groupsPane.FooterHint()
 	default:
 		content = m.renderSettings()
-		footerText = "h/l section • j/k select • enter save • esc cancel"
+		footerText = settingsFooterText
 	}
 	footer := m.styles.Text.Muted.Render(footerText)
 

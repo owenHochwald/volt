@@ -84,8 +84,13 @@ func (m GroupsPane) ViewContent() string {
 }
 
 func (m GroupsPane) renderBrowse() string {
-	groupsBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusGroups).Render(m.groups.View())
-	serversBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusServers).Render(m.servers.View())
+	// list.Model's own View() doesn't stretch a short/empty list out to
+	// its SetSize width by itself (only Height pads) - Width(m.listWidth)
+	// here is what actually makes each box fill the space resize() gave
+	// it, rather than shrinking to fit whatever text happens to be in it.
+	box := boxStyle.Width(m.listWidth)
+	groupsBox := applyFocus(box, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusGroups).Render(m.groups.View())
+	serversBox := applyFocus(box, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusServers).Render(m.servers.View())
 	return lipgloss.JoinHorizontal(lipgloss.Top, groupsBox, "  ", serversBox)
 }
 

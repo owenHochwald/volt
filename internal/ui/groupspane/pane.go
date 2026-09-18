@@ -54,7 +54,15 @@ type pendingDeleteItem struct {
 // server, so reassigning a server redirects the whole group at once.
 type GroupsPane struct {
 	width, height int
-	Focused       bool
+	// listWidth is each of the two browse-mode boxes' own target width
+	// (see resize) - stored so view.go's renderBrowse can apply it
+	// explicitly. list.Model's own View() doesn't actually stretch an
+	// empty/short list out to its SetSize width on its own (only Height
+	// pads), so boxStyle needs telling directly or the box renders only
+	// as wide as its title/placeholder text, not the space it's been
+	// given.
+	listWidth int
+	Focused   bool
 
 	keys   keybindings.KeyMap
 	db     *storage.SQLiteStorage
@@ -236,11 +244,25 @@ func (m *GroupsPane) SetHeight(height int) {
 	m.resize()
 }
 
+// resize derives the two browse-mode boxes' size from m.width/m.height,
+// which the embedding shortcutpane already trims down to exactly the
+// content area GroupsPane has to render into (see ShortcutPane.
+// contentArea) - so, unlike when this pane rendered its own standalone
+// modal (border+padding of its own), nothing here needs to guess at
+// outer chrome anymore, only its own: the two boxes' borders/padding and
+// the separator between them (see renderBrowse), and ViewContent's own
+// blank-line-then-status-line below the boxes.
 func (m *GroupsPane) resize() {
-	innerWidth := max(m.width-8, 20)
-	listWidth := innerWidth/2 - 2
-	listHeight := max(m.height-14, 5)
-	m.groups.SetSize(listWidth, listHeight)
-	m.servers.SetSize(listWidth, listHeight)
-	m.headersInput.SetWidth(innerWidth)
+	const separator = 2  // the "  " between the two boxes (see renderBrowse)
+	const boxFrame = 4   // boxStyle's Border(2) + Padding(0,1)*2(2), per box
+	const bodyChrome = 2 // ViewContent's own blank line + status line, below the boxes
+	const boxBorder = 2  // boxStyle's Border top+bottom (Padding(0,1) has no vertical padding)
+
+	boxWidth := max((m.width-separator)/2, boxFrame+8)
+	m.listWidth = boxWidth - boxFrame
+	listHeight := max(m.height-bodyChrome-boxBorder, 3)
+
+	m.groups.SetSize(m.listWidth, listHeight)
+	m.servers.SetSize(m.listWidth, listHeight)
+	m.headersInput.SetWidth(max(m.width-4, 20))
 }
