@@ -85,12 +85,18 @@ func (m GroupsPane) ViewContent() string {
 
 func (m GroupsPane) renderBrowse() string {
 	// list.Model's own View() doesn't stretch a short/empty list out to
-	// its SetSize width by itself (only Height pads) - Width(m.listWidth)
-	// here is what actually makes each box fill the space resize() gave
-	// it, rather than shrinking to fit whatever text happens to be in it.
-	box := boxStyle.Width(m.listWidth)
-	groupsBox := applyFocus(box, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusGroups).Render(m.groups.View())
-	serversBox := applyFocus(box, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusServers).Render(m.servers.View())
+	// its SetSize width by itself (only Height pads), so it's padded to
+	// m.listWidth explicitly here before boxStyle wraps it - not via
+	// boxStyle.Width(m.listWidth) directly, since lipgloss.Style.Width on
+	// a style that already has Border+Padding set treats the given width
+	// as the box's *total* rendered width, not its content width before
+	// the border/padding are added on top, silently shrinking the actual
+	// content area by the frame size (4 cells) - the same reason
+	// app/view.go's renderPanel pads content separately before an outer
+	// bordered style ever touches it.
+	pad := lipgloss.NewStyle().Width(m.listWidth).MaxWidth(m.listWidth)
+	groupsBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusGroups).Render(pad.Render(m.groups.View()))
+	serversBox := applyFocus(boxStyle, m.styles.Panel.Focused, m.styles.Panel.Base, m.target == focusServers).Render(pad.Render(m.servers.View()))
 	return lipgloss.JoinHorizontal(lipgloss.Top, groupsBox, "  ", serversBox)
 }
 

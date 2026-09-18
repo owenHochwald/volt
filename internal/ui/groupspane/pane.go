@@ -54,13 +54,11 @@ type pendingDeleteItem struct {
 // server, so reassigning a server redirects the whole group at once.
 type GroupsPane struct {
 	width, height int
-	// listWidth is each of the two browse-mode boxes' own target width
-	// (see resize) - stored so view.go's renderBrowse can apply it
-	// explicitly. list.Model's own View() doesn't actually stretch an
-	// empty/short list out to its SetSize width on its own (only Height
-	// pads), so boxStyle needs telling directly or the box renders only
-	// as wide as its title/placeholder text, not the space it's been
-	// given.
+	// listWidth is each of the two browse-mode boxes' own *content*
+	// width (see resize) - stored so view.go's renderBrowse can pad each
+	// list's own View() out to it explicitly before boxStyle wraps it in
+	// a border, since list.Model's View() doesn't stretch an empty/short
+	// list out to its SetSize width on its own (only Height pads).
 	listWidth int
 	Focused   bool
 
