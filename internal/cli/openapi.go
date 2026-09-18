@@ -99,9 +99,15 @@ func ParseOpenAPIURLs(data []byte, isYAML bool, baseURLOverride string, allowRel
 			if fields := jsonRequestBodyFields(doc, op); len(fields) > 0 {
 				req.Body = requestBodyTemplate(fields)
 			}
-			if pathFields := pathParamFields(doc, item, op); len(pathFields) > 0 {
-				req.PathParamSchema = pathFields
-			}
+			// Always set, even to an empty (non-nil) map for an operation
+			// with no path parameters of its own - requestpane.
+			// IsSchemaRequest uses PathParamSchema != nil as its marker
+			// for "this request came from an import", regardless of
+			// whether that import actually found any path (or body)
+			// fields to describe, so an imported bodyless/paramless
+			// endpoint doesn't look indistinguishable from a hand-typed
+			// request once loaded back from the database.
+			req.PathParamSchema = pathParamFields(doc, item, op)
 
 			if err := req.Validate(); err != nil {
 				warnings = append(warnings, fmt.Sprintf("skipped %s %s: %v", method, req.URL, err))

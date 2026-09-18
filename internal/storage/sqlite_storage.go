@@ -47,13 +47,23 @@ func deserializeHeaders(jsonStr string) (map[string]string, error) {
 
 // serializePathParamSchema/deserializePathParamSchema mirror
 // serializeHeaders/deserializeHeaders for http.Request.PathParamSchema,
-// except an empty/nil schema round-trips as an empty string rather than
-// the literal 4-byte "null" - matching path_param_schema's migration
-// default (empty string, not SQL NULL) for every row saved before this
-// column existed, so Load doesn't need to special-case old rows
-// differently from new ones with no path params.
+// except a nil schema round-trips as an empty string rather than the
+// literal 4-byte "null" - matching path_param_schema's migration default
+// (empty string, not SQL NULL) for every row saved before this column
+// existed, so Load doesn't need to special-case old rows differently from
+// new ones with no path params.
+//
+// A non-nil but *empty* schema (map[string]http.BodyFieldSchema{}, as
+// opposed to a nil one) is deliberately serialized as a real "{}"
+// instead - requestpane.IsSchemaRequest uses PathParamSchema != nil after
+// loading a row back as its marker for "this request's schema was
+// inspected at import time" (see internal/cli/openapi.go's
+// pathParamFields, which now always returns a non-nil map, empty or
+// not), and collapsing that distinction to the same "" a hand-typed
+// request's genuinely-nil schema produces would make the two
+// indistinguishable again once loaded back from the database.
 func serializePathParamSchema(schema map[string]http.BodyFieldSchema) (string, error) {
-	if len(schema) == 0 {
+	if schema == nil {
 		return "", nil
 	}
 	data, err := json.Marshal(schema)

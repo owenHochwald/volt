@@ -19,6 +19,22 @@ func (m *RequestPane) ShowServerSelector() bool {
 	return m.Request != nil && m.Request.GroupID != nil
 }
 
+// IsSchemaRequest reports whether this request came from an OpenAPI
+// import (see `volt import`/internal/cli/openapi.go), as opposed to
+// being a plain, hand-typed one - checked by fieldsContent/components to
+// decide whether an empty freeform Body field is worth showing at all.
+//
+// PathParamSchema is the marker: import always sets it now (even to an
+// empty, non-nil map, for an endpoint with no path parameters of its
+// own - see pathParamFields), so its mere presence means "this request's
+// schema was inspected at import time", independent of whether that
+// schema actually described any path or body fields. A hand-typed
+// request never has it set at all (nil), and clearing a request back to
+// a clean slate (see clearParamValues) explicitly nils it back out.
+func (m *RequestPane) IsSchemaRequest() bool {
+	return m.Request != nil && m.Request.PathParamSchema != nil
+}
+
 // rebuildServerSelector refreshes Servers from the database and rebuilds
 // ServerSelector over it, so servers added/renamed/removed via the Groups &
 // Servers modal show up next time a request is loaded, preserving

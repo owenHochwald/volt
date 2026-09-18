@@ -129,6 +129,43 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 	assert.Equal(t, groupID, *updated.GroupID)
 }
 
+// TestSQLiteStorage_PathParamSchema_DistinguishesNilFromEmpty is a
+// regression test for a real feature request: requestpane.IsSchemaRequest
+// uses PathParamSchema != nil as its marker for "this request came from
+// an OpenAPI import" (see internal/cli/openapi.go's pathParamFields,
+// which always sets it now, even to an empty map for an endpoint with no
+// path parameters of its own) - so a non-nil but empty schema and a
+// genuinely nil one (a hand-typed request that was never imported) must
+// round-trip through the database as distinguishable, not both collapse
+// to the same thing.
+func TestSQLiteStorage_PathParamSchema_DistinguishesNilFromEmpty(t *testing.T) {
+	db := setupTestDB(t)
+
+	imported := &http.Request{Method: "POST", URL: "http://localhost:8080/no-body", PathParamSchema: map[string]http.BodyFieldSchema{}}
+	handTyped := &http.Request{Method: "GET", URL: "http://localhost:8080/typed"}
+
+	assert.NoError(t, db.Save(imported))
+	assert.NoError(t, db.Save(handTyped))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(loaded))
+
+	byID := make(map[int64]http.Request, len(loaded))
+	for _, r := range loaded {
+		byID[r.ID] = r
+	}
+
+	if got := byID[imported.ID].PathParamSchema; got == nil {
+		t.Error("expected the imported (empty-schema) request's PathParamSchema to round-trip non-nil")
+	} else if len(got) != 0 {
+		t.Errorf("expected an empty map, got %+v", got)
+	}
+	if got := byID[handTyped.ID].PathParamSchema; got != nil {
+		t.Errorf("expected the hand-typed request's PathParamSchema to round-trip nil, got %+v", got)
+	}
+}
+
 // TestSQLiteStorage_Save_UpsertsWhenNameUnchanged is a regression test
 // for a real feature request: resaving an already-saved request (ID != 0)
 // whose Name hasn't changed must update that same row in place, not pile

@@ -71,11 +71,20 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	// is rendered separately below, since it's a repeatable group of
 	// sub-fields rather than a single value - bodyBlock stays empty when
 	// there are no scalar BodyParams to show alongside it.
+	//
+	// A schema request (see IsSchemaRequest) whose schema turned up
+	// neither BodyParams nor ArrayParams has nothing to say about a body
+	// at all - its own import-time inspection already found no fields to
+	// fill in, so the freeform Body textarea (with its own "here's an
+	// example" placeholder - see factory.go) would just be inviting text
+	// that syncRequest's own schema-aware path won't even look at. A
+	// hand-typed request has no such schema to have inspected, so it
+	// keeps the freeform field as its only way to set a body at all.
 	var bodyBlock string
 	var bodyOffsets []fieldOffset
 	if len(m.BodyParams) > 0 {
 		bodyBlock, bodyOffsets = renderParamSection(m.styles, "Body Params", m.BodyParams, m.ShowRequiredErrors)
-	} else if len(m.ArrayParams) == 0 {
+	} else if len(m.ArrayParams) == 0 && !m.IsSchemaRequest() {
 		bodyLabel := fieldGroupLabelStyle.Render("Body    ")
 		bodyBlock = lipgloss.JoinHorizontal(lipgloss.Left, bodyLabel, m.Body.View())
 	}

@@ -132,7 +132,11 @@ func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
 		components = append(components, arrayParamFocusables(m.ArrayParams)...)
-	} else {
+	} else if !m.IsSchemaRequest() {
+		// A schema request with no body fields doesn't render the
+		// freeform Body field at all (see fieldsContent) - it must be
+		// left out of the focus cycle too, or tab would land on a field
+		// that isn't actually on screen.
 		components = append(components, m.Body)
 	}
 	components = append(components,

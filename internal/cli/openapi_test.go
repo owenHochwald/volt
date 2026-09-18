@@ -775,3 +775,44 @@ func TestParseOpenAPIURLs_PathParamSchema(t *testing.T) {
 		t.Error("expected the 'in: query' parameter to be excluded from PathParamSchema")
 	}
 }
+
+// TestParseOpenAPIURLs_SetsSchemaMarkerEvenWithNoPathParams is a
+// regression test for a real feature request: requestpane.IsSchemaRequest
+// uses http.Request.PathParamSchema != nil as its marker for "this
+// request came from an OpenAPI import" (so the UI can hide an empty
+// freeform Body field for it) - an operation with no "in: path"
+// parameters at all must still get a non-nil (just empty) PathParamSchema,
+// or an imported bodyless/paramless endpoint would be indistinguishable
+// from a hand-typed request once loaded back from the database.
+func TestParseOpenAPIURLs_SetsSchemaMarkerEvenWithNoPathParams(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/ping": {
+				"post": {
+					"operationId": "ping"
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	ping := requests[0]
+	if ping.PathParamSchema == nil {
+		t.Error("expected a non-nil PathParamSchema even for an operation with no path parameters")
+	}
+	if len(ping.PathParamSchema) != 0 {
+		t.Errorf("expected an empty PathParamSchema, got %+v", ping.PathParamSchema)
+	}
+	if ping.Body != "" {
+		t.Errorf("expected no body for an operation with no requestBody, got %q", ping.Body)
+	}
+}
