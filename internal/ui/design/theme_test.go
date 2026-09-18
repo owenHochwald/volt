@@ -71,6 +71,12 @@ func TestStylesUseSemanticThemeRoles(t *testing.T) {
 	assert.Equal(t, theme.Colors.Error, styles.Badge.Error.GetBackground())
 	assert.Equal(t, theme.Colors.MethodGET, styles.Method.GET.GetForeground())
 	assert.Equal(t, theme.Colors.MethodDELETE, styles.Method.DELETE.GetForeground())
+	assert.Equal(t, theme.Colors.TextMuted, styles.Metric.Label.GetForeground())
+	assert.Equal(t, theme.Colors.Text, styles.Metric.Value.GetForeground())
+	assert.Equal(t, theme.Colors.ChartPrimary, styles.Chart.Primary.GetForeground())
+	assert.Equal(t, theme.Colors.ChartSecondary, styles.Chart.Secondary.GetForeground())
+	assert.Equal(t, theme.Colors.ChartGood, styles.Chart.Good.GetForeground())
+	assert.Equal(t, theme.Colors.ChartBad, styles.Chart.Bad.GetForeground())
 }
 
 func TestStylesDoNotChangePanelGeometryAcrossStates(t *testing.T) {

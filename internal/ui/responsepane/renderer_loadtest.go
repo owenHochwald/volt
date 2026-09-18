@@ -2,11 +2,14 @@ package responsepane
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/owenHochwald/Volt/internal/apperror"
+	"github.com/owenHochwald/Volt/internal/http"
 )
 
 // renderLoadTestOverview renders the overview tab for load test results
@@ -16,58 +19,145 @@ func (m ResponsePane) renderLoadTestOverview() string {
 		return "No data"
 	}
 
-	var b strings.Builder
-	b.WriteString("Load Test Results\n")
-	b.WriteString(strings.Repeat("─", 60) + "\n\n")
-
-	// Calculate success metrics
 	successCount := stats.CompletedRequests - stats.FailedRequests
 	successRate := 0.0
 	if stats.CompletedRequests > 0 {
 		successRate = float64(successCount) / float64(stats.CompletedRequests) * 100
 	}
-
-	// Requests
-	b.WriteString(m.styles.Text.ResponseLabel.Render("Requests"))
-	b.WriteString(": ")
-	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d / %d", stats.CompletedRequests, stats.TotalRequests)))
-	b.WriteString("\n\n")
-
-	// Success
-	b.WriteString(m.styles.Text.ResponseLabel.Render("Success"))
-	b.WriteString(": ")
-	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d (%.1f%%)", successCount, successRate)))
-	b.WriteString("\n\n")
-
-	// Failed
-	b.WriteString(m.styles.Text.ResponseLabel.Render("Failed"))
-	b.WriteString(": ")
-	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%d (%.1f%%)", stats.FailedRequests, 100-successRate)))
-	b.WriteString("\n\n")
-
-	// Calculate throughput
-	elapsed := time.Since(stats.StartTime)
-	if !stats.EndTime.IsZero() {
-		elapsed = stats.EndTime.Sub(stats.StartTime)
+	failureRate := 100 - successRate
+	if stats.CompletedRequests == 0 {
+		failureRate = 0
 	}
+	elapsed := loadTestElapsed(stats)
 	throughput := 0.0
 	if elapsed.Seconds() > 0 {
 		throughput = float64(stats.CompletedRequests) / elapsed.Seconds()
 	}
+	p50 := time.Duration(0)
+	if stats.Percentiles != nil {
+		p50 = stats.Percentiles.Percentile(50)
+	}
 
-	// Throughput
-	b.WriteString(m.styles.Text.ResponseLabel.Render("Throughput"))
-	b.WriteString(": ")
-	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf("%.1f req/s", throughput)))
+	var b strings.Builder
+	b.WriteString(m.styles.Metric.Label.Render("PERFORMANCE"))
+	b.WriteString("\n")
+	b.WriteString(m.styles.Metric.Value.Render(formatThroughput(throughput)))
+	b.WriteString(m.styles.Metric.Unit.Render(" req/s"))
+	b.WriteString("       ")
+	b.WriteString(m.styles.Metric.Value.Render(formatLatency(p50)))
+	b.WriteString(m.styles.Metric.Unit.Render(" p50"))
+	b.WriteString("       ")
+	b.WriteString(m.styles.Metric.Value.Render(fmt.Sprintf("%.2f%%", failureRate)))
+	b.WriteString(m.styles.Metric.Unit.Render(" errors"))
 	b.WriteString("\n\n")
 
-	// Duration
+	b.WriteString(m.styles.Metric.Label.Render("LATENCY CURRENT"))
+	b.WriteString("\n")
+	b.WriteString(m.renderLatencySparkline())
+	b.WriteString("\n\n")
+
+	b.WriteString(m.styles.Metric.Label.Render("OUTCOME"))
+	b.WriteString("\n")
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Success"))
+	b.WriteString(": ")
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf(
+		"%s (%.1f%%)",
+		formatRequestCount(successCount),
+		successRate,
+	)))
+	b.WriteString("    ")
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Failed"))
+	b.WriteString(": ")
+	b.WriteString(m.styles.Text.Value.Render(fmt.Sprintf(
+		"%s (%.1f%%)",
+		formatRequestCount(stats.FailedRequests),
+		failureRate,
+	)))
+	b.WriteString("    ")
 	b.WriteString(m.styles.Text.ResponseLabel.Render("Duration"))
 	b.WriteString(": ")
 	b.WriteString(m.styles.Text.Value.Render(elapsed.Round(time.Millisecond).String()))
-	b.WriteString("\n")
 
 	return b.String()
+}
+
+func (m ResponsePane) renderLatencySparkline() string {
+	if len(m.latencySamples) == 0 {
+		return m.styles.Text.Muted.Render("waiting for samples…")
+	}
+
+	width := min(max(m.width-2, 8), maxLatencySamples)
+	samples := m.latencySamples
+	if len(samples) > width {
+		samples = samples[len(samples)-width:]
+	}
+
+	minimum, maximum := samples[0], samples[0]
+	for _, sample := range samples[1:] {
+		minimum = min(minimum, sample)
+		maximum = max(maximum, sample)
+	}
+
+	const levels = "▁▂▃▄▅▆▇█"
+	var b strings.Builder
+	for _, sample := range samples {
+		index := 3
+		if maximum > minimum {
+			ratio := float64(sample-minimum) / float64(maximum-minimum)
+			index = int(math.Round(ratio * 7))
+		}
+		b.WriteRune([]rune(levels)[index])
+	}
+	return m.styles.Chart.Secondary.Render(b.String())
+}
+
+func loadTestProgress(stats *http.LoadTestStats) float64 {
+	if stats == nil || stats.TotalRequests <= 0 {
+		return 0
+	}
+	return min(max(
+		float64(stats.CompletedRequests)/float64(stats.TotalRequests),
+		0,
+	), 1)
+}
+
+func loadTestElapsed(stats *http.LoadTestStats) time.Duration {
+	if stats == nil || stats.StartTime.IsZero() {
+		return 0
+	}
+	end := time.Now()
+	if !stats.EndTime.IsZero() {
+		end = stats.EndTime
+	}
+	return max(end.Sub(stats.StartTime), 0)
+}
+
+func formatRequestCount(value int) string {
+	sign := ""
+	if value < 0 {
+		sign = "-"
+		value = -value
+	}
+	digits := strconv.Itoa(value)
+	for i := len(digits) - 3; i > 0; i -= 3 {
+		digits = digits[:i] + "," + digits[i:]
+	}
+	return sign + digits
+}
+
+func formatThroughput(value float64) string {
+	rounded := int64(math.Round(value))
+	return formatRequestCount(int(rounded))
+}
+
+func formatLatency(value time.Duration) string {
+	if value <= 0 {
+		return "—"
+	}
+	if value < time.Millisecond {
+		return fmt.Sprintf("%.0fµs", float64(value)/float64(time.Microsecond))
+	}
+	return fmt.Sprintf("%.1fms", float64(value)/float64(time.Millisecond))
 }
 
 // renderLoadTestLatency renders the latency distribution tab for load test results

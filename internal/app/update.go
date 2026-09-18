@@ -58,7 +58,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case startupAdvanceMsg:
+		m.setStartupFrame(msg.frame)
+		if m.startupFrame < ui.HeaderFrameCompact {
+			return m, startupAdvanceCmd(m.startupFrame+1, m.theme.Motion)
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
+		m.setStartupFrame(ui.HeaderFrameCompact)
 		if keybindings.Matches(msg, m.keys.ForceQuit) {
 			if m.loadTestCancel != nil {
 				m.loadTestCancel()
@@ -363,6 +371,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		switch {
 		case m.loadTestCanceled:
 			completed := 0
@@ -394,6 +403,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.requestPane.ExitLoadTestMode()
 		m.setFocusedPanel(utils.ResponsePanel)
+		m.applyLayout(m.currentLayout())
 		m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't start the load test.", "Check the load test settings and try again."))
 		return m, nil
 
@@ -408,7 +418,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd
 		} else if m.focusedPanel == utils.RequestPanel {
+			wasLoadTestMode := m.requestPane.LoadTestMode
+			wasRequestInProgress := m.requestPane.RequestInProgress
 			m.requestPane, cmd = m.requestPane.Update(msg)
+			if wasLoadTestMode != m.requestPane.LoadTestMode ||
+				wasRequestInProgress != m.requestPane.RequestInProgress {
+				m.applyLayout(m.currentLayout())
+			}
 			return m, cmd
 		} else if m.focusedPanel == utils.ResponsePanel {
 			m.responsePane, cmd = m.responsePane.Update(msg)

@@ -117,10 +117,14 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.themeSource == "adaptive" {
-		return tea.Batch(m.sidebarPane.Init(), tea.RequestBackgroundColor)
+	cmds := []tea.Cmd{
+		m.sidebarPane.Init(),
+		startupAdvanceCmd(ui.HeaderFrameCompressed, m.theme.Motion),
 	}
-	return m.sidebarPane.Init()
+	if m.themeSource == "adaptive" {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // resizeContentPanels re-applies the current layout (see layout.go's

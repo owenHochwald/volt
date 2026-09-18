@@ -123,6 +123,12 @@ func (m *RequestPane) toggleLoadTestMode() {
 
 	// Create new focus manager, preserving index (clamped to valid range)
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, currentIndex)
+	// Headers/Body's editorHeight (see SetHeight) branches on LoadTestMode,
+	// just flipped above - re-applying the current size recalculates it for
+	// the new mode instead of leaving it sized for whichever mode was
+	// active when SetHeight was last called from a real resize.
+	m.SetWidth(m.Width)
+	m.SetHeight(m.Height)
 }
 
 // resetToBlank discards whatever request is currently loaded/being

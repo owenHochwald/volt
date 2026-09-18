@@ -342,6 +342,39 @@ func TestInvalidLoadTestConfigBlocksStartAndSurfacesError(t *testing.T) {
 	}
 }
 
+func TestToggleLoadTestModeReflowsEditorsAndPreservesConfiguration(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetWidth(100)
+	pane.SetHeight(26)
+	pane.LoadTestConcurrency.SetValue("25")
+	pane.LoadTestTotalReqs.SetValue("5000")
+
+	if got := pane.Headers.Height(); got != 5 {
+		t.Fatalf("normal editor height = %d, want 5", got)
+	}
+
+	pane.toggleLoadTestMode()
+
+	if got := pane.Headers.Height(); got != 3 {
+		t.Fatalf("load-test editor height = %d, want 3", got)
+	}
+	if got := pane.Body.Height(); got != 3 {
+		t.Fatalf("load-test body height = %d, want 3", got)
+	}
+	if got := pane.LoadTestConcurrency.Value(); got != "25" {
+		t.Fatalf("concurrency = %q, want preserved value", got)
+	}
+	if got := pane.LoadTestTotalReqs.Value(); got != "5000" {
+		t.Fatalf("total requests = %q, want preserved value", got)
+	}
+
+	pane.toggleLoadTestMode()
+
+	if got := pane.Headers.Height(); got != 5 {
+		t.Fatalf("restored editor height = %d, want 5", got)
+	}
+}
+
 func TestInvalidURLOffersLikelyCorrection(t *testing.T) {
 	pane := newTestRequestPane(t)
 	pane.SetFocused(true)

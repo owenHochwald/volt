@@ -1,6 +1,8 @@
 package responsepane
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
@@ -10,6 +12,8 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
+
+const maxLatencySamples = 32
 
 // ResponsePane is the component responsible for displaying HTTP responses and load test statistics
 type ResponsePane struct {
@@ -24,6 +28,11 @@ type ResponsePane struct {
 	// what was actually sent over the wire is inspectable, not just what's
 	// still being edited in the request pane.
 	SentRequest *http.Request
+
+	latencySamples    []time.Duration
+	loadTestStart     time.Time
+	previousCompleted int
+	previousDuration  time.Duration
 
 	viewport  viewport.Model
 	activeTab int
@@ -183,14 +192,38 @@ func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Re
 	m.Response = response
 	m.SentRequest = sentRequest
 	m.isLoadTest = false
+	m.resetLoadTestSeries(time.Time{})
 	m.updateViewportForActiveTab()
 }
 
 // SetLoadTestStats updates the response pane with load test statistics
 func (m *ResponsePane) SetLoadTestStats(stats *http.LoadTestStats) {
+	if stats == nil {
+		return
+	}
+	newRun := !m.isLoadTest ||
+		!stats.StartTime.Equal(m.loadTestStart) ||
+		stats.CompletedRequests < m.previousCompleted
+	if newRun {
+		m.resetLoadTestSeries(stats.StartTime)
+		m.activeTab = int(TabLoadTestOverview)
+	}
+
+	completedDelta := stats.CompletedRequests - m.previousCompleted
+	durationDelta := stats.TotalDuration - m.previousDuration
+	if completedDelta > 0 && durationDelta >= 0 {
+		m.latencySamples = append(
+			m.latencySamples,
+			durationDelta/time.Duration(completedDelta),
+		)
+		if len(m.latencySamples) > maxLatencySamples {
+			m.latencySamples = m.latencySamples[len(m.latencySamples)-maxLatencySamples:]
+		}
+	}
+	m.previousCompleted = stats.CompletedRequests
+	m.previousDuration = stats.TotalDuration
 	m.LoadTestStats = stats
 	m.isLoadTest = true
-	m.activeTab = int(TabLoadTestOverview) // Reset to Overview tab
 	m.updateViewportForActiveTab()
 }
 
@@ -198,6 +231,7 @@ func (m *ResponsePane) SetLoadTestStats(stats *http.LoadTestStats) {
 func (m *ResponsePane) ClearLoadTestStats() {
 	m.LoadTestStats = nil
 	m.isLoadTest = false
+	m.resetLoadTestSeries(time.Time{})
 }
 
 func (m *ResponsePane) SetLoadTestPending(totalRequests int) {
@@ -239,4 +273,11 @@ func (m *ResponsePane) SetStylePickerSize(width, height int) {
 	if m.pickingStyle {
 		m.resizeStyleList()
 	}
+}
+
+func (m *ResponsePane) resetLoadTestSeries(start time.Time) {
+	m.latencySamples = nil
+	m.loadTestStart = start
+	m.previousCompleted = 0
+	m.previousDuration = 0
 }

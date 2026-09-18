@@ -55,9 +55,12 @@ func calculateLayout(width, height int) terminalLayout {
 
 	if width >= wideTerminalWidth && height >= wideTerminalHeight {
 		layout.mode = layoutWide
-		// 9 = 2 border rows + 7 content rows (Header.fullView's 6-row ASCII
-		// logo, plus the separator rule every header frame now appends
-		// below its own content - see internal/ui/header.go).
+		// headerHeight/contentHeight/requestHeight/responseHeight here are
+		// only a starting point - currentLayout (see startup.go) always
+		// overrides headerHeight based on the startup animation's current
+		// frame and recomputes the rest from that (resizeContentForHeader/
+		// resizeContentForLoadTest), since that's state calculateLayout
+		// itself can't see (a pure function of terminal size alone).
 		layout.headerHeight = 9
 		layout.statusHeight = 1
 		layout.contentHeight = max(height-layout.headerHeight-layout.statusHeight, 0)
@@ -69,8 +72,6 @@ func calculateLayout(width, height int) terminalLayout {
 	}
 
 	layout.mode = layoutFocused
-	// 4 = 2 border rows + 2 content rows (Header.compressedView/
-	// compactView's one context line plus the separator rule below it).
 	layout.headerHeight = 4
 	layout.tabBarHeight = 1
 	layout.statusHeight = 1
@@ -89,27 +90,8 @@ func clamp(value, minimum, maximum int) int {
 	return min(max(value, minimum), maximum)
 }
 
-// currentLayout computes the layout for the model's current terminal size,
-// then adjusts it for zoomedResponse (see ToggleZoomResponse, "z"), which
-// calculateLayout can't see on its own (it's a pure function of terminal
-// size alone) - zoomed hands the request column's share to the response
-// instead of splitting it.
-func (m Model) currentLayout() terminalLayout {
-	layout := calculateLayout(m.width, m.height)
-	if layout.mode == layoutTooSmall {
-		return layout
-	}
-
-	if m.zoomedResponse {
-		layout.requestHeight = 0
-		layout.responseHeight = layout.contentHeight
-	}
-
-	return layout
-}
-
 func (m *Model) applyLayout(layout terminalLayout) {
-	m.headerPane.SetSize(layout.width, layout.mode != layoutWide)
+	m.headerPane.SetSize(layout.width)
 	m.shortcutPane.SetWidth(layout.modalWidth)
 	m.shortcutPane.SetHeight(layout.modalHeight)
 	m.importPane.SetWidth(layout.modalWidth)
