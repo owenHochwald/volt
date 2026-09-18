@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -367,24 +368,98 @@ func highlightLineSpans(original string, spans []styledSpan) string {
 		return original
 	}
 	plain := ansi.Strip(original)
-	totalCells := ansi.StringWidth(plain)
-	var b strings.Builder
-	lastCell := 0
+
+	// The gaps between/around spans need whatever style was active in
+	// original at that point reapplied, in case a span falls in the
+	// middle of a longer styled run (e.g. a whole quoted string as one
+	// chroma token) - ansi.Cut does exactly this, but by re-scanning
+	// original from the start on every call. Calling it once per gap
+	// made a line with many matches quadratic (matches * line length) -
+	// splitOriginalByPlainOffsets computes every gap's cut in a single
+	// linear pass instead.
+	offsets := make([]int, 0, len(spans)*2+2)
+	offsets = append(offsets, 0)
 	for _, span := range spans {
-		leftCell := ansi.StringWidth(plain[:span.start])
-		rightCell := ansi.StringWidth(plain[:span.end])
-		if leftCell > lastCell {
-			b.WriteString(ansi.Cut(original, lastCell, leftCell))
-		}
+		offsets = append(offsets, span.start, span.end)
+	}
+	offsets = append(offsets, len(plain))
+	gaps := splitOriginalByPlainOffsets(original, offsets)
+
+	var b strings.Builder
+	for i, span := range spans {
+		b.WriteString(gaps[2*i])
 		if span.end > span.start {
 			b.WriteString(span.style.Render(plain[span.start:span.end]))
 		}
-		lastCell = max(lastCell, rightCell)
 	}
-	if lastCell < totalCells {
-		b.WriteString(ansi.Cut(original, lastCell, totalCells))
-	}
+	b.WriteString(gaps[len(gaps)-1])
 	return b.String()
+}
+
+// splitOriginalByPlainOffsets returns the len(offsets)-1 substrings of
+// original corresponding to each [offsets[i], offsets[i+1]) range of
+// *plain* (ansi.Strip'd) byte offsets (offsets must be sorted and start
+// at 0), each with whatever SGR style was active at its start reapplied
+// as a prefix - the same reconstruction ansi.Cut does for a single range,
+// computed here for every requested offset in one linear pass over
+// original instead. Only tracks simple "ESC [ ... m" (SGR) sequences,
+// which is all chroma's syntax highlighting and this package's own
+// search-highlight styles ever emit; any other escape sequence is passed
+// through as part of whichever segment it falls in without being
+// specially tracked.
+func splitOriginalByPlainOffsets(original string, offsets []int) []string {
+	segments := make([]string, 0, max(len(offsets)-1, 0))
+	if len(offsets) < 2 {
+		return segments
+	}
+
+	var activeStyle strings.Builder
+	var seg strings.Builder
+	plainPos := 0
+	nextCut := 1
+
+	flush := func() {
+		segments = append(segments, activeStyle.String()+seg.String())
+		seg.Reset()
+	}
+
+	i, n := 0, len(original)
+	for i < n {
+		if original[i] == 0x1b && i+1 < n && original[i+1] == '[' {
+			j := i + 2
+			for j < n && original[j] != 'm' && (original[j] < 'A' || original[j] > 'Z') && (original[j] < 'a' || original[j] > 'z') {
+				j++
+			}
+			if j < n {
+				j++ // include the terminator byte (usually 'm')
+			}
+			code := original[i:j]
+			seg.WriteString(code)
+			if code == "\x1b[0m" || code == "\x1b[m" {
+				activeStyle.Reset()
+			} else if strings.HasSuffix(code, "m") {
+				activeStyle.WriteString(code)
+			}
+			i = j
+			continue
+		}
+		_, size := utf8.DecodeRuneInString(original[i:])
+		if size == 0 {
+			size = 1
+		}
+		seg.WriteString(original[i : i+size])
+		plainPos += size
+		i += size
+		for nextCut < len(offsets) && plainPos >= offsets[nextCut] {
+			flush()
+			nextCut++
+		}
+	}
+	for nextCut < len(offsets) {
+		flush()
+		nextCut++
+	}
+	return segments
 }
 
 // wrapLines wraps content to width columns (see ToggleWrap/wrapBody),

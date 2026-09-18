@@ -1,8 +1,10 @@
 package responsepane
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -604,6 +606,35 @@ func TestHighlightLineSpans_PreservesSurroundingColor(t *testing.T) {
 	}
 	if !strings.Contains(out, "\x1b[38;5;212m") {
 		t.Errorf("expected the surrounding text's original color to survive, got:\n%s", out)
+	}
+}
+
+// TestHighlightMatches_StaysFastWithManyHitsOnOneLine is a regression
+// test for a real performance bug: highlightLineSpans used to call
+// ansi.Cut once per gap between matches, and ansi.Cut re-scans its input
+// from the start on every call - with many matches on one long line, that
+// made highlighting (re-run on every search keystroke - see liveSearch)
+// quadratic in the number of matches, turning a search with lots of hits
+// into a multi-second stall. 1000 hits across a ~30KB pretty-printed body
+// must still highlight well under what a keystroke's frame budget allows.
+func TestHighlightMatches_StaysFastWithManyHitsOnOneLine(t *testing.T) {
+	var body strings.Builder
+	body.WriteString("{")
+	for i := range 200 {
+		fmt.Fprintf(&body, `"key%d": "value with needle needle needle needle needle text", `, i)
+	}
+	body.WriteString("}")
+	pretty := formatContentByType(body.String(), "application/json", "onedark")
+
+	matches := findSearchMatches(pretty, "needle")
+	if len(matches) != 1000 {
+		t.Fatalf("test setup error: expected 1000 matches, got %d", len(matches))
+	}
+
+	start := time.Now()
+	highlightMatches(pretty, "needle", matches, 0)
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Errorf("highlighting 1000 matches took %s, want well under 200ms", elapsed)
 	}
 }
 
