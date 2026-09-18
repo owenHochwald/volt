@@ -59,7 +59,7 @@ components. Resolve inheritance and fallbacks before constructing styles. Pass
 Theme explicitly; avoid mutable package-global styles.
 
 When changing the public theme schema, preserve versioning, safe fallback,
-atomic preview/apply behavior, and YAML/JSON equivalence described in the
+atomic preview/apply behavior, and the YAML-only format described in the
 customization contract.
 
 ## Review output

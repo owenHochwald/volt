@@ -54,6 +54,10 @@ func (h *Header) SetSize(width int, compact bool) {
 	h.compact = compact
 }
 
+func (h *Header) SetStyles(styles design.Styles) {
+	h.styles = styles
+}
+
 func SetupHeader(version string, optionalStyles ...design.Styles) *Header {
 	styles := design.NewStyles(design.DefaultTheme())
 	if len(optionalStyles) > 0 {

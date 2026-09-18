@@ -163,6 +163,10 @@ func (m *ResponsePane) IsPickingStyle() bool {
 	return m.pickingStyle
 }
 
+func (m *ResponsePane) SetStyles(styles design.Styles) {
+	m.styles = styles
+}
+
 // SetResponse updates the response pane with a new HTTP response and the
 // request that produced it (see SentRequest). Deliberately leaves activeTab
 // as-is (re-sending a request while on the Headers tab, say, stays there)

@@ -118,6 +118,11 @@ func (m *RequestPane) SetFocused(focused bool) {
 	m.FocusManager.Current().Blur()
 }
 
+func (m *RequestPane) SetStyles(styles design.Styles) {
+	m.styles = styles
+	m.MethodSelector.SetStyles(styles)
+}
+
 // approxFooterLines is a rough, constant estimate of the pinned footer's
 // height (blank separator + Send button + stopwatch line + help hint),
 // used only to give FieldsViewport a sane Height for Update() to compute

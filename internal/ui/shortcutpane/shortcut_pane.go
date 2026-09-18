@@ -25,6 +25,10 @@ func (m *ShortcutPane) SetFocused(focused bool) {
 	m.Focused = focused
 }
 
+func (m *ShortcutPane) SetStyles(styles design.Styles) {
+	m.styles = styles
+}
+
 func (m *ShortcutPane) SetHeight(height int) {
 	m.height = height
 }
