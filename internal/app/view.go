@@ -177,15 +177,19 @@ func (m Model) renderPanel(style lipgloss.Style, focused, running bool, width, h
 		MaxWidth(contentWidth).
 		MaxHeight(contentHeight).
 		Render(content)
-	// The outer style's own Width/Height (which draws the border around
-	// content already sized to contentWidth/contentHeight above) still
-	// needs its own MaxWidth/MaxHeight here too - without them, re-flowing
-	// content that's already exactly contentWidth cells wide through a
-	// second Width() call can occasionally push a trailing word (e.g. a
-	// bullet in the footer's help hint) onto an extra line, one row taller
-	// than contentHeight reserved for it.
+	// The outer (bordered) style deliberately doesn't call Width() again -
+	// content is already padded to exactly contentWidth above, but
+	// re-wrapping already-exactly-sized content through a second Width()
+	// call can still trigger an extra wrapped line for some content
+	// (confirmed with a real repro: the sidebar's help hint, ending in
+	// "•" at exactly contentWidth cells, silently lost its box's bottom
+	// border - the phantom wrapped line pushed it past MaxHeight, which
+	// clipped the border instead of just the phantom line). UnsetWidth()
+	// clears whatever fixed width the style itself may carry (e.g.
+	// design.NewStyles' Sidebar bakes in Width(20)) so the border still
+	// wraps at the content's own already-correct width instead of that.
 	return style.
-		Width(contentWidth).
+		UnsetWidth().
 		Height(contentHeight).
 		MaxWidth(width).
 		MaxHeight(height).
@@ -209,8 +213,11 @@ func (m Model) renderLoadTestPanel(width, height int, content string) string {
 		MaxWidth(contentWidth).
 		MaxHeight(contentHeight).
 		Render(content)
+	// No Width() on the outer (bordered) call - see renderPanel's comment
+	// for why re-wrapping already-exactly-sized content can silently
+	// clip the border's bottom row instead of just the phantom line.
 	return style.
-		Width(contentWidth).
+		UnsetWidth().
 		Height(contentHeight).
 		MaxWidth(width).
 		MaxHeight(height).
