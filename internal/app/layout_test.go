@@ -19,10 +19,10 @@ func TestCalculateLayoutUsesResponsiveModes(t *testing.T) {
 	}{
 		{name: "spacious", width: 160, height: 50, mode: layoutWide},
 		{name: "narrow", width: 88, height: 35, mode: layoutFocused},
-		{name: "short", width: 140, height: 24, mode: layoutFocused},
-		{name: "minimum supported", width: 60, height: 20, mode: layoutFocused},
-		{name: "too narrow", width: 59, height: 30, mode: layoutTooSmall},
-		{name: "too short", width: 100, height: 19, mode: layoutTooSmall},
+		{name: "short", width: 140, height: 26, mode: layoutFocused},
+		{name: "minimum supported", width: 80, height: 25, mode: layoutFocused},
+		{name: "too narrow", width: 79, height: 30, mode: layoutTooSmall},
+		{name: "too short", width: 100, height: 24, mode: layoutTooSmall},
 	}
 
 	for _, tt := range tests {

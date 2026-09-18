@@ -102,8 +102,8 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 		focusedPanel:  focusedPanel,
 		headerPane:    ui.SetupHeader(buildinfo.Version(), styles),
 		showHelpModal: false,
-		width:         80,
-		height:        24,
+		width:         minTerminalWidth,
+		height:        minTerminalHeight,
 	}
 	if appearance.Warning != "" {
 		m.notification = ui.Notification{

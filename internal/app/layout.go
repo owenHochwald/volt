@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	minTerminalWidth   = 60
-	minTerminalHeight  = 20
+	minTerminalWidth   = 80
+	minTerminalHeight  = 25
 	wideTerminalWidth  = 110
 	wideTerminalHeight = 30
 )
@@ -64,7 +64,7 @@ func calculateLayout(width, height int) terminalLayout {
 		layout.headerHeight = 9
 		layout.statusHeight = 1
 		layout.contentHeight = max(height-layout.headerHeight-layout.statusHeight, 0)
-		layout.sidebarWidth = clamp(width/4, 24, 34)
+		layout.sidebarWidth = clamp(width/4, 24, 80)
 		layout.mainWidth = max(width-layout.sidebarWidth, 0)
 		layout.requestHeight = max(layout.contentHeight*45/100, 1)
 		layout.responseHeight = max(layout.contentHeight-layout.requestHeight, 1)
