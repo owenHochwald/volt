@@ -425,22 +425,10 @@ func splitOriginalByPlainOffsets(original string, offsets []int) []string {
 
 	i, n := 0, len(original)
 	for i < n {
-		if original[i] == 0x1b && i+1 < n && original[i+1] == '[' {
-			j := i + 2
-			for j < n && original[j] != 'm' && (original[j] < 'A' || original[j] > 'Z') && (original[j] < 'a' || original[j] > 'z') {
-				j++
-			}
-			if j < n {
-				j++ // include the terminator byte (usually 'm')
-			}
-			code := original[i:j]
+		if code, end, ok := sgrCodeAt(original, i); ok {
 			seg.WriteString(code)
-			if code == "\x1b[0m" || code == "\x1b[m" {
-				activeStyle.Reset()
-			} else if strings.HasSuffix(code, "m") {
-				activeStyle.WriteString(code)
-			}
-			i = j
+			applySGRCode(&activeStyle, code)
+			i = end
 			continue
 		}
 		_, size := utf8.DecodeRuneInString(original[i:])
@@ -462,15 +450,86 @@ func splitOriginalByPlainOffsets(original string, offsets []int) []string {
 	return segments
 }
 
+// sgrCodeAt reports whether an SGR ("ESC [ ... m") escape sequence starts
+// at position i in s, returning it along with the index just past it.
+// Only recognizes the simple "m"-terminated CSI form chroma's syntax
+// highlighting and this package's own search-highlight/lipgloss styles
+// ever emit; any other escape sequence (or a bare byte) is left for the
+// caller to handle as ordinary content.
+func sgrCodeAt(s string, i int) (code string, end int, ok bool) {
+	n := len(s)
+	if i >= n || s[i] != 0x1b || i+1 >= n || s[i+1] != '[' {
+		return "", i, false
+	}
+	j := i + 2
+	for j < n && s[j] != 'm' && (s[j] < 'A' || s[j] > 'Z') && (s[j] < 'a' || s[j] > 'z') {
+		j++
+	}
+	if j < n {
+		j++ // include the terminator byte (usually 'm')
+	}
+	return s[i:j], j, true
+}
+
+// applySGRCode folds code into active - the accumulated sequence of SGR
+// codes currently in effect - clearing it on a reset ("ESC[0m"/"ESC[m")
+// and appending anything else, so active always holds whatever prefix
+// would need reapplying to render a later fragment (one active didn't see
+// applied to it directly) with the same style.
+func applySGRCode(active *strings.Builder, code string) {
+	if code == "\x1b[0m" || code == "\x1b[m" {
+		active.Reset()
+		return
+	}
+	if strings.HasSuffix(code, "m") {
+		active.WriteString(code)
+	}
+}
+
 // wrapLines wraps content to width columns (see ToggleWrap/wrapBody),
-// ANSI-aware (ansi.Wrap preserves embedded styling - search highlights,
-// syntax colors - across the wrap, and already treats content's own
-// "\n"s as hard breaks, so it's safe to call on the whole multi-line
-// string directly rather than line by line). Unlike a fixed-size preview
-// box, the viewport this feeds is already scrollable, so even a single
-// pathologically long line (a minified page's whole body on one line,
-// say) wrapping into many visual ones is just more to scroll through,
-// not a layout hazard.
+// ANSI-aware (ansi.Wrap won't break an escape sequence itself, and
+// already treats content's own "\n"s as hard breaks, so it's safe to
+// call on the whole multi-line string directly rather than line by
+// line). Unlike a fixed-size preview box, the viewport this feeds is
+// already scrollable, so even a single pathologically long line (a
+// minified page's whole body on one line, say) wrapping into many
+// visual ones is just more to scroll through, not a layout hazard.
+//
+// ansi.Wrap only opens a styled run's own SGR codes on the *first*
+// physical line it produces and closes them on the *last* - the
+// physical lines in between carry no color of their own. That's
+// invisible as long as every physical line of a wrapped run is on
+// screen together, but the viewport this feeds shows a scrolled window
+// of individual lines - once the first line (the one carrying the
+// opening code) scrolls out of view, every line after it renders with
+// no color at all. reapplyStyleAcrossWrappedLines re-prefixes each
+// physical line with whatever style was still active at its start, so
+// every line stays correctly colored on its own regardless of which
+// ones are actually visible.
 func wrapLines(content string, width int) string {
-	return ansi.Wrap(content, width, "")
+	return reapplyStyleAcrossWrappedLines(ansi.Wrap(content, width, ""))
+}
+
+// reapplyStyleAcrossWrappedLines re-prefixes each line of wrapped (a
+// string already hard-wrapped by ansi.Wrap) with whatever SGR style was
+// still active at its start - see wrapLines for why. A single linear
+// pass, tracking the same accumulated "active style" state
+// splitOriginalByPlainOffsets does.
+func reapplyStyleAcrossWrappedLines(wrapped string) string {
+	lines := strings.Split(wrapped, "\n")
+	var activeStyle strings.Builder
+	for i, line := range lines {
+		if i > 0 && activeStyle.Len() > 0 {
+			lines[i] = activeStyle.String() + line
+		}
+		for j := 0; j < len(line); {
+			if code, end, ok := sgrCodeAt(line, j); ok {
+				applySGRCode(&activeStyle, code)
+				j = end
+				continue
+			}
+			j++
+		}
+	}
+	return strings.Join(lines, "\n")
 }

@@ -54,3 +54,27 @@ func TestResponsePane_ToggleWrap_WrapsLongLines(t *testing.T) {
 		t.Error("expected a second \"w\" to turn wrapping back off")
 	}
 }
+
+// TestWrapLines_PreservesColorOnEveryWrappedLine is a regression test for
+// a real bug: ansi.Wrap only opens a styled run's SGR code on the first
+// physical line it produces from a long logical one, and closes it on the
+// last - the lines in between carry no color of their own. Invisible as
+// long as the whole run stays on screen together, but the viewport this
+// feeds shows a scrolled window of individual lines - once the first
+// line (carrying the opening code) scrolled out of view, every line
+// after it rendered with no color at all. Every physical line must carry
+// its own copy of whatever style was active at its start.
+func TestWrapLines_PreservesColorOnEveryWrappedLine(t *testing.T) {
+	colored := "\x1b[38;5;212m" + strings.Repeat("A", 100) + "\x1b[m"
+	wrapped := wrapLines(colored, 20)
+
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) < 3 {
+		t.Fatalf("test setup error: expected at least 3 wrapped lines, got %d: %q", len(lines), wrapped)
+	}
+	for i, line := range lines {
+		if !strings.Contains(line, "\x1b[38;5;212m") {
+			t.Errorf("expected wrapped line %d to carry its own color code, got %q", i, line)
+		}
+	}
+}
