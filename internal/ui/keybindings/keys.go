@@ -14,13 +14,13 @@ type KeyMap struct {
 	ContextHelp   key.Binding
 	PreviousPanel key.Binding
 	NextPanel     key.Binding
-	EscapePanel   key.Binding
 	OpenGroups    key.Binding
 	OpenImport    key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
 	DeleteRequest key.Binding
+	NavCount      key.Binding
 	NavUp         key.Binding
 	NavDown       key.Binding
 	NavFirst      key.Binding
@@ -28,6 +28,7 @@ type KeyMap struct {
 
 	// Request pane
 	SendRequest      key.Binding
+	ActivateControl  key.Binding
 	SaveRequest      key.Binding
 	ResetRequest     key.Binding
 	ClearParams      key.Binding
@@ -89,7 +90,7 @@ type KeyMap struct {
 	// ToggleZoomResponse ("z") expands the response panel to the right
 	// column's full height, hiding the request panel, while focused on
 	// the response panel - the same key un-zooms it again, and so does
-	// leaving the response panel any other way (see app.Model.focusPanel).
+	// leaving the response panel any other way (see app.Model.setFocusedPanel).
 	ToggleZoomResponse key.Binding
 
 	// Help modal
@@ -117,16 +118,17 @@ func DefaultKeyMap() KeyMap {
 		ContextHelp:            registry.MustBinding(ActionContextHelp),
 		PreviousPanel:          registry.MustBinding(ActionPreviousPanel),
 		NextPanel:              registry.MustBinding(ActionNextPanel),
-		EscapePanel:            registry.MustBinding(ActionReturnSidebar),
 		OpenGroups:             registry.MustBinding(ActionOpenGroups),
 		OpenImport:             registry.MustBinding(ActionOpenImport),
 		LoadRequest:            registry.MustBinding(ActionLoadRequest),
 		DeleteRequest:          registry.MustBinding(ActionDeleteRequest),
+		NavCount:               registry.MustBinding(ActionNavigationCount),
 		NavUp:                  registry.MustBinding(ActionNavigateUp),
 		NavDown:                registry.MustBinding(ActionNavigateDown),
 		NavFirst:               registry.MustBinding(ActionNavigateFirst),
 		NavLast:                registry.MustBinding(ActionNavigateLast),
 		SendRequest:            registry.MustBinding(ActionSubmit),
+		ActivateControl:        registry.MustBinding(ActionActivateControl),
 		SaveRequest:            registry.MustBinding(ActionSaveRequest),
 		ResetRequest:           registry.MustBinding(ActionResetRequest),
 		ClearParams:            registry.MustBinding(ActionClearParams),

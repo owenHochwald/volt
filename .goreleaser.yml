@@ -25,6 +25,7 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
+      - -X github.com/owenHochwald/Volt/internal/buildinfo.version={{ .Version }}
 
 archives:
   - format: tar.gz

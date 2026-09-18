@@ -8,6 +8,7 @@ import (
 type Header struct {
 	width   int
 	compact bool
+	version string
 }
 
 func (h *Header) Init() tea.Cmd {
@@ -28,7 +29,7 @@ func (h *Header) View() string {
 			lipgloss.Left,
 			HeaderLogoStyle.Render("⚡ VOLT"),
 			"  ",
-			HeaderHelpStyle.Render("Terminal-native HTTP client"),
+			HeaderHelpStyle.Render(h.version+" • Terminal-native HTTP client"),
 		)
 	}
 
@@ -41,7 +42,7 @@ func (h *Header) View() string {
 
 	logo := HeaderLogoStyle.Render(asciiArt)
 
-	help := HeaderHelpStyle.Render("⚡ v0.2/isp • [ ? ] Help • [ ctrl+c ] Quit")
+	help := HeaderHelpStyle.Render("⚡ " + h.version + " • [ ? ] Help • [ ctrl+c ] Quit")
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, logo, "\t", help)
 }
@@ -51,8 +52,9 @@ func (h *Header) SetSize(width int, compact bool) {
 	h.compact = compact
 }
 
-func SetupHeader() *Header {
+func SetupHeader(version string) *Header {
 	return &Header{
-		width: 80,
+		width:   80,
+		version: version,
 	}
 }

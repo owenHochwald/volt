@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
@@ -14,6 +15,15 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
+
+const (
+	quitSequenceTimeout = 750 * time.Millisecond
+	quitWarningText     = "Press Esc again to quit"
+)
+
+type quitSequenceExpiredMsg struct {
+	sequence uint64
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -28,6 +38,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
+
+		if keybindings.Matches(msg, m.keys.Quit) {
+			if m.quitArmed {
+				if m.loadTestCancel != nil {
+					m.loadTestCancel()
+				}
+				return m, tea.Quit
+			}
+
+			// Esc's own save-to-file/search/style-picker overlays (see
+			// SaveResponseRaw/SearchResponse/PickBodyStyle) take priority
+			// over both the panel switch and quit-arming below - otherwise
+			// esc could never actually cancel any of them, since this would
+			// always intercept it first (it still reaches responsePane.
+			// Update below, via the normal routing at the bottom of this
+			// function, which is what actually closes whichever overlay is
+			// open).
+			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle())
+			if overlayOpen {
+				m.disarmQuit()
+			} else {
+				if m.showHelpModal {
+					m.closeHelp()
+				} else if m.focusedPanel != utils.SidebarPanel {
+					m.setFocusedPanel(utils.SidebarPanel)
+				}
+				return m, m.armQuit()
+			}
+		} else {
+			m.disarmQuit()
+		}
 
 		if m.showHelpModal {
 			if keybindings.Matches(msg, m.keys.GlobalHelp) {
@@ -90,13 +132,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notification = ui.Notification{Level: ui.NotificationWarning, Text: "Canceling load test…"}
 			return m, nil
 		}
-		if keybindings.Matches(msg, m.keys.Quit) &&
-			(m.focusedPanel == utils.SidebarPanel || m.focusedPanel == utils.ResponsePanel) {
-			if m.loadTestCancel != nil {
-				m.loadTestCancel()
-			}
-			return m, tea.Quit
-		}
 		// "z" expands the response panel to the whole right column,
 		// hiding the request panel, while focused on it - the same key
 		// un-zooms it again, and so does leaving the response panel any
@@ -123,21 +158,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// now, and the picker needs it sized correctly the instant it
 			// opens.
 			m.resizeContentPanels()
-		}
-		if keybindings.Matches(msg, m.keys.EscapePanel) {
-			// Esc's own save-to-file/search/style-picker overlays (see
-			// SaveResponseRaw/SearchResponse/PickBodyStyle) take priority
-			// over the panel switch below - otherwise esc could never
-			// actually cancel any of them, since this would always
-			// intercept it first and switch panels instead (it still
-			// reaches responsePane.Update below, which is what actually
-			// closes whichever overlay is open).
-			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle())
-			if !overlayOpen && m.focusedPanel != utils.SidebarPanel {
-				m.setFocusedPanel(utils.SidebarPanel)
-				return m, nil
-			}
 		}
 		if keybindings.Matches(msg, m.keys.LoadRequest) && !m.sidebarPane.IsFiltering() {
 			// Guarded on IsFiltering(): LoadRequest is bound to enter/space,
@@ -170,6 +190,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case importpane.ImportResultMsg:
 		m.importPane, cmd = m.importPane.Update(msg)
 		return m, cmd
+
+	case quitSequenceExpiredMsg:
+		if m.quitArmed && msg.sequence == m.quitSequence {
+			m.disarmQuit()
+		}
+		return m, nil
 
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
@@ -317,4 +343,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m *Model) armQuit() tea.Cmd {
+	m.quitSequence++
+	m.quitArmed = true
+	m.notification = ui.Notification{Level: ui.NotificationWarning, Text: quitWarningText}
+	sequence := m.quitSequence
+	return tea.Tick(quitSequenceTimeout, func(time.Time) tea.Msg {
+		return quitSequenceExpiredMsg{sequence: sequence}
+	})
+}
+
+func (m *Model) disarmQuit() {
+	if !m.quitArmed {
+		return
+	}
+	m.quitArmed = false
+	m.quitSequence++
+	if m.notification.Text == quitWarningText {
+		m.notification = ui.Notification{}
+	}
 }

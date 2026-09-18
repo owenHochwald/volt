@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -245,5 +246,18 @@ func TestResponsePane_MaxTabs(t *testing.T) {
 	pane.isLoadTest = true
 	if got := pane.getMaxTabs(); got != 3 {
 		t.Errorf("expected 3 tabs in load test mode, got %d", got)
+	}
+}
+
+func TestResponseTabLabelsFollowConfiguredBinding(t *testing.T) {
+	keys := keybindings.DefaultKeyMap()
+	keys.DirectTab = key.NewBinding(key.WithKeys("a", "b", "c"))
+	pane := SetupResponsePane(nil, keys)
+
+	rendered := pane.renderTabs()
+	for _, expected := range []string{"[a] Body", "[b] Headers", "[c] Timing"} {
+		if !strings.Contains(rendered, expected) {
+			t.Errorf("tab bar does not contain %q: %s", expected, rendered)
+		}
 	}
 }

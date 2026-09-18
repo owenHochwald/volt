@@ -78,7 +78,7 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 
 // handleSubmit handles the submit button in normal mode
 func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*RequestPane, tea.Cmd) {
-	if keybindings.Matches(msg, m.keys.SendRequest) {
+	if keybindings.Matches(msg, m.keys.SendRequest) || keybindings.Matches(msg, m.keys.ActivateControl) {
 		if m.RequestInProgress {
 			return m, nil
 		}

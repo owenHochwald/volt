@@ -131,13 +131,12 @@ func TestPlainEnterDoesNotSubmitFromEditableField(t *testing.T) {
 	}
 }
 
-func TestModifiedEnterSubmitsFromAnyRequestField(t *testing.T) {
+func TestRequestSubmissionKeyBindings(t *testing.T) {
 	tests := []struct {
 		name string
-		mod  tea.KeyMod
+		key  tea.KeyPressMsg
 	}{
-		{name: "control", mod: tea.ModCtrl},
-		{name: "alt", mod: tea.ModAlt},
+		{name: "meta enter alias", key: keyPress(tea.KeyEnter, "", tea.ModAlt)},
 	}
 
 	for _, tt := range tests {
@@ -147,15 +146,34 @@ func TestModifiedEnterSubmitsFromAnyRequestField(t *testing.T) {
 			pane.FocusManager.Next()
 			pane.URLInput.SetValue("https://example.com")
 
-			updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tt.mod))
+			updated, cmd := pane.Update(tt.key)
 
 			if !updated.RequestInProgress {
-				t.Fatal("modified enter did not start a request")
+				t.Fatal("submit binding did not start a request")
 			}
 			if cmd == nil {
-				t.Fatal("modified enter did not produce a submit command")
+				t.Fatal("submit binding did not produce a command")
 			}
 		})
+	}
+}
+
+func TestEnterActivatesFocusedSendButton(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	pane.URLInput.SetValue("https://example.com")
+	// SubmitButton is index 5, the last component in tab order for a
+	// fresh, unloaded pane (see TestTabAndShiftTabOnlyNavigateFields's
+	// comment for the full field order).
+	pane.FocusManager.FocusIndex(5)
+
+	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", 0))
+
+	if !updated.RequestInProgress {
+		t.Fatal("enter on the send button did not start a request")
+	}
+	if cmd == nil {
+		t.Fatal("enter on the send button did not produce a command")
 	}
 }
 
@@ -196,13 +214,88 @@ func TestSetFocusedBlursAndRestoresCurrentControl(t *testing.T) {
 	}
 }
 
+// TestTabAndShiftTabOnlyNavigateFields exercises tab/shift-tab's generic
+// advance/wrap behavior. Field indices below match NormalMode.components'
+// tab order for a fresh, unloaded pane (no ServerSelector/PathParams/
+// BodyParams - see newTestRequestPane): Name(0), Method(1), URL(2),
+// Body(3), Headers(4), Submit(5) - not main's fixed Method/URL/Name/
+// Headers/Body/Submit layout, since our field set is dynamic.
+func TestTabAndShiftTabOnlyNavigateFields(t *testing.T) {
+	const (
+		fieldName = iota
+		fieldMethod
+		fieldURL
+		fieldSubmit = 5
+	)
+	tests := []struct {
+		name  string
+		start int
+		key   tea.KeyPressMsg
+		want  int
+	}{
+		{
+			name:  "tab advances",
+			start: fieldMethod,
+			key:   keyPress(tea.KeyTab, "", 0),
+			want:  fieldURL,
+		},
+		{
+			name:  "shift tab moves backward",
+			start: fieldURL,
+			key:   keyPress(tea.KeyTab, "", tea.ModShift),
+			want:  fieldMethod,
+		},
+		{
+			name:  "shift tab wraps",
+			start: fieldName,
+			key:   keyPress(tea.KeyTab, "", tea.ModShift),
+			want:  fieldSubmit,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane := newTestRequestPane(t)
+			pane.FocusManager.Current().Blur()
+			pane.FocusManager = pane.currentMode.GetFocusManagerWithIndex(&pane, tt.start)
+			pane.SetFocused(true)
+
+			updated, _ := pane.Update(tt.key)
+
+			if got := updated.FocusManager.CurrentIndex(); got != tt.want {
+				t.Fatalf("focus = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestArrowKeysDoNotChangeFocusedField(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	// FocusManager starts on MethodSelector (see defaultFocusIndex) - one
+	// Next() reaches URL.
+	pane.FocusManager.Next()
+	pane.URLInput.SetValue("https://example.com")
+	pane.URLInput.CursorEnd()
+
+	wantIndex := pane.FocusManager.CurrentIndex()
+	updated, _ := pane.Update(keyPress(tea.KeyLeft, "", 0))
+
+	if got := updated.FocusManager.CurrentIndex(); got != wantIndex {
+		t.Fatalf("left arrow changed focus to index %d, want %d", got, wantIndex)
+	}
+	if got, want := updated.URLInput.Position(), len("https://example.com")-1; got != want {
+		t.Fatalf("left arrow cursor position = %d, want %d", got, want)
+	}
+}
+
 func TestInvalidHeadersBlockSubmissionAndSurfaceError(t *testing.T) {
 	pane := newTestRequestPane(t)
 	pane.SetFocused(true)
 	pane.URLInput.SetValue("https://example.com")
 	pane.Headers.SetValue("missing delimiter")
 
-	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tea.ModCtrl))
+	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tea.ModAlt))
 
 	if updated.RequestInProgress {
 		t.Fatal("invalid headers started a request")
@@ -226,7 +319,7 @@ func TestInvalidLoadTestConfigBlocksStartAndSurfacesError(t *testing.T) {
 	pane.URLInput.SetValue("https://example.com")
 	pane.LoadTestConcurrency.SetValue("not-a-number")
 
-	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tea.ModCtrl))
+	updated, cmd := pane.Update(keyPress(tea.KeyEnter, "", tea.ModAlt))
 
 	if updated.RequestInProgress {
 		t.Fatal("invalid load-test config remained in progress")

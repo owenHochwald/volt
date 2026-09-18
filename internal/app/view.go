@@ -157,11 +157,24 @@ func renderPanel(style lipgloss.Style, focused bool, width, height int, content 
 		style = ui.ApplyFocus(style, true)
 	}
 	contentWidth, contentHeight := contentSize(style, width, height)
-	return style.
+	content = lipgloss.NewStyle().
 		Width(contentWidth).
 		Height(contentHeight).
 		MaxWidth(contentWidth).
 		MaxHeight(contentHeight).
+		Render(content)
+	// The outer style's own Width/Height (which draws the border around
+	// content already sized to contentWidth/contentHeight above) still
+	// needs its own MaxWidth/MaxHeight here too - without them, re-flowing
+	// content that's already exactly contentWidth cells wide through a
+	// second Width() call can occasionally push a trailing word (e.g. a
+	// bullet in the footer's help hint) onto an extra line, one row taller
+	// than contentHeight reserved for it.
+	return style.
+		Width(contentWidth).
+		Height(contentHeight).
+		MaxWidth(width).
+		MaxHeight(height).
 		Render(content)
 }
 

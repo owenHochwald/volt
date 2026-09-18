@@ -62,6 +62,9 @@ func TestResponsiveViewNeverExceedsTerminal(t *testing.T) {
 				updated, _ := model.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
 				model = updated.(Model)
 				assertViewFits(t, model.View().Content, tt.width, tt.height)
+				if tt.width >= minTerminalWidth && tt.height >= minTerminalHeight {
+					assertViewFills(t, model.View().Content, tt.width, tt.height)
+				}
 			}
 		})
 	}
@@ -79,6 +82,7 @@ func TestFocusedLayoutFitsLoadTestAndHelpViews(t *testing.T) {
 	updated, _ = model.Update(tea.WindowSizeMsg{Width: 72, Height: 22})
 	model = updated.(Model)
 	assertViewFits(t, model.View().Content, 72, 22)
+	assertViewFills(t, model.View().Content, 72, 22)
 
 	updated, _ = model.Update(appKeyPress(tea.KeyF1, "", 0))
 	model = updated.(Model)
@@ -86,6 +90,7 @@ func TestFocusedLayoutFitsLoadTestAndHelpViews(t *testing.T) {
 		t.Fatal("F1 did not open help")
 	}
 	assertViewFits(t, model.View().Content, 72, 22)
+	assertViewFills(t, model.View().Content, 72, 22)
 }
 
 func TestResizePreservesFocusedPanelAndEditorContent(t *testing.T) {
@@ -109,6 +114,17 @@ func TestResizePreservesFocusedPanelAndEditorContent(t *testing.T) {
 			t.Fatalf("resize to %dx%d changed URL to %q", size.Width, size.Height, got)
 		}
 		assertViewFits(t, model.View().Content, size.Width, size.Height)
+		assertViewFills(t, model.View().Content, size.Width, size.Height)
+	}
+}
+
+func assertViewFills(t *testing.T, view string, width, height int) {
+	t.Helper()
+	if got := lipgloss.Width(view); got != width {
+		t.Fatalf("view width = %d, want terminal width %d", got, width)
+	}
+	if got := lipgloss.Height(view); got != height {
+		t.Fatalf("view height = %d, want terminal height %d", got, height)
 	}
 }
 

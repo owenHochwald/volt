@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -45,6 +44,8 @@ type SidebarPane struct {
 	selectedRequest *RequestItem
 
 	desiredCursorIndex int
+	navigationCount    int
+	hasNavigationCount bool
 
 	// allRequests/groupNames hold the last load's full, unfiltered request
 	// set and its group-id-to-name lookup, kept around so cycling the group
@@ -253,18 +254,8 @@ func (s *SidebarPane) describeURL(url, groupLabel string) string {
 func (s *SidebarPane) SetRequests(items []list.Item) {
 	s.requestsList = list.New(items, list.NewDefaultDelegate(), s.listWidth(), s.listHeight())
 	s.requestsList.SetShowHelp(false)
-	disableEscQuit(&s.requestsList)
-}
-
-// disableEscQuit strips esc out of the list's own default Quit binding
-// ("q"/"esc" - see bubbles' list.DefaultKeyMap), which otherwise exits the
-// whole program the instant esc is pressed with the sidebar focused and
-// nothing being filtered - esc is meant to be free for other uses (e.g.
-// closing a filter query or, elsewhere, switching panels), not a hidden
-// quit shortcut. The app's own Quit keybinding (see keybindings.KeyMap,
-// bound to ctrl+c) is unaffected.
-func disableEscQuit(l *list.Model) {
-	l.KeyMap.Quit = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
+	s.requestsList.DisableQuitKeybindings()
+	s.clearNavigationCount()
 }
 
 func (s *SidebarPane) Init() tea.Cmd {
@@ -273,6 +264,9 @@ func (s *SidebarPane) Init() tea.Cmd {
 
 func (s *SidebarPane) SetFocused(focused bool) {
 	s.panelFocused = focused
+	if !focused {
+		s.clearNavigationCount()
+	}
 }
 
 func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
@@ -369,6 +363,11 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 			return s, DeleteRequestCmd(s.db, item.Request.ID)
 		}
 
+		if keybindings.Matches(msg, s.keys.NavCount) {
+			s.appendNavigationDigit(msg.Code)
+			return s, nil
+		}
+
 		// While the user is actively typing a "/" filter query, every key
 		// must go straight to the list's own filter text input instead of
 		// being intercepted below - otherwise typing e.g. "json" would
@@ -378,6 +377,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 			break
 		}
 		if keybindings.Matches(msg, s.keys.DeleteRequest) {
+			s.clearNavigationCount()
 			item, ok := s.SelectedItem()
 			if !ok || item.Request == nil || item.Request.ID == 0 {
 				return s, nil
@@ -422,35 +422,26 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 		//    slice and panics). Using >=/< instead of == self-corrects in
 		//    a single press no matter how far off the cursor already is.
 		if keybindings.Matches(msg, s.keys.NavUp) {
-			if n := len(s.requestsList.VisibleItems()); n > 0 {
-				next := s.requestsList.Index() - 1
-				if next < 0 {
-					next = n - 1
-				}
-				s.requestsList.Select(next)
-			}
+			s.moveSelection(-s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavDown) {
-			if n := len(s.requestsList.VisibleItems()); n > 0 {
-				next := s.requestsList.Index() + 1
-				if next >= n {
-					next = 0
-				}
-				s.requestsList.Select(next)
-			}
+			s.moveSelection(s.consumeNavigationCount())
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavFirst) {
+			s.clearNavigationCount()
 			s.requestsList.Select(0)
 			return s, nil
 		}
 		if keybindings.Matches(msg, s.keys.NavLast) {
+			s.clearNavigationCount()
 			if itemCount := len(s.requestsList.Items()); itemCount > 0 {
 				s.requestsList.Select(itemCount - 1)
 			}
 			return s, nil
 		}
+		s.clearNavigationCount()
 	}
 
 	s.requestsList, cmd = s.requestsList.Update(msg)
@@ -462,6 +453,52 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 // thing shown, above the request list itself, so it reads as a field you
 // pick before the list it narrows down.
 var groupFilterStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+
+// appendNavigationDigit/consumeNavigationCount/moveSelection use
+// VisibleItems(), not Items() (always the full, unfiltered set) - same
+// reasoning as NavUp/NavDown above: bounding a count or a wrap against the
+// unfiltered count can point past the end of an active "/" filter's
+// narrower list and crash on render.
+func (s *SidebarPane) appendNavigationDigit(code rune) {
+	digit := int(code - '0')
+	if digit < 0 || digit > 9 {
+		s.clearNavigationCount()
+		return
+	}
+	s.hasNavigationCount = true
+	itemCount := len(s.requestsList.VisibleItems())
+	if itemCount == 0 {
+		s.navigationCount = 0
+		return
+	}
+	s.navigationCount = (s.navigationCount*10 + digit) % itemCount
+}
+
+func (s *SidebarPane) consumeNavigationCount() int {
+	if !s.hasNavigationCount {
+		return 1
+	}
+	count := s.navigationCount
+	s.clearNavigationCount()
+	return count
+}
+
+func (s *SidebarPane) clearNavigationCount() {
+	s.navigationCount = 0
+	s.hasNavigationCount = false
+}
+
+func (s *SidebarPane) moveSelection(delta int) {
+	itemCount := len(s.requestsList.VisibleItems())
+	if itemCount == 0 {
+		return
+	}
+	next := (s.requestsList.Index() + delta) % itemCount
+	if next < 0 {
+		next += itemCount
+	}
+	s.requestsList.Select(next)
+}
 
 func (s *SidebarPane) View() string {
 	// "[" / "]" work no matter where the list cursor is - there's no
@@ -517,7 +554,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap) *SidebarPane
 	}
 	sidebar.requestsList.Title = "Saved (Loading...)"
 	sidebar.requestsList.SetShowHelp(false)
-	disableEscQuit(&sidebar.requestsList)
+	sidebar.requestsList.DisableQuitKeybindings()
 
 	return sidebar
 }

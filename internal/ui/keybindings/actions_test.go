@@ -16,14 +16,16 @@ func TestDefaultRegistryDefinesCoreActions(t *testing.T) {
 		keys     []string
 	}{
 		{ActionForceQuit, []Context{ContextGlobal}, []string{"ctrl+c"}},
-		{ActionQuit, []Context{ContextSidebar, ContextResponse}, []string{"q"}},
+		{ActionQuit, []Context{ContextGlobal}, []string{"esc"}},
 		{ActionGlobalHelp, []Context{ContextGlobal}, []string{"f1"}},
 		{ActionContextHelp, []Context{ContextSidebar, ContextRequest, ContextResponse}, []string{"?"}},
-		{ActionPreviousPanel, []Context{ContextGlobal}, []string{"alt+h"}},
-		{ActionNextPanel, []Context{ContextGlobal}, []string{"alt+l"}},
+		{ActionPreviousPanel, []Context{ContextGlobal}, []string{"ctrl+e", "alt+h"}},
+		{ActionNextPanel, []Context{ContextGlobal}, []string{"ctrl+w", "alt+l"}},
+		{ActionNavigationCount, []Context{ContextSidebar}, []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}},
 		{ActionPreviousField, []Context{ContextRequest}, []string{"shift+tab"}},
 		{ActionNextField, []Context{ContextRequest}, []string{"tab"}},
-		{ActionSubmit, []Context{ContextRequest}, []string{"ctrl+enter", "alt+enter", "ctrl+p"}},
+		{ActionSubmit, []Context{ContextRequest}, []string{"alt+enter", "ctrl+p"}},
+		{ActionActivateControl, []Context{ContextRequest}, []string{"enter"}},
 	}
 
 	registry := DefaultRegistry()
@@ -198,9 +200,11 @@ func TestDefaultKeyMapIsGeneratedFromRegistry(t *testing.T) {
 		{ActionContextHelp, keyMap.ContextHelp.Keys()},
 		{ActionPreviousPanel, keyMap.PreviousPanel.Keys()},
 		{ActionNextPanel, keyMap.NextPanel.Keys()},
+		{ActionNavigationCount, keyMap.NavCount.Keys()},
 		{ActionPreviousField, keyMap.PrevField.Keys()},
 		{ActionNextField, keyMap.NextField.Keys()},
 		{ActionSubmit, keyMap.SendRequest.Keys()},
+		{ActionActivateControl, keyMap.ActivateControl.Keys()},
 		{ActionCancelLoadTest, keyMap.CancelLoadTest.Keys()},
 	}
 

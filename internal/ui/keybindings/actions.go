@@ -34,14 +34,15 @@ const (
 	ActionContextHelp     ActionID = "context_help"
 	ActionPreviousPanel   ActionID = "previous_panel"
 	ActionNextPanel       ActionID = "next_panel"
-	ActionReturnSidebar   ActionID = "return_sidebar"
 	ActionLoadRequest     ActionID = "load_request"
 	ActionDeleteRequest   ActionID = "delete_request"
+	ActionNavigationCount ActionID = "navigation_count"
 	ActionNavigateUp      ActionID = "navigate_up"
 	ActionNavigateDown    ActionID = "navigate_down"
 	ActionNavigateFirst   ActionID = "navigate_first"
 	ActionNavigateLast    ActionID = "navigate_last"
 	ActionSubmit          ActionID = "submit"
+	ActionActivateControl ActionID = "activate_control"
 	ActionSaveRequest     ActionID = "save_request"
 	ActionToggleLoadTest  ActionID = "toggle_load_test"
 	ActionNextField       ActionID = "next_field"
@@ -176,26 +177,27 @@ func (r Registry) ActionsDeclaredFor(context Context) []Action {
 func DefaultRegistry() Registry {
 	return NewRegistry([]Action{
 		{ActionForceQuit, []Context{ContextGlobal}, []string{"ctrl+c"}, "ctrl+c", "quit immediately", 100},
+		{ActionQuit, []Context{ContextGlobal}, []string{"esc"}, "esc esc", "back / quit", 98},
 		{ActionGlobalHelp, []Context{ContextGlobal}, []string{"f1"}, "f1", "show all shortcuts", 95},
-		{ActionPreviousPanel, []Context{ContextGlobal}, []string{"alt+h"}, "alt+h", "previous panel", 90},
-		{ActionNextPanel, []Context{ContextGlobal}, []string{"alt+l"}, "alt+l", "next panel", 90},
-		{ActionReturnSidebar, []Context{ContextRequest, ContextResponse}, []string{"esc"}, "esc", "return to sidebar", 85},
+		{ActionPreviousPanel, []Context{ContextGlobal}, []string{"ctrl+e", "alt+h"}, "ctrl+e/alt+h", "previous panel", 90},
+		{ActionNextPanel, []Context{ContextGlobal}, []string{"ctrl+w", "alt+l"}, "ctrl+w/alt+l", "next panel", 90},
 
-		{ActionQuit, []Context{ContextSidebar, ContextResponse}, []string{"q"}, "q", "quit", 80},
 		{ActionContextHelp, []Context{ContextSidebar, ContextRequest, ContextResponse}, []string{"?"}, "?", "show context help", 75},
 
 		{ActionLoadRequest, []Context{ContextSidebar}, []string{"enter"}, "enter", "open request", 70},
 		{ActionDeleteRequest, []Context{ContextSidebar}, []string{"d"}, "d", "delete request", 65},
+		{ActionNavigationCount, []Context{ContextSidebar}, []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}, "0-9", "prefix movement count", 62},
 		{ActionNavigateUp, []Context{ContextSidebar}, []string{"k"}, "k", "move up", 60},
 		{ActionNavigateDown, []Context{ContextSidebar}, []string{"j"}, "j", "move down", 60},
 		{ActionNavigateFirst, []Context{ContextSidebar}, []string{"g"}, "g", "first request", 55},
 		{ActionNavigateLast, []Context{ContextSidebar}, []string{"G"}, "G", "last request", 55},
 
-		{ActionSubmit, []Context{ContextRequest}, []string{"ctrl+enter", "alt+enter", "ctrl+p"}, "ctrl+enter/alt+enter", "send request", 70},
+		{ActionSubmit, []Context{ContextRequest}, []string{"alt+enter", "ctrl+p"}, "alt+enter", "send request", 70},
 		{ActionSaveRequest, []Context{ContextRequest}, []string{"ctrl+s"}, "ctrl+s", "save request", 65},
 		{ActionToggleLoadTest, []Context{ContextRequest}, []string{"ctrl+l"}, "ctrl+l", "toggle load test", 65},
 		{ActionNextField, []Context{ContextRequest}, []string{"tab"}, "tab", "next field", 60},
 		{ActionPreviousField, []Context{ContextRequest}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
+		{ActionActivateControl, []Context{ContextRequest}, []string{"enter"}, "enter", "activate focused control", 55},
 		{ActionNextMethod, []Context{ContextRequest}, []string{"l"}, "l", "next method", 50},
 		{ActionPreviousMethod, []Context{ContextRequest}, []string{"h"}, "h", "previous method", 50},
 
@@ -209,7 +211,7 @@ func DefaultRegistry() Registry {
 		{ActionPageUp, []Context{ContextResponse}, []string{"ctrl+u"}, "ctrl+u", "half page up", 50},
 		{ActionPageDown, []Context{ContextResponse}, []string{"ctrl+d"}, "ctrl+d", "half page down", 50},
 
-		{ActionCloseHelp, []Context{ContextHelp}, []string{"q", "?", "esc"}, "q/?/esc", "close help", 80},
+		{ActionCloseHelp, []Context{ContextHelp}, []string{"q", "?"}, "q/?", "close help", 80},
 		{ActionPreviousHelpTab, []Context{ContextHelp}, []string{"h"}, "h", "previous section", 70},
 		{ActionNextHelpTab, []Context{ContextHelp}, []string{"l"}, "l", "next section", 70},
 		{ActionDirectHelpTab, []Context{ContextHelp}, []string{"1", "2", "3", "4"}, "1-4", "jump to section", 60},
