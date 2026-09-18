@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -67,11 +67,8 @@ func TestResponsePane_RequestTab_ShowsSentRequestEvenOnConnectionError(t *testin
 	}
 	pane.SetResponse(&http.Response{Error: `Post "http://localhost:1500/host": dial tcp 127.0.0.1:1500: connect: connection refused`}, sent)
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("4")[0], Text: "4"}))
+	result := model
 	if TabIndex(result.activeTab) != TabRequest {
 		t.Fatalf("expected tab 4 (Request) selected, got %v", result.activeTab)
 	}
@@ -100,11 +97,8 @@ func TestResponsePane_TimingTab_ExplainsFailedSendInsteadOfZeroDuration(t *testi
 	pane.SetHeight(30)
 	pane.SetResponse(&http.Response{Error: `dial tcp 127.0.0.1:1: connect: connection refused`}, &http.Request{Method: http.POST, URL: "http://x"})
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("3")[0], Text: "3"}))
+	result := model
 
 	content := result.View()
 	if strings.Contains(content, "Total Duration: 0s") || strings.Contains(content, "0 ms") {
@@ -131,11 +125,8 @@ func TestResponsePane_DirectTab4_SwitchesToRequestTab(t *testing.T) {
 	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK"}, &http.Request{Method: http.GET, URL: "http://x"})
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("4")[0], Text: "4"}))
+	result := model
 	if TabIndex(result.activeTab) != TabRequest {
 		t.Errorf("expected pressing '4' to select TabRequest, got tab %d", result.activeTab)
 	}
@@ -145,11 +136,8 @@ func TestResponsePane_DirectTab4_IgnoredDuringLoadTest(t *testing.T) {
 	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetLoadTestStats(&http.LoadTestStats{TotalRequests: 10})
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("4")[0], Text: "4"}))
+	result := model
 	if result.activeTab == int(TabRequest) {
 		t.Error("expected '4' to be a no-op during a load test, which has no Request tab")
 	}
@@ -209,11 +197,8 @@ func TestResponsePane_AllFourTabs_ScrollWhenContentOverflows(t *testing.T) {
 		{"4", TabRequest},
 	} {
 		t.Run(tt.tabKey, func(t *testing.T) {
-			model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.tabKey)})
-			result, ok := model.(*ResponsePane)
-			if !ok {
-				t.Fatalf("expected *ResponsePane, got %T", model)
-			}
+			model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune(tt.tabKey)[0], Text: tt.tabKey}))
+			result := model
 			if TabIndex(result.activeTab) != tt.tab {
 				t.Fatalf("expected tab %v selected, got %v", tt.tab, result.activeTab)
 			}
@@ -225,22 +210,16 @@ func TestResponsePane_AllFourTabs_ScrollWhenContentOverflows(t *testing.T) {
 				t.Errorf("expected a 'more below' scroll indicator before scrolling, got %q", indicator)
 			}
 
-			model2, _ := result.Update(tea.KeyMsg{Type: tea.KeyPgDown})
-			scrolled, ok := model2.(*ResponsePane)
-			if !ok {
-				t.Fatalf("expected *ResponsePane, got %T", model2)
-			}
-			if scrolled.viewport.YOffset == 0 {
+			model2, _ := result.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyPgDown}))
+			scrolled := model2
+			if scrolled.viewport.YOffset() == 0 {
 				t.Errorf("expected pgdown to move tab %v's scroll offset", tt.tab)
 			}
 
-			model3, _ := scrolled.Update(tea.KeyMsg{Type: tea.KeyPgUp})
-			back, ok := model3.(*ResponsePane)
-			if !ok {
-				t.Fatalf("expected *ResponsePane, got %T", model3)
-			}
-			if back.viewport.YOffset != 0 {
-				t.Errorf("expected pgup to return tab %v to the top, got YOffset=%d", tt.tab, back.viewport.YOffset)
+			model3, _ := scrolled.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyPgUp}))
+			back := model3
+			if back.viewport.YOffset() != 0 {
+				t.Errorf("expected pgup to return tab %v to the top, got YOffset=%d", tt.tab, back.viewport.YOffset())
 			}
 		})
 	}

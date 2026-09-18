@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 func tKeyMsg() tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	return tea.KeyPressMsg(tea.Key{Code: []rune("t")[0], Text: "t"})
 }
 
 // TestPickBodyStyle_UnzoomsAndRendersInRequestSlot is a regression test
@@ -21,8 +21,10 @@ func tKeyMsg() tea.KeyMsg {
 // area - could previously blow out the whole layout on a response with
 // pathologically long lines, e.g. a minified HTML page).
 func TestPickBodyStyle_UnzoomsAndRendersInRequestSlot(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.ResponsePanel
+	m := newTestModel(t)
+	m.setFocusedPanel(utils.ResponsePanel)
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m = sized.(Model)
 
 	model, _ := m.Update(zKeyMsg())
 	zoomed := model.(Model)
@@ -42,7 +44,7 @@ func TestPickBodyStyle_UnzoomsAndRendersInRequestSlot(t *testing.T) {
 		t.Fatal("expected \"t\" to open the style picker")
 	}
 
-	out := result.View()
+	out := result.View().Content
 	if !strings.Contains(out, "Body syntax style") {
 		t.Errorf("expected the picker to render in the request pane's slot, got:\n%s", out)
 	}

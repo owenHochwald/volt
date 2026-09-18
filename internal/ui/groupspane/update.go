@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -14,8 +14,8 @@ type CloseGroupsModalMsg struct{}
 
 func closeCmd() tea.Msg { return CloseGroupsModalMsg{} }
 
-func (m GroupsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyMsg)
+func (m GroupsPane) Update(msg tea.Msg) (GroupsPane, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
@@ -34,14 +34,14 @@ func (m GroupsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m GroupsPane) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	// A pending delete swallows the very next key as its y/n answer, checked
 	// before anything else - while confirming, that's the only thing any key
 	// should mean.
 	if m.pendingDelete != nil {
 		pending := m.pendingDelete
 		m.pendingDelete = nil
-		if msg.String() != "y" && msg.String() != "Y" && msg.String() != tea.KeyEnter.String() {
+		if msg.String() != "y" && msg.String() != "Y" && msg.String() != "enter" {
 			return m, nil
 		}
 		switch pending.kind {
@@ -146,7 +146,7 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() && m.target == focusGroups {
+	if msg.String() == "enter" && m.target == focusGroups {
 		item, ok := m.selectedGroup()
 		if !ok {
 			return m, nil
@@ -165,13 +165,13 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m GroupsPane) handleGroupFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m GroupsPane) handleGroupFormKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.mode = modeBrowse
 		m.nameInput.Blur()
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		name := strings.TrimSpace(m.nameInput.Value())
 		if name == "" {
 			m.statusMsg, m.statusErr = "name cannot be empty", true
@@ -198,14 +198,14 @@ func (m GroupsPane) handleGroupFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m GroupsPane) handleServerFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m GroupsPane) handleServerFormKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.mode = modeBrowse
 		m.nameInput.Blur()
 		m.urlInput.Blur()
 		return m, nil
 	}
-	if m.mode == modeCreateServer && msg.String() == tea.KeyTab.String() {
+	if m.mode == modeCreateServer && msg.String() == "tab" {
 		m.formFocusURL = !m.formFocusURL
 		if m.formFocusURL {
 			m.nameInput.Blur()
@@ -216,7 +216,7 @@ func (m GroupsPane) handleServerFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		var err error
 		var successMsg string
 
@@ -272,7 +272,7 @@ func (m GroupsPane) handleServerFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // via a group). Unlike the single-line name/URL forms, this is a textarea:
 // enter inserts a newline instead of submitting, so ctrl+s (the same save
 // key the request pane's own Headers field lives next to) submits instead.
-func (m GroupsPane) handleServerHeadersFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m GroupsPane) handleServerHeadersFormKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.mode = modeBrowse
 		m.headersInput.Blur()
@@ -299,12 +299,12 @@ func (m GroupsPane) handleServerHeadersFormKey(msg tea.KeyMsg) (tea.Model, tea.C
 	return m, cmd
 }
 
-func (m GroupsPane) handleAssignServerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m GroupsPane) handleAssignServerKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.mode = modeBrowse
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		if item, ok := m.selectedServer(); ok {
 			err := m.db.SetGroupServer(m.assigningGroup, item.server.Name)
 			m.setStatus(err, fmt.Sprintf("%q now points at %q", m.assigningGroup, item.server.Name))

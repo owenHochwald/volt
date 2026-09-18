@@ -6,14 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
-func keyRunes(s string) tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+func keyRunes(s string) tea.KeyPressMsg {
+	var code rune
+	if len(s) > 0 {
+		code = []rune(s)[0]
+	}
+	return tea.KeyPressMsg(tea.Key{Code: code, Text: s})
 }
 
 // TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted is a
@@ -40,10 +44,7 @@ func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *tes
 	}
 
 	model, _ := pane.Update(keyRunes("r"))
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	result := model
 
 	raw := ansi.Strip(result.View())
 	if !strings.Contains(raw, `{"a":1,"b":2}`) {
@@ -52,10 +53,7 @@ func TestResponsePane_ToggleRawBody_SwitchesBodyTabBetweenRawAndFormatted(t *tes
 
 	// Toggling back must return to the formatted view.
 	model2, _ := result.Update(keyRunes("r"))
-	back, ok := model2.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model2)
-	}
+	back := model2
 	if back.rawBody {
 		t.Error("expected a second toggle to turn raw view back off")
 	}
@@ -82,7 +80,7 @@ func TestResponsePane_RawBody_IsSyntaxHighlightedButNotReformatted(t *testing.T)
 	}, &http.Request{Method: http.GET, URL: "http://x"})
 
 	model, _ := pane.Update(keyRunes("r"))
-	result := model.(*ResponsePane)
+	result := model
 
 	raw := result.View()
 	if !strings.Contains(raw, "\x1b[") {
@@ -104,16 +102,10 @@ func TestResponsePane_ToggleRawBody_OnlyAffectsBodyTab(t *testing.T) {
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: `{"a":1}`}, &http.Request{Method: http.GET, URL: "http://x"})
 
 	model, _ := pane.Update(keyRunes("2")) // Headers tab
-	onHeaders, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	onHeaders := model
 
 	model2, _ := onHeaders.Update(keyRunes("r"))
-	result, ok := model2.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model2)
-	}
+	result := model2
 	if result.rawBody {
 		t.Error("expected 'r' to have no effect while on a tab other than Body")
 	}
@@ -142,10 +134,7 @@ func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
 
 	// Open the save prompt.
 	model2, cmd := pane.Update(keyRunes("s"))
-	opened, ok := model2.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model2)
-	}
+	opened := model2
 	if !opened.savingToFile {
 		t.Fatal("expected 's' to open the save-to-file prompt")
 	}
@@ -155,16 +144,12 @@ func TestResponsePane_SaveToFile_WritesRawBodyRegardlessOfToggle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "response.json")
 	current := opened
 	for _, r := range path {
-		m, _ := current.Update(keyRunes(string(r)))
-		current = m.(*ResponsePane)
+		current, _ = current.Update(keyRunes(string(r)))
 	}
 
 	// Confirm.
-	final, saveCmd := current.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	afterSave, ok := final.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", final)
-	}
+	final, saveCmd := current.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	afterSave := final
 	if afterSave.savingToFile {
 		t.Error("expected confirming the filename to close the prompt")
 	}
@@ -199,16 +184,13 @@ func TestResponsePane_SaveToFile_EscCancelsWithoutSaving(t *testing.T) {
 	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
 
 	model, _ := pane.Update(keyRunes("s"))
-	opened := model.(*ResponsePane)
+	opened := model
 
 	model2, _ := opened.Update(keyRunes("some-name"))
-	typed := model2.(*ResponsePane)
+	typed := model2
 
-	final, cmd := typed.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	result, ok := final.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", final)
-	}
+	final, cmd := typed.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}))
+	result := final
 	if result.savingToFile {
 		t.Error("expected esc to close the prompt")
 	}

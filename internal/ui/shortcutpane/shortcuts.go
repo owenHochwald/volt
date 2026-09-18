@@ -11,6 +11,7 @@ type Shortcut struct {
 // ShortcutTab represents a category of shortcuts
 type ShortcutTab struct {
 	Name      string
+	Context   keybindings.Context
 	Shortcuts []Shortcut
 }
 
@@ -29,6 +30,7 @@ func GetShortcutTabs(keys keybindings.KeyMap) []ShortcutTab {
 		}
 		tabs = append(tabs, ShortcutTab{
 			Name:      group.Name,
+			Context:   group.Context,
 			Shortcuts: shortcuts,
 		})
 	}

@@ -1,7 +1,7 @@
 package importpane
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/cli"
 	"github.com/owenHochwald/Volt/internal/storage"
 )

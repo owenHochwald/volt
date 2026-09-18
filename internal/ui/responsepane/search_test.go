@@ -4,9 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -22,7 +20,7 @@ func typeAndConfirmSearch(t *testing.T, pane *ResponsePane, query string) *Respo
 	model, _ = result.Update(keyRunes(query))
 	result = mustResponsePane(t, model)
 
-	model, _ = result.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ = result.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
 	return mustResponsePane(t, model)
 }
 
@@ -149,21 +147,20 @@ func setupAdvancedSearchAtTop(t *testing.T) (atTop *ResponsePane, advancedIdx in
 		t.Fatalf("test setup error: expected 200 matches, got %d", len(result.searchMatches))
 	}
 
-	var model tea.Model = result
+	model := result
 	for i := 0; i < 50; i++ {
-		model, _ = model.(*ResponsePane).Update(keyRunes("n"))
+		model, _ = model.Update(keyRunes("n"))
 	}
-	advanced := mustResponsePane(t, model)
-	advancedIdx = advanced.searchMatchIdx
+	advancedIdx = model.searchMatchIdx
 	if advancedIdx == 0 {
 		t.Fatal("test setup error: expected \"n\" to have advanced the match index")
 	}
 
-	model, _ = advanced.Update(keyRunes("g"))
-	model, _ = model.(*ResponsePane).Update(keyRunes("g"))
-	atTop = mustResponsePane(t, model)
-	if atTop.viewport.YOffset != 0 {
-		t.Fatalf("test setup error: expected \"gg\" to scroll to the top, got offset %d", atTop.viewport.YOffset)
+	model, _ = model.Update(keyRunes("g"))
+	model, _ = model.Update(keyRunes("g"))
+	atTop = model
+	if atTop.viewport.YOffset() != 0 {
+		t.Fatalf("test setup error: expected \"gg\" to scroll to the top, got offset %d", atTop.viewport.YOffset())
 	}
 	return atTop, advancedIdx
 }
@@ -247,7 +244,7 @@ func TestResponsePane_SearchNextFromPosition_UnaffectedByOrdinaryScroll(t *testi
 	}
 
 	model, _ := result.Update(keyRunes("j"))
-	model, _ = model.(*ResponsePane).Update(keyRunes("j"))
+	model, _ = model.Update(keyRunes("j"))
 	scrolled := mustResponsePane(t, model)
 	matchLine := scrolled.searchMatches[scrolled.searchMatchIdx]
 	if !scrolled.isLineVisible(matchLine) {
@@ -417,10 +414,6 @@ func TestResponsePane_Search_HighlightsMatches(t *testing.T) {
 	// `go test`, with no TTY attached) - force a color profile for this
 	// check so the highlight styling (see highlightMatches/styles.go)
 	// actually gets a chance to render, restoring it after.
-	prevProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prevProfile) })
-
 	pane := setupPaneWithLines(t, 30)
 	pane.rawBody = true
 	pane.updateViewportForActiveTab()
@@ -442,10 +435,6 @@ func TestResponsePane_Search_HighlightsMatches(t *testing.T) {
 // line (everything besides the query itself) must stay as plain,
 // unstyled text.
 func TestResponsePane_Search_HighlightsOnlyThePattern(t *testing.T) {
-	prevProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prevProfile) })
-
 	pane := SetupResponsePane(nil, keybindings.DefaultKeyMap())
 	pane.SetWidth(150)
 	pane.SetHeight(20)
@@ -533,10 +522,6 @@ func TestResponsePane_Search_InvalidRegexFallsBackToLiteral(t *testing.T) {
 // every span highlighted, each independently, using its own found bounds
 // rather than a fixed literal length.
 func TestHighlightQueryInLine_HighlightsEveryRegexSpan(t *testing.T) {
-	prevProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prevProfile) })
-
 	re := compileSearchQuery(`\d+`)
 	out := highlightQueryInLine("id=1 count=42 total=100", re, otherMatchStyle)
 
@@ -590,7 +575,7 @@ func TestResponsePane_SearchEsc_ClosesPromptWithoutDiscardingPreviousSearch(t *t
 	model, _ = reopened.Update(keyRunes("something else"))
 	typed := mustResponsePane(t, model)
 
-	model, _ = typed.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ = typed.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}))
 	afterEsc := mustResponsePane(t, model)
 
 	if afterEsc.searching {

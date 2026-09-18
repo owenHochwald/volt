@@ -3,7 +3,7 @@ package shortcutpane
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 func (m ShortcutPane) View() string {
@@ -27,7 +27,7 @@ func (m ShortcutPane) View() string {
 	// Footer hint
 	footer := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
-		Render("Press ? or Escape to close")
+		Render(m.keys.CloseHelp.Help().Key + " " + m.keys.CloseHelp.Help().Desc)
 
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,

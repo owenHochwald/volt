@@ -3,7 +3,7 @@ package groupspane
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -23,11 +23,7 @@ func setupTestPane(t *testing.T) (GroupsPane, *storage.SQLiteStorage) {
 
 func pressKey(t *testing.T, pane GroupsPane, key string) GroupsPane {
 	t.Helper()
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
-	updated, ok := model.(GroupsPane)
-	if !ok {
-		t.Fatalf("expected GroupsPane, got %T", model)
-	}
+	updated, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune(key)[0], Text: key}))
 	return updated
 }
 

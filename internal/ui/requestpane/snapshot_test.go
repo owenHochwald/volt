@@ -3,7 +3,7 @@ package requestpane
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -146,11 +146,7 @@ func TestRequestPane_HandleSubmit_SavesSnapshotOnlyOnActualSend(t *testing.T) {
 	pane.PanelFocused = true
 	// "name" left empty on purpose - blocks the first attempt.
 
-	model, cmd := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	blocked, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	blocked, cmd := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if blocked.RequestInProgress {
 		t.Fatal("expected the missing required field to block sending")
 	}
@@ -165,11 +161,7 @@ func TestRequestPane_HandleSubmit_SavesSnapshotOnlyOnActualSend(t *testing.T) {
 	for i := range blocked.BodyParams {
 		blocked.BodyParams[i].Input.SetValue("server-1")
 	}
-	model2, cmd2 := blocked.currentMode.HandleInput(blocked, tea.KeyMsg{Type: tea.KeyCtrlP})
-	sent, ok := model2.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model2)
-	}
+	sent, cmd2 := blocked.currentMode.HandleInput(blocked, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if !sent.RequestInProgress {
 		t.Fatal("expected the filled-in request to actually send")
 	}

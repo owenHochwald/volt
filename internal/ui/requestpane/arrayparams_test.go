@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -172,11 +172,7 @@ func TestRequestPane_ArrayCountControl_CyclesViaFocusManager(t *testing.T) {
 		beforeFieldCount += len(item.Fields)
 	}
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyRight})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'l', Text: "l"}))
 
 	if len(result.ArrayParams[0].Items) != 2 {
 		t.Fatalf("expected cycling forward to add a second item, got %d", len(result.ArrayParams[0].Items))

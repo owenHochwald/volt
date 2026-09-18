@@ -3,8 +3,8 @@ package requestpane
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -189,11 +189,7 @@ func TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredPathParam(t *testin
 	pane.PanelFocused = true
 	// host_id left empty on purpose.
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if result.RequestInProgress {
 		t.Error("expected the missing required path param to block sending")
 	}

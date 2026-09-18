@@ -1,11 +1,11 @@
 package keybindings
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Matches checks if a key message matches a binding
-func Matches(msg tea.KeyMsg, binding key.Binding) bool {
+func Matches(msg tea.KeyPressMsg, binding key.Binding) bool {
 	return key.Matches(msg, binding)
 }

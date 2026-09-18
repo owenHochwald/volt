@@ -3,7 +3,7 @@ package requestpane
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -254,11 +254,7 @@ func TestRequestPane_ServerSelector_CyclesViaFocusManager(t *testing.T) {
 		t.Fatalf("expected the server selector (first field) focused, got index %d", pane.FocusManager.CurrentIndex())
 	}
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyRight})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'l', Text: "l"}))
 
 	if result.ServerSelector.Value() != "prod" {
 		t.Errorf("expected cycling via the real input path to change the selector actually rendered, got %q", result.ServerSelector.Value())

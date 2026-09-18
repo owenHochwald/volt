@@ -29,6 +29,12 @@ func TestRequest_Validate(t *testing.T) {
 		{"invalid method", fields{Method: "GETT", URL: "http://localhost"}, true},
 		{"invalid url", fields{Method: GET, URL: "htt://localhost:8080"}, true},
 		{"url shorter than prefix", fields{Method: GET, URL: "ab"}, true},
+		{"one-character url", fields{Method: GET, URL: "h"}, true},
+		{"three-character url", fields{Method: GET, URL: "htt"}, true},
+		// A bare path is valid too - it's meant to be resolved against a
+		// group's/server's base URL at send time (see EffectiveURL), not
+		// sent as-is, so it's exempt from the scheme-prefix check.
+		{"group-relative path", fields{Method: GET, URL: "/pets"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

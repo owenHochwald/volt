@@ -3,8 +3,8 @@ package requestpane
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
@@ -42,11 +42,7 @@ func TestRequestPane_ResetRequest_ReturnsToBlankState(t *testing.T) {
 	pane.BodyParams[0].Input.SetValue("widget-1")
 	pane.ParseErrors = []string{"some previous error"}
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
-	result, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	result, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl}))
 
 	want := http.NewDefaultRequest()
 	if result.Request.Name != want.Name {
@@ -89,7 +85,7 @@ func TestRequestPane_ResetRequest_ClearsPersistedLastSentRequest(t *testing.T) {
 		t.Fatalf("test setup error: expected a saved snapshot, got %+v err=%v", got, err)
 	}
 
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	_, cmd := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl}))
 	if cmd == nil {
 		t.Fatal("expected a non-nil command to clear the persisted snapshot")
 	}
@@ -115,11 +111,7 @@ func TestRequestPane_ResetRequest_ExitsLoadTestMode(t *testing.T) {
 		t.Fatal("test setup error: expected load test mode to be on")
 	}
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
-	result, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	result, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl}))
 	if result.LoadTestMode {
 		t.Error("expected reset to exit load test mode")
 	}
@@ -146,11 +138,7 @@ func TestRequestPane_DefaultFocus_IsMethodURL(t *testing.T) {
 	}
 	pane.PanelFocused = true
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
-	result, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	result, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl}))
 	if _, ok := result.FocusManager.Current().(*ui.MethodSelector); !ok {
 		t.Errorf("expected reset to focus MethodSelector, got %T", result.FocusManager.Current())
 	}

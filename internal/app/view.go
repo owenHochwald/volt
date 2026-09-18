@@ -1,23 +1,64 @@
 package app
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"fmt"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
-func (m Model) View() string {
-	sidebarWidth := m.sidebarWidth()
-	mainHeight := m.mainHeight()
+func (m Model) View() tea.View {
+	layout := m.currentLayout()
+	if layout.mode == layoutTooSmall {
+		return newView(m.tooSmallView(layout))
+	}
 
-	responseHeight := m.responseHeight()
-	responseWidth := m.responseWidth()
+	header := m.headerView(layout)
+	var content string
+	if layout.mode == layoutWide {
+		content = m.wideView(layout, header)
+	} else {
+		content = m.focusedView(layout, header)
+	}
 
-	sidebar := m.sidebarView(mainHeight, sidebarWidth)
+	// If a modal is open, overlay it on top (only one can be open at once).
+	switch {
+	case m.showHelpModal:
+		content = m.overlayHelpModal()
+	case m.showGroupsModal:
+		content = m.overlayModal(m.groupsPane.View())
+	case m.showImportModal:
+		content = m.overlayModal(m.importPane.View())
+	}
 
-	response := ui.ApplyFocus(ui.ResponseStyle, m.focusedPanel == 2).Width(responseWidth).
-		Height(responseHeight).
-		Render(m.responseView(responseHeight, responseWidth))
+	return newView(content)
+}
+
+func newView(content string) tea.View {
+	view := tea.NewView(content)
+	view.AltScreen = true
+	view.WindowTitle = "Volt"
+	return view
+}
+
+func (m Model) wideView(layout terminalLayout, header string) string {
+	sidebar := renderPanel(
+		ui.SidebarStyle,
+		m.focusedPanel == utils.SidebarPanel,
+		layout.sidebarWidth,
+		layout.contentHeight,
+		m.sidebarPane.View(),
+	)
+
+	response := renderPanel(
+		ui.ResponseStyle,
+		m.focusedPanel == utils.ResponsePanel,
+		layout.mainWidth,
+		layout.responseHeight,
+		m.responsePane.View(),
+	)
 
 	// Zoomed (see zoomedResponse/ToggleZoomResponse), the response panel
 	// is the only box in the right column - the request panel isn't
@@ -32,16 +73,6 @@ func (m Model) View() string {
 	if m.zoomedResponse && !m.responsePane.IsPickingStyle() {
 		rightSide = response
 	} else {
-		requestHeight := m.requestHeight()
-		requestWidth := m.requestWidth()
-
-		// Conditional rendering for custom request pane border color. Both
-		// branches use the same requestHeight (see layout.go) - previously
-		// the load-test branch also subtracted an extra, undocumented 3
-		// lines from the response box, which (combined with the two boxes'
-		// heights never actually summing to the space available beside the
-		// sidebar - see rightColumnHeight) was part of why the right column
-		// visibly fell short of the sidebar, leaving blank space beneath it.
 		var request string
 		switch {
 		case m.responsePane.IsPickingStyle():
@@ -49,85 +80,116 @@ func (m Model) View() string {
 			// goes here, in the request pane's own slot, instead of the
 			// request pane itself - response (already rendered above)
 			// keeps showing the real response content alongside it,
-			// live-previewing whatever style the list's cursor is on
-			// (see responsepane.ResponsePane.effectiveBodyStyle) - safe
-			// against arbitrarily long real response lines the same way
-			// response's own normal rendering always has been, unlike an
-			// earlier version that crammed a separate preview snippet
-			// into this pane's own fixed-size box instead.
-			request = ui.ApplyFocus(ui.RequestStyle, true).Width(requestWidth).
-				Height(requestHeight).
-				Render(m.responsePane.StylePickerListView())
+			// live-previewing whatever style the list's cursor is on (see
+			// responsepane.ResponsePane.effectiveBodyStyle).
+			request = renderPanel(ui.RequestStyle, true, layout.mainWidth, layout.requestHeight, m.responsePane.StylePickerListView())
 		case m.requestPane.LoadTestMode:
-			// Load test style already has yellow border, background, and bold - don't apply focus
-			request = ui.LoadTestBorderStyle.Width(requestWidth).
-				Height(requestHeight).
-				Render(m.requestView(requestHeight, requestWidth))
+			// Load test style already has yellow border, background, and
+			// bold - don't apply the usual focus highlight on top of it.
+			request = renderPanel(ui.LoadTestBorderStyle, false, layout.mainWidth, layout.requestHeight, m.requestPane.View())
 		default:
-			request = ui.ApplyFocus(ui.RequestStyle, m.focusedPanel == 1).Width(requestWidth).
-				Height(requestHeight).
-				Render(m.requestView(requestHeight, requestWidth))
+			request = renderPanel(ui.RequestStyle, m.focusedPanel == utils.RequestPanel, layout.mainWidth, layout.requestHeight, m.requestPane.View())
 		}
-		rightSide = lipgloss.JoinVertical(lipgloss.Right, request, response)
+		rightSide = lipgloss.JoinVertical(lipgloss.Left, request, response)
 	}
 
-	bottomPanels := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightSide)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightSide)
+	return lipgloss.JoinVertical(lipgloss.Left, header, panels, m.statusView(layout.width))
+}
 
-	// Hidden (see showHeader/ToggleHeader, "f4"), the header isn't
-	// rendered at all - not just shrunk to nothing, since even a
-	// zero-height bordered box would still draw its own border lines -
-	// and mainHeight/sidebarContentHeight (see layout.go's headerHeight)
-	// have already handed the panels below the space it used to occupy.
-	var mainView string
-	if m.showHeader {
-		mainView = lipgloss.JoinVertical(lipgloss.Top, m.headerView(m.width), bottomPanels)
-	} else {
-		mainView = bottomPanels
+func (m Model) focusedView(layout terminalLayout, header string) string {
+	tabs := m.panelTabs(layout.width)
+	var panel string
+	switch m.focusedPanel {
+	case utils.RequestPanel:
+		style := ui.RequestStyle
+		if m.requestPane.LoadTestMode {
+			style = ui.LoadTestBorderStyle
+		}
+		panel = renderPanel(style, true, layout.width, layout.contentHeight, m.requestPane.View())
+	case utils.ResponsePanel:
+		panel = renderPanel(ui.ResponseStyle, true, layout.width, layout.contentHeight, m.responsePane.View())
+	default:
+		panel = renderPanel(ui.SidebarStyle, true, layout.width, layout.contentHeight, m.sidebarPane.View())
 	}
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, panel, m.statusView(layout.width))
+}
 
-	// If a modal is open, overlay it on top (only one can be open at once)
-	if m.showHelpModal {
-		return m.overlayHelpModal()
+func (m Model) statusView(width int) string {
+	if m.notification.Text != "" {
+		return m.notification.View(width)
 	}
-	if m.showGroupsModal {
-		return m.overlayModal(m.groupsPane.View())
+	help := m.keys.CompactHelp(m.focusedContext(), 5)
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Width(width).
+		MaxWidth(width).
+		MaxHeight(1).
+		Render(" " + help)
+}
+
+func (m Model) headerView(layout terminalLayout) string {
+	return renderPanel(
+		ui.HeaderStyle,
+		false,
+		layout.width,
+		layout.headerHeight,
+		m.headerPane.View(),
+	)
+}
+
+func (m Model) panelTabs(width int) string {
+	names := []string{" SIDEBAR ", " REQUEST ", " RESPONSE "}
+	rendered := make([]string, 0, len(names))
+	for i, name := range names {
+		if utils.Panel(i) == m.focusedPanel {
+			rendered = append(rendered, ui.ActiveTab.Render(name))
+		} else {
+			rendered = append(rendered, ui.InactiveTab.Render(name))
+		}
 	}
-	if m.showImportModal {
-		return m.overlayModal(m.importPane.View())
+	content := lipgloss.JoinHorizontal(lipgloss.Left, rendered...)
+	return lipgloss.NewStyle().Width(width).MaxWidth(width).MaxHeight(1).Render(content)
+}
+
+func renderPanel(style lipgloss.Style, focused bool, width, height int, content string) string {
+	if focused {
+		style = ui.ApplyFocus(style, true)
 	}
-
-	return mainView
+	contentWidth, contentHeight := contentSize(style, width, height)
+	return style.
+		Width(contentWidth).
+		Height(contentHeight).
+		MaxWidth(contentWidth).
+		MaxHeight(contentHeight).
+		Render(content)
 }
 
-func (m Model) headerView(width int) string {
-	header := ui.HeaderStyle.Width(width).Render(m.headerPane.View())
-	return header
+func (m Model) tooSmallView(layout terminalLayout) string {
+	if layout.width == 0 || layout.height == 0 {
+		return ""
+	}
+	message := fmt.Sprintf(
+		"Volt needs at least %d×%d\nCurrent terminal: %d×%d",
+		minTerminalWidth,
+		minTerminalHeight,
+		layout.width,
+		layout.height,
+	)
+	message = lipgloss.NewStyle().
+		Width(layout.width).
+		MaxWidth(layout.width).
+		Align(lipgloss.Center).
+		Render(message)
+	return lipgloss.Place(
+		layout.width,
+		layout.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		message,
+	)
 }
 
-func (m Model) sidebarView(height, width int) string {
-	sidebar := ui.ApplyFocus(ui.SidebarStyle, m.focusedPanel == 0).Width(width).
-		Height(height - 4).
-		Render(m.sidebarPane.View())
-	return sidebar
-}
-
-func (m Model) requestView(height, width int) string {
-	m.requestPane.SetFocused(m.focusedPanel == utils.RequestPanel)
-	//m.requestPane.LoadTestMode
-	m.requestPane.SetHeight(height)
-	m.requestPane.SetWidth(width)
-
-	return m.requestPane.View()
-}
-
-func (m Model) responseView(height, width int) string {
-	m.responsePane.SetHeight(height)
-	m.responsePane.SetWidth(width)
-
-	return m.responsePane.View()
-}
-
-// overlayHelpModal renders the help modal centered over the main view
 func (m Model) overlayHelpModal() string {
 	return m.overlayModal(m.shortcutPane.View())
 }
@@ -142,6 +204,8 @@ func (m Model) overlayModal(modal string) string {
 		lipgloss.Center,
 		modal,
 		lipgloss.WithWhitespaceChars("░"),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("236")),
+		lipgloss.WithWhitespaceStyle(
+			lipgloss.NewStyle().Foreground(lipgloss.Color("236")),
+		),
 	)
 }

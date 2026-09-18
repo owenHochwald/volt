@@ -335,27 +335,6 @@ func TestSQLiteStorage_BodyStyle_RoundTrips(t *testing.T) {
 	assert.Equal(t, "nord", got)
 }
 
-// TestSQLiteStorage_ShowHeader_RoundTrips verifies SaveShowHeader/
-// LoadShowHeader preserve the header's visibility, and that a fresh
-// database returns (true, nil) - shown is the ordinary starting state.
-func TestSQLiteStorage_ShowHeader_RoundTrips(t *testing.T) {
-	db := setupTestDB(t)
-
-	got, err := db.LoadShowHeader()
-	assert.NoError(t, err)
-	assert.Equal(t, true, got)
-
-	assert.NoError(t, db.SaveShowHeader(false))
-	got, err = db.LoadShowHeader()
-	assert.NoError(t, err)
-	assert.Equal(t, false, got)
-
-	assert.NoError(t, db.SaveShowHeader(true))
-	got, err = db.LoadShowHeader()
-	assert.NoError(t, err)
-	assert.Equal(t, true, got)
-}
-
 // TestSQLiteStorage_LastGroupFilter_RoundTrips verifies
 // SaveLastGroupFilter/LoadLastGroupFilter preserve a group name, and that
 // a fresh database returns "" (not an error) - "All groups", the ordinary

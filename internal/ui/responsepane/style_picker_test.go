@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -50,10 +50,7 @@ func TestResponsePane_PickBodyStyle_OpensPicker(t *testing.T) {
 	pane := setupPaneWithResponse(t, nil)
 
 	model, _ := pane.Update(keyRunes("t"))
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	result := model
 	if !result.pickingStyle {
 		t.Fatal("expected \"t\" to open the style picker")
 	}
@@ -79,7 +76,7 @@ func TestResponsePane_StylePicker_LivePreviewsAsCursorMoves(t *testing.T) {
 	original := pane.bodyStyleName
 
 	model, _ := pane.Update(keyRunes("t"))
-	opened := model.(*ResponsePane)
+	opened := model
 
 	// Pick a style guaranteed to differ from the current default.
 	targetIdx := -1
@@ -118,7 +115,7 @@ func TestResponsePane_ConfirmStylePicker_AppliesAndPersists(t *testing.T) {
 	pane := setupPaneWithResponse(t, db)
 
 	model, _ := pane.Update(keyRunes("t"))
-	opened := model.(*ResponsePane)
+	opened := model
 
 	// Move the cursor onto a specific, known style directly (list.Select
 	// is synchronous) rather than through list.Model's own "/" filter -
@@ -140,11 +137,8 @@ func TestResponsePane_ConfirmStylePicker_AppliesAndPersists(t *testing.T) {
 	}
 	opened.styleList.Select(draculaIdx)
 
-	model, cmd := opened.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	confirmed, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, cmd := opened.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	confirmed := model
 	if confirmed.pickingStyle {
 		t.Error("expected enter to close the picker")
 	}
@@ -174,16 +168,13 @@ func TestResponsePane_CancelStylePicker_LeavesStyleUnchanged(t *testing.T) {
 	original := pane.bodyStyleName
 
 	model, _ := pane.Update(keyRunes("t"))
-	opened := model.(*ResponsePane)
+	opened := model
 
-	model, _ = opened.Update(tea.KeyMsg{Type: tea.KeyDown})
-	moved := model.(*ResponsePane)
+	model, _ = opened.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	moved := model
 
-	model, _ = moved.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	model, _ = moved.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}))
+	result := model
 	if result.pickingStyle {
 		t.Error("expected esc to close the picker")
 	}
@@ -202,7 +193,7 @@ func TestResponsePane_StylePicker_QDoesNotQuitTheApp(t *testing.T) {
 	pane := setupPaneWithResponse(t, nil)
 
 	model, _ := pane.Update(keyRunes("t"))
-	opened := model.(*ResponsePane)
+	opened := model
 
 	_, cmd := opened.Update(keyRunes("q"))
 	if cmd == nil {

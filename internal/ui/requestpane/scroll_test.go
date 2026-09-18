@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -45,13 +45,9 @@ func TestRequestPane_ScrollFieldsDown_RevealsFieldsBeyondTheBox(t *testing.T) {
 		t.Fatal("expected field3 to start out scrolled below the visible box")
 	}
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyPgDown})
-	scrolled, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected a RequestPane, got %T", model)
-	}
+	scrolled, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyPgDown}))
 
-	if scrolled.FieldsViewport.YOffset == 0 {
+	if scrolled.FieldsViewport.YOffset() == 0 {
 		t.Fatal("expected pgdown to move the scroll offset")
 	}
 	after := scrolled.View()
@@ -60,13 +56,9 @@ func TestRequestPane_ScrollFieldsDown_RevealsFieldsBeyondTheBox(t *testing.T) {
 	}
 
 	// And pgup should bring it back to the top.
-	model, _ = scrolled.Update(tea.KeyMsg{Type: tea.KeyPgUp})
-	back, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected a RequestPane, got %T", model)
-	}
-	if back.FieldsViewport.YOffset != 0 {
-		t.Errorf("expected pgup to return to the top, got YOffset=%d", back.FieldsViewport.YOffset)
+	back, _ := scrolled.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyPgUp}))
+	if back.FieldsViewport.YOffset() != 0 {
+		t.Errorf("expected pgup to return to the top, got YOffset=%d", back.FieldsViewport.YOffset())
 	}
 }
 
@@ -101,22 +93,14 @@ func TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem(t *testing.T) {
 
 	// Add a second item, then tab into its first field - exactly what a
 	// user filling it in would do.
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyRight})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'l', Text: "l"}))
 	if len(result.ArrayParams[0].Items) != 2 {
 		t.Fatalf("expected 2 items after adding one, got %d", len(result.ArrayParams[0].Items))
 	}
 
-	model2, _ := result.Update(tea.KeyMsg{Type: tea.KeyTab})               // -> item1.key
-	model3, _ := model2.(RequestPane).Update(tea.KeyMsg{Type: tea.KeyTab}) // -> item1.value
-	model4, _ := model3.(RequestPane).Update(tea.KeyMsg{Type: tea.KeyTab}) // -> item2.key
-	final, ok := model4.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model4)
-	}
+	model2, _ := result.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab})) // -> item1.key
+	model3, _ := model2.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab})) // -> item1.value
+	final, _ := model3.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))  // -> item2.key
 
 	focused := final.FocusManager.Current()
 	if focused != &final.ArrayParams[0].Items[1].Fields[0].Input {

@@ -1,14 +1,15 @@
 package responsepane
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
@@ -20,8 +21,12 @@ type SaveResponseBodyMsg struct {
 	Err  error
 }
 
+type ResponseCopiedMsg struct {
+	Err error
+}
+
 // Update handles Bubble Tea messages and state transitions
-func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
 		cmds []tea.Cmd
@@ -38,7 +43,7 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// The filename prompt (see SaveResponseRaw) claims every key while
 		// open, same as groupspane's create/rename prompt - none of the
 		// tab/scroll/copy bindings below should fire while typing a
@@ -186,6 +191,15 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			}
 		}
+
+		if keybindings.Matches(msg, m.keys.PageUp) {
+			m.viewport.HalfPageUp()
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.PageDown) {
+			m.viewport.HalfPageDown()
+			return m, nil
+		}
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -198,13 +212,13 @@ func (m *ResponsePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // (see SaveResponseRaw) - enter confirms and dispatches the save, esc
 // cancels back to normal browsing, anything else is forwarded to
 // filenameInput. Mirrors groupspane's create/rename prompt handling.
-func (m *ResponsePane) handleSaveToFileKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *ResponsePane) handleSaveToFileKey(msg tea.KeyPressMsg) (*ResponsePane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.savingToFile = false
 		m.filenameInput.Blur()
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		path, err := resolveSavePath(m.filenameInput.Value())
 		if err != nil {
 			m.saveStatusMsg = err.Error()
@@ -256,9 +270,15 @@ func saveResponseBodyCmd(path, content string) tea.Cmd {
 
 // copyToClipboard copies content to the system clipboard
 func (m ResponsePane) copyToClipboard(content string) tea.Cmd {
+	return copyCommand(content, clipboard.WriteAll)
+}
+
+func copyCommand(content string, write func(string) error) tea.Cmd {
 	return func() tea.Msg {
-		clipboard.WriteAll(content)
-		return nil
+		if write == nil {
+			return ResponseCopiedMsg{Err: errors.New("clipboard writer is unavailable")}
+		}
+		return ResponseCopiedMsg{Err: write(content)}
 	}
 }
 

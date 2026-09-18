@@ -37,10 +37,7 @@ func TestResponsePane_ToggleWrap_WrapsLongLines(t *testing.T) {
 	beforeLines := pane.viewport.TotalLineCount()
 
 	model, _ := pane.Update(keyRunes("w"))
-	result, ok := model.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model)
-	}
+	result := model
 	if !result.wrapBody {
 		t.Fatal("expected \"w\" to turn wrapping on")
 	}
@@ -52,10 +49,7 @@ func TestResponsePane_ToggleWrap_WrapsLongLines(t *testing.T) {
 
 	// Toggling back off must return to the unwrapped (truncated) view.
 	model2, _ := result.Update(keyRunes("w"))
-	back, ok := model2.(*ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", model2)
-	}
+	back := model2
 	if back.wrapBody {
 		t.Error("expected a second \"w\" to turn wrapping back off")
 	}

@@ -1,8 +1,8 @@
 package responsepane
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -15,12 +15,12 @@ func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Respo
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "response.json"
 	filenameInput.CharLimit = 500
-	filenameInput.Width = 50
+	filenameInput.SetWidth(50)
 
 	searchInput := textinput.New()
 	searchInput.Placeholder = "search query (regex)"
 	searchInput.CharLimit = 500
-	searchInput.Width = 50
+	searchInput.SetWidth(50)
 
 	bodyStyleName := defaultBodyStyle
 	if db != nil {
@@ -30,7 +30,7 @@ func SetupResponsePane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Respo
 	}
 
 	return ResponsePane{
-		viewport:       viewport.New(20, 10),
+		viewport:       viewport.New(viewport.WithWidth(20), viewport.WithHeight(10)),
 		width:          20,
 		height:         30,
 		activeTab:      int(TabBody), // Start on Body tab

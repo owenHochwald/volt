@@ -1,7 +1,7 @@
 package requestpane
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -9,7 +9,7 @@ import (
 )
 
 // Update handles updates to the request pane
-func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m RequestPane) Update(msg tea.Msg) (RequestPane, tea.Cmd) {
 	var cmd tea.Cmd
 	m.Stopwatch, cmd = m.Stopwatch.Update(msg)
 
@@ -25,7 +25,7 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scrollToFocused()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if !m.PanelFocused {
 			return m, nil
 		}
@@ -37,6 +37,9 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if keybindings.Matches(msg, m.keys.SaveRequest) {
 			m.syncRequest()
+			if err := m.validateRequest(); err != nil {
+				return m, ui.NotifyCmd(ui.NotificationError, err.Error())
+			}
 			// Snapshot (not m.Request directly) so the currently
 			// typed/selected field values (see http.Request.ParamValues)
 			// are persisted along with the schema/template - otherwise
@@ -90,10 +93,7 @@ func (m RequestPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Delegate to current mode strategy
 		model, cmd := m.currentMode.HandleInput(&m, msg)
-		if ptr, ok := model.(*RequestPane); ok {
-			return *ptr, cmd
-		}
-		return m, cmd
+		return *model, cmd
 	}
 
 	m.syncRequest()

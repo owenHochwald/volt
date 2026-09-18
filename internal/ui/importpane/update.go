@@ -3,7 +3,7 @@ package importpane
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // CloseImportModalMsg signals the parent app to close this modal.
@@ -11,7 +11,7 @@ type CloseImportModalMsg struct{}
 
 func closeCmd() tea.Msg { return CloseImportModalMsg{} }
 
-func (m ImportPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m ImportPane) Update(msg tea.Msg) (ImportPane, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ImportResultMsg:
 		m.importing = false
@@ -24,7 +24,7 @@ func (m ImportPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = summaryText(msg.Summary)
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.importing {
 			return m, nil
 		}
@@ -36,14 +36,14 @@ func (m ImportPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m ImportPane) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m ImportPane) handleFormKey(msg tea.KeyPressMsg) (ImportPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		return m, closeCmd
 	}
 	const fieldCount = 4 // path, group, base URL, force toggle
-	if msg.String() == tea.KeyTab.String() || msg.String() == tea.KeyShiftTab.String() {
+	if msg.String() == "tab" || msg.String() == "shift+tab" {
 		m.blurAll()
-		if msg.String() == tea.KeyTab.String() {
+		if msg.String() == "tab" {
 			m.focusIndex = (m.focusIndex + 1) % fieldCount
 		} else {
 			m.focusIndex = (m.focusIndex + fieldCount - 1) % fieldCount
@@ -51,10 +51,10 @@ func (m ImportPane) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusCurrent()
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		return m.submit()
 	}
-	if m.focusIndex == 3 && msg.String() == " " {
+	if m.focusIndex == 3 && msg.String() == "space" {
 		m.force = !m.force
 		return m, nil
 	}
@@ -71,7 +71,7 @@ func (m ImportPane) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m ImportPane) handleResultKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m ImportPane) handleResultKey(msg tea.KeyPressMsg) (ImportPane, tea.Cmd) {
 	if msg.String() == "esc" {
 		return m, closeCmd
 	}
@@ -84,7 +84,7 @@ func (m ImportPane) handleResultKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m ImportPane) submit() (tea.Model, tea.Cmd) {
+func (m ImportPane) submit() (ImportPane, tea.Cmd) {
 	path := strings.TrimSpace(m.pathInput.Value())
 	if path == "" {
 		m.statusMsg, m.statusErr = "spec file path is required", true

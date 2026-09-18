@@ -1,6 +1,6 @@
 package responsepane
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 // Tab indices for normal mode
 const (

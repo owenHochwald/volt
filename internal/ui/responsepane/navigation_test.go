@@ -59,8 +59,8 @@ func TestResponsePane_GG_ScrollsToTop(t *testing.T) {
 	if result.gPending {
 		t.Error("expected the second \"g\" to resolve the sequence, not stay armed")
 	}
-	if result.viewport.YOffset != 0 {
-		t.Errorf("expected \"gg\" to scroll to the top (offset 0), got %d", result.viewport.YOffset)
+	if result.viewport.YOffset() != 0 {
+		t.Errorf("expected \"gg\" to scroll to the top (offset 0), got %d", result.viewport.YOffset())
 	}
 }
 
@@ -118,7 +118,7 @@ func TestResponsePane_GotoSequence_CancelledByUnrelatedKey(t *testing.T) {
 	if result.gPending {
 		t.Error("expected \"j\" to cancel the pending \"g\" sequence")
 	}
-	if result.viewport.YOffset == 0 {
+	if result.viewport.YOffset() == 0 {
 		t.Error("expected \"j\" to still scroll down after cancelling the sequence")
 	}
 }

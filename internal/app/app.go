@@ -1,7 +1,9 @@
 package app
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"context"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -33,22 +35,19 @@ type Model struct {
 	// zoomedResponse expands the response panel to the right column's
 	// full height, hiding the request panel (see ToggleZoomResponse,
 	// "z") - always reset whenever focus leaves the response panel (see
-	// focusPanel), so a zoomed response never silently stays zoomed once
-	// you've moved on from it.
+	// setFocusedPanel), so a zoomed response never silently stays zoomed
+	// once you've moved on from it.
 	zoomedResponse bool
-
-	// showHeader shows/hides the top banner (logo + help hint) - toggled
-	// by ToggleHeader ("f4"), persisted (see storage.SaveShowHeader/
-	// LoadShowHeader, loaded once at SetupModel) so the next app start
-	// restores whatever visibility was last chosen.
-	showHeader bool
 
 	width, height int
 
-	loadTestUpdates <-chan *http.LoadTestStats
-	showHelpModal   bool
-	showGroupsModal bool
-	showImportModal bool
+	loadTestUpdates  <-chan *http.LoadTestStats
+	loadTestCancel   context.CancelFunc
+	loadTestCanceled bool
+	showHelpModal    bool
+	showGroupsModal  bool
+	showImportModal  bool
+	notification     ui.Notification
 }
 
 func SetupModel(db *storage.SQLiteStorage) Model {
@@ -74,13 +73,6 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		}
 	}
 
-	showHeader := true
-	if db != nil {
-		if show, err := db.LoadShowHeader(); err == nil {
-			showHeader = show
-		}
-	}
-
 	m := Model{
 		db:            db,
 		keys:          keys,
@@ -93,8 +85,11 @@ func SetupModel(db *storage.SQLiteStorage) Model {
 		focusedPanel:  focusedPanel,
 		headerPane:    ui.SetupHeader(),
 		showHelpModal: false,
-		showHeader:    showHeader,
+		width:         80,
+		height:        24,
 	}
+	m.setFocusedPanel(focusedPanel)
+	m.applyLayout(m.currentLayout())
 	return m
 }
 
@@ -102,43 +97,14 @@ func (m Model) Init() tea.Cmd {
 	return m.sidebarPane.Init()
 }
 
-// resizeContentPanels re-sizes the sidebar, request pane, and style
-// picker to whatever sidebarWidth/sidebarContentHeight/requestHeight/
-// requestWidth (see layout.go) currently compute - called on every
-// WindowSizeMsg, and also whenever something else changes what those
-// functions return without a terminal resize of its own (see
-// ToggleHeader, "f4") - otherwise these panels' own persisted
-// size (view.go's own calls to SetHeight/SetWidth only ever mutate
-// View()'s local, discarded copy - see requestPane.SetHeight's own
-// comment) would stay stale until the next real resize, silently
-// throwing off things like pgup/pgdn's scroll-by-page size.
+// resizeContentPanels re-applies the current layout (see layout.go's
+// currentLayout/applyLayout) to every panel - called on every
+// WindowSizeMsg, and also whenever something else changes what
+// currentLayout computes without a terminal resize of its own (e.g.
+// ToggleZoomResponse, "z") - otherwise these panels' own persisted size
+// (view.go's own rendering doesn't mutate it back - see requestPane.
+// SetHeight's own comment) would stay stale until the next real resize,
+// silently throwing off things like pgup/pgdn's scroll-by-page size.
 func (m *Model) resizeContentPanels() {
-	// sidebarWidth/sidebarContentHeight are shared with view.go's
-	// rendering (see layout.go) - they must match the box the sidebar is
-	// actually rendered into, otherwise the list wraps its content to fit
-	// a differently-sized box than it thinks it has, so the wrapped line
-	// count (and therefore the sidebar's rendered height) drifts as
-	// different items are selected, visibly shifting the right panel.
-	m.sidebarPane.SetSize(m.sidebarWidth(), m.sidebarContentHeight())
-
-	m.requestPane.SetHeight(m.requestHeight())
-	m.requestPane.SetWidth(m.requestWidth())
-
-	// The style picker's list (see PickBodyStyle) is sized to this same
-	// box - it's rendered there in its place while open (see view.go) -
-	// so it needs to track resizes the same way.
-	m.responsePane.SetStylePickerSize(m.requestWidth(), m.requestHeight())
-}
-
-// focusPanel switches focus to p - the one place update.go's various
-// focus-changing key handlers assign m.focusedPanel, so that leaving the
-// response panel by any of them (esc, f1/f2, shift+tab, loading a
-// request from the sidebar, a response arriving, ...) reliably un-zooms
-// it (see zoomedResponse/ToggleZoomResponse) too, rather than needing
-// every one of those call sites to separately remember to.
-func (m *Model) focusPanel(p utils.Panel) {
-	m.focusedPanel = p
-	if p != utils.ResponsePanel {
-		m.zoomedResponse = false
-	}
+	m.applyLayout(m.currentLayout())
 }

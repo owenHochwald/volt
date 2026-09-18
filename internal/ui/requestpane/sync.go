@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -53,7 +53,10 @@ func (m *RequestPane) syncRequest() {
 
 	headerMap, headerErrors := utils.ParseKeyValuePairs(m.Headers.Value())
 	m.Request.Headers = headerMap
-	m.ParseErrors = headerErrors
+	m.ParseErrors = nil
+	for _, e := range headerErrors {
+		m.ParseErrors = append(m.ParseErrors, "header: "+e)
+	}
 
 	// When BodyParams or ArrayParams is populated (an imported request with
 	// a known JSON schema), the structured fields drive the body instead -
@@ -73,7 +76,9 @@ func (m *RequestPane) syncRequest() {
 			m.Request.Body = "{}" // Set to valid empty JSON
 		} else {
 			m.Request.Body = string(jsonData)
-			m.ParseErrors = append(m.ParseErrors, bodyErrors...)
+			for _, e := range bodyErrors {
+				m.ParseErrors = append(m.ParseErrors, "body: "+e)
+			}
 		}
 	}
 
@@ -140,6 +145,22 @@ func (m *RequestPane) resolvedRequest() *http.Request {
 	return &resolvedReq
 }
 
+// validateRequest checks the request-level concerns syncRequest itself
+// doesn't block on - malformed header lines (see ParseErrors) and
+// http.Request.Validate()'s own checks (method/URL/name/size limits) -
+// called before a send actually goes out (see handleSubmit), independent
+// of ValidateParams/RequiredFieldErrors' structured Path/Body/Array param
+// checks below it.
+func (m *RequestPane) validateRequest() error {
+	if len(m.ParseErrors) > 0 {
+		return fmt.Errorf("invalid request: %s", strings.Join(m.ParseErrors, "; "))
+	}
+	if err := m.Request.Validate(); err != nil {
+		return fmt.Errorf("invalid request: %w", err)
+	}
+	return nil
+}
+
 // buildJobConfig builds a load test job configuration from current input
 func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 	var parseErrors []string
@@ -187,8 +208,11 @@ func (m *RequestPane) buildJobConfig() (*http.JobConfig, error) {
 
 	m.ParseErrors = append(m.ParseErrors, parseErrors...)
 
-	if err := m.Request.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+	if len(parseErrors) > 0 {
+		return nil, fmt.Errorf("invalid load test configuration: %s", strings.Join(parseErrors, "; "))
+	}
+	if err := m.validateRequest(); err != nil {
+		return nil, err
 	}
 
 	resolvedReq := m.resolvedRequest()

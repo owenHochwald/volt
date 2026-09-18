@@ -1,10 +1,10 @@
 package responsepane
 
 import (
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -191,9 +191,13 @@ func (m *ResponsePane) ClearLoadTestStats() {
 	m.isLoadTest = false
 }
 
+func (m *ResponsePane) SetLoadTestPending(totalRequests int) {
+	m.SetLoadTestStats(http.NewLoadTestStats(totalRequests))
+}
+
 // SetHeight sets the height of the response pane
 func (m *ResponsePane) SetHeight(height int) {
-	m.height = height
+	m.height = max(height, 1)
 	// Viewport needs to be smaller to account for the status bar, tab
 	// bar, and the pinned footer hint renderNormalView always appends
 	// below it (see footerHint) - the scroll indicator and save-status
@@ -203,13 +207,13 @@ func (m *ResponsePane) SetHeight(height int) {
 	// past what's actually been allocated for it, which - unlike a plain
 	// lipgloss.Height() - only pads short content and would otherwise
 	// silently corrupt the whole layout around it.
-	m.viewport.Height = max(height-4, 1)
+	m.viewport.SetHeight(max(m.height-4, 1))
 }
 
 // SetWidth sets the width of the response pane
 func (m *ResponsePane) SetWidth(width int) {
-	m.width = width
-	m.viewport.Width = width
+	m.width = max(width, 1)
+	m.viewport.SetWidth(m.width)
 }
 
 // SetStylePickerSize sizes the style picker's list (see

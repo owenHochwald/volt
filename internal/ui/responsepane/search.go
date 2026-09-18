@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -54,8 +54,8 @@ func (m *ResponsePane) setViewportContent(content string) {
 // afterward, an accepted tradeoff for readable wrapped text.
 func (m *ResponsePane) refreshHighlightedContent() {
 	content := highlightMatches(m.currentContent, m.searchQuery, m.searchMatches, m.searchMatchIdx)
-	if m.wrapBody && m.viewport.Width > 0 {
-		content = wrapLines(content, m.viewport.Width)
+	if m.wrapBody && m.viewport.Width() > 0 {
+		content = wrapLines(content, m.viewport.Width())
 	}
 	m.viewport.SetContent(content)
 }
@@ -76,7 +76,7 @@ func (m *ResponsePane) resetSearch() {
 // this state.
 func (m *ResponsePane) openSearch() tea.Cmd {
 	m.searchOrigin = searchSnapshot{
-		offset:    m.viewport.YOffset,
+		offset:    m.viewport.YOffset(),
 		query:     m.searchQuery,
 		matches:   m.searchMatches,
 		matchIdx:  m.searchMatchIdx,
@@ -93,12 +93,12 @@ func (m *ResponsePane) openSearch() tea.Cmd {
 // opened (see cancelSearch), enter simply stops editing and keeps
 // whatever the live search already landed on (see liveSearch, run after
 // every other keystroke), anything else is forwarded to searchInput.
-func (m *ResponsePane) handleSearchInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *ResponsePane) handleSearchInputKey(msg tea.KeyPressMsg) (*ResponsePane, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.cancelSearch()
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() {
+	if msg.String() == "enter" {
 		m.searching = false
 		m.searchInput.Blur()
 		return m, nil
@@ -216,7 +216,7 @@ func (m *ResponsePane) jumpToNearestMatch(forward bool) {
 		return
 	}
 
-	pos := m.viewport.YOffset
+	pos := m.viewport.YOffset()
 	idx := -1
 	if forward {
 		for i, line := range m.searchMatches {

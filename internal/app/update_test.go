@@ -1,121 +1,108 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
-func setupTestModel(t *testing.T) Model {
-	t.Helper()
-	db, err := storage.NewSQLiteStorage(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create sqlite storage: %v", err)
+func TestQuestionMarkOpensFocusedPanelHelp(t *testing.T) {
+	model := newTestModel(t)
+
+	updated, _ := model.Update(appKeyPress('?', "?", 0))
+	got := updated.(Model)
+
+	if !got.showHelpModal {
+		t.Fatal("question mark did not open help")
 	}
-	t.Cleanup(func() { db.Close() })
-	return SetupModel(db)
-}
-
-func shiftTabMsg() tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyShiftTab}
-}
-
-// TestShiftTab_InRequestPanel_DoesNotCyclePanels guards against a
-// regression where shift+tab inside the request pane always triggered the
-// app-level CyclePanel binding before ever reaching the request pane's own
-// PrevField handling (also bound to shift+tab) - so shift-tabbing backward
-// through its fields silently moved focus to a different panel entirely
-// instead of ever landing on the previous field.
-func TestShiftTab_InRequestPanel_DoesNotCyclePanels(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.RequestPanel
-
-	model, _ := m.Update(shiftTabMsg())
-	result, ok := model.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model)
-	}
-	if result.focusedPanel != utils.RequestPanel {
-		t.Errorf("expected shift+tab to stay in the request panel (letting it handle PrevField), got panel %v", result.focusedPanel)
+	if context := got.shortcutPane.ActiveContext(); context != keybindings.ContextSidebar {
+		t.Fatalf("help context = %s, want %s", context, keybindings.ContextSidebar)
 	}
 }
 
-// TestShiftTab_InSidebarOrResponsePanel_StillCyclesPanels verifies the fix
-// above didn't disable CyclePanel everywhere - only the request panel has
-// a competing use for shift+tab.
-func TestShiftTab_InSidebarOrResponsePanel_StillCyclesPanels(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.SidebarPanel
+func TestQuestionMarkAndQRemainEditableInRequestFields(t *testing.T) {
+	for _, text := range []string{"?", "q"} {
+		t.Run(text, func(t *testing.T) {
+			model := newTestModel(t)
+			model.setFocusedPanel(utils.RequestPanel)
+			model.requestPane.FocusManager.Next()
 
-	model, _ := m.Update(shiftTabMsg())
-	result, ok := model.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model)
-	}
-	if result.focusedPanel != utils.RequestPanel {
-		t.Errorf("expected shift+tab from the sidebar to cycle to the request panel, got %v", result.focusedPanel)
-	}
+			updated, _ := model.Update(appKeyPress(rune(text[0]), text, 0))
+			got := updated.(Model)
 
-	m2 := setupTestModel(t)
-	m2.focusedPanel = utils.ResponsePanel
-	model2, _ := m2.Update(shiftTabMsg())
-	result2, ok := model2.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model2)
-	}
-	if result2.focusedPanel != utils.SidebarPanel {
-		t.Errorf("expected shift+tab from the response panel to wrap to the sidebar, got %v", result2.focusedPanel)
+			if got.showHelpModal {
+				t.Fatalf("%q opened help while editing", text)
+			}
+			if value := got.requestPane.URLInput.Value(); value != text {
+				t.Fatalf("URL value = %q, want %q", value, text)
+			}
+		})
 	}
 }
 
-func escMsg() tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyEsc}
+func TestF1AlwaysOpensGlobalHelp(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.RequestPanel)
+	model.requestPane.FocusManager.Next()
+
+	updated, _ := model.Update(appKeyPress(tea.KeyF1, "", 0))
+	got := updated.(Model)
+
+	if !got.showHelpModal {
+		t.Fatal("F1 did not open help while editing")
+	}
+	if context := got.shortcutPane.ActiveContext(); context != keybindings.ContextGlobal {
+		t.Fatalf("help context = %s, want %s", context, keybindings.ContextGlobal)
+	}
 }
 
-// TestEsc_InResponsePanel_ReturnsToRequestPanel is a regression test for a
-// real feature request: esc already stepped back from the request panel
-// to the sidebar - it should step back the same way from the response
-// panel to the request panel, not require jumping straight to the sidebar
-// (or an F-key) to get there.
-func TestEsc_InResponsePanel_ReturnsToRequestPanel(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.ResponsePanel
+func TestPanelNavigationBlursRequestControl(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.RequestPanel)
+	model.requestPane.FocusManager.Next()
+	if !model.requestPane.URLInput.Focused() {
+		t.Fatal("URL input is not focused before panel navigation")
+	}
 
-	model, _ := m.Update(escMsg())
-	result, ok := model.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model)
+	updated, _ := model.Update(appKeyPress('l', "", tea.ModAlt))
+	got := updated.(Model)
+
+	if got.focusedPanel != utils.ResponsePanel {
+		t.Fatalf("focused panel = %d, want response", got.focusedPanel)
 	}
-	if result.focusedPanel != utils.RequestPanel {
-		t.Errorf("expected esc from the response panel to return to the request panel, got %v", result.focusedPanel)
+	if got.requestPane.URLInput.Focused() {
+		t.Fatal("URL input remained focused after leaving request panel")
 	}
+}
+
+func escKeyPress() tea.KeyPressMsg {
+	return appKeyPress(tea.KeyEsc, "", 0)
 }
 
 // TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst verifies esc's more
 // specific existing meaning - canceling the response pane's own
-// save-to-file filename prompt (see SaveResponseRaw) - takes priority
-// over the panel switch above; otherwise that prompt could never actually
-// be cancelled with esc, since the panel-switch would always intercept it
+// save-to-file filename prompt (see SaveResponseRaw) - takes priority over
+// the panel-switch binding; otherwise that prompt could never actually be
+// cancelled with esc, since the panel switch would always intercept it
 // first.
 func TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.ResponsePanel
-	m.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
-	m.responsePane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if !m.responsePane.IsSavingToFile() {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.ResponsePanel)
+	model.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
+	model.responsePane.Update(appKeyPress('s', "s", 0))
+	if !model.responsePane.IsSavingToFile() {
 		t.Fatal("test setup error: expected 's' to open the save-to-file prompt")
 	}
 
-	model, _ := m.Update(escMsg())
-	result, ok := model.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model)
-	}
-	if result.focusedPanel != utils.ResponsePanel {
-		t.Errorf("expected esc to stay in the response panel while its save prompt is open, got %v", result.focusedPanel)
+	updated, _ := model.Update(escKeyPress())
+	got := updated.(Model)
+	if got.focusedPanel != utils.ResponsePanel {
+		t.Errorf("expected esc to stay in the response panel while its save prompt is open, got %v", got.focusedPanel)
 	}
 }
 
@@ -124,54 +111,40 @@ func TestEsc_InResponsePanel_ClosesSaveToFilePromptFirst(t *testing.T) {
 // response pane's other filename-prompt-shaped overlay: its "/" search
 // prompt (see SearchResponse).
 func TestEsc_InResponsePanel_ClosesSearchPromptFirst(t *testing.T) {
-	m := setupTestModel(t)
-	m.focusedPanel = utils.ResponsePanel
-	m.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
-	m.responsePane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
-	if !m.responsePane.IsSearching() {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.ResponsePanel)
+	model.responsePane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "hello"}, &http.Request{Method: http.GET, URL: "http://x"})
+	model.responsePane.Update(appKeyPress('/', "/", 0))
+	if !model.responsePane.IsSearching() {
 		t.Fatal("test setup error: expected '/' to open the search prompt")
 	}
 
-	model, _ := m.Update(escMsg())
-	result, ok := model.(Model)
-	if !ok {
-		t.Fatalf("expected Model, got %T", model)
-	}
-	if result.focusedPanel != utils.ResponsePanel {
-		t.Errorf("expected esc to stay in the response panel while its search prompt is open, got %v", result.focusedPanel)
+	updated, _ := model.Update(escKeyPress())
+	got := updated.(Model)
+	if got.focusedPanel != utils.ResponsePanel {
+		t.Errorf("expected esc to stay in the response panel while its search prompt is open, got %v", got.focusedPanel)
 	}
 }
 
-// TestFKeys_JumpToPanel_EvenMidEditInRequestPane verifies f1/f2/f3 reliably
-// switch panels from anywhere, including while the request panel is focused
-// - unlike shift+tab, which the request pane also needs for its own
-// PrevField and so can't serve as a panel switch there. F-keys were chosen
-// over ctrl+1/2/3 (not a real, distinguishable combination over classic
-// terminal input) and alt+1/2/3 (grabbed by most terminal emulators
-// themselves for their own tab switching before the app ever sees it).
-func TestFKeys_JumpToPanel_EvenMidEditInRequestPane(t *testing.T) {
-	tests := []struct {
-		name string
-		key  tea.KeyType
-		want utils.Panel
-	}{
-		{"f1", tea.KeyF1, utils.SidebarPanel},
-		{"f2", tea.KeyF2, utils.RequestPanel},
-		{"f3", tea.KeyF3, utils.ResponsePanel},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := setupTestModel(t)
-			m.focusedPanel = utils.RequestPanel // start mid-edit, worst case for shift+tab
+func newTestModel(t *testing.T) Model {
+	t.Helper()
 
-			model, _ := m.Update(tea.KeyMsg{Type: tt.key})
-			result, ok := model.(Model)
-			if !ok {
-				t.Fatalf("expected Model, got %T", model)
-			}
-			if result.focusedPanel != tt.want {
-				t.Errorf("expected %s to focus panel %v, got %v", tt.name, tt.want, result.focusedPanel)
-			}
-		})
+	db, err := storage.NewSQLiteStorage(filepath.Join(t.TempDir(), "volt.db"))
+	if err != nil {
+		t.Fatalf("create test storage: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test storage: %v", err)
+		}
+	})
+	return SetupModel(db)
+}
+
+func appKeyPress(code rune, text string, mod tea.KeyMod) tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{
+		Code: code,
+		Text: text,
+		Mod:  mod,
+	})
 }

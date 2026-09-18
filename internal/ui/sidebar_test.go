@@ -3,8 +3,8 @@ package ui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -31,7 +31,7 @@ func setupSidebarWithRequest(t *testing.T) (*SidebarPane, *storage.SQLiteStorage
 
 func sendKey(t *testing.T, sidebar *SidebarPane, key string) tea.Cmd {
 	t.Helper()
-	_, cmd := sidebar.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	_, cmd := sidebar.Update(tea.KeyPressMsg(tea.Key{Code: []rune(key)[0], Text: key}))
 	return cmd
 }
 
@@ -62,7 +62,7 @@ func requestItemTitles(sidebar *SidebarPane) []string {
 func TestSidebar_Esc_DoesNotQuitTheApp(t *testing.T) {
 	sidebar, _, _ := setupSidebarWithRequest(t)
 
-	_, cmd := sidebar.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := sidebar.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}))
 	if cmd == nil {
 		return
 	}

@@ -3,11 +3,11 @@ package requestpane
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -106,6 +106,14 @@ func (m RequestPane) Init() tea.Cmd {
 // SetFocused sets the panel focus state
 func (m *RequestPane) SetFocused(focused bool) {
 	m.PanelFocused = focused
+	if m.FocusManager == nil {
+		return
+	}
+	if focused {
+		m.FocusManager.Current().Focus()
+		return
+	}
+	m.FocusManager.Current().Blur()
 }
 
 // approxFooterLines is a rough, constant estimate of the pinned footer's
@@ -127,7 +135,21 @@ const approxFooterLines = 4
 // zero height is a no-op.
 func (m *RequestPane) SetHeight(height int) {
 	m.Height = height
-	m.FieldsViewport.Height = max(height-approxFooterLines, 1)
+	m.FieldsViewport.SetHeight(max(height-approxFooterLines, 1))
+
+	// Headers/Body get a shrinking share of the available height too - a
+	// small terminal (or load-test mode, which has its own extra config
+	// fields competing for the same space) leaves them less room.
+	editorHeight := clampDimension((height-10)/2, 2, 5)
+	if m.LoadTestMode {
+		editorHeight = clampDimension((height-16)/2, 1, 3)
+	}
+	m.Headers.SetHeight(editorHeight)
+	m.Body.SetHeight(editorHeight)
+}
+
+func clampDimension(value, minimum, maximum int) int {
+	return min(max(value, minimum), maximum)
 }
 
 // SetWidth sets the panel's available content width and resizes its text
@@ -136,7 +158,7 @@ func (m *RequestPane) SetHeight(height int) {
 // width, and don't overflow a narrow one.
 func (m *RequestPane) SetWidth(width int) {
 	m.Width = width
-	m.FieldsViewport.Width = width
+	m.FieldsViewport.SetWidth(width)
 
 	const (
 		minInputWidth   = 20
@@ -146,8 +168,8 @@ func (m *RequestPane) SetWidth(width int) {
 		safetyMargin    = 2
 	)
 
-	m.URLInput.Width = max(width-methodBoxWidth-safetyMargin, minInputWidth)
-	m.NameInput.Width = max(width-nameLabelWidth-safetyMargin, minInputWidth)
+	m.URLInput.SetWidth(max(width-methodBoxWidth-safetyMargin, minInputWidth))
+	m.NameInput.SetWidth(max(width-nameLabelWidth-safetyMargin, minInputWidth))
 
 	textAreaWidth := max(width-fieldLabelWidth-safetyMargin, minInputWidth)
 	m.Headers.SetWidth(textAreaWidth)
@@ -162,7 +184,7 @@ func (m *RequestPane) SetWidth(width int) {
 	resizeParams := func(params []Param) {
 		for i := range params {
 			labelWidth := len(params[i].Name) + 1 // "name "
-			params[i].Input.Width = min(max(width-labelWidth-safetyMargin, minInputWidth), maxParamInputWidth)
+			params[i].Input.SetWidth(min(max(width-labelWidth-safetyMargin, minInputWidth), maxParamInputWidth))
 		}
 	}
 	resizeParams(m.PathParams)
@@ -174,6 +196,24 @@ func (m *RequestPane) SetWidth(width int) {
 	}
 }
 
+// IsEditing reports whether the focused control accepts printable text -
+// true for a *textinput.Model/*textarea.Model (URL/Name/Headers/Body/path
+// or body param fields), false for anything cycled instead of typed into
+// (MethodSelector, an EnumSelector, ArrayCountControl) or the submit
+// button. Used by app.Model to decide whether '?' should be swallowed as
+// literal text being typed rather than interpreted as ContextHelp.
+func (m RequestPane) IsEditing() bool {
+	if m.FocusManager == nil {
+		return false
+	}
+	switch m.FocusManager.Current().(type) {
+	case *textinput.Model, *textarea.Model:
+		return true
+	default:
+		return false
+	}
+}
+
 // GetCurrentMethod returns the currently selected HTTP method
 func (m *RequestPane) GetCurrentMethod() string {
 	return m.MethodSelector.Current()
@@ -182,7 +222,7 @@ func (m *RequestPane) GetCurrentMethod() string {
 // ResultMsgCleanup resets the stopwatch and request state after a response
 func (m *RequestPane) ResultMsgCleanup() {
 	m.Stopwatch.Stop()
-	m.Stopwatch = stopwatch.NewWithInterval(10 * time.Millisecond)
+	m.Stopwatch = stopwatch.New(stopwatch.WithInterval(10 * time.Millisecond))
 	m.RequestInProgress = false
 }
 

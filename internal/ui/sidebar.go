@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -271,7 +271,11 @@ func (s *SidebarPane) Init() tea.Cmd {
 	return LoadRequestsCmd(s.db)
 }
 
-func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *SidebarPane) SetFocused(focused bool) {
+	s.panelFocused = focused
+}
+
+func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -339,7 +343,7 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.desiredCursorIndex = -1
 		}
 		return s, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// A pending delete swallows the very next key as its y/n answer,
 		// checked before anything else (including the filter-typing guard
 		// right below) - while confirming, that's the only thing any key
@@ -437,6 +441,16 @@ func (s *SidebarPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return s, nil
 		}
+		if keybindings.Matches(msg, s.keys.NavFirst) {
+			s.requestsList.Select(0)
+			return s, nil
+		}
+		if keybindings.Matches(msg, s.keys.NavLast) {
+			if itemCount := len(s.requestsList.Items()); itemCount > 0 {
+				s.requestsList.Select(itemCount - 1)
+			}
+			return s, nil
+		}
 	}
 
 	s.requestsList, cmd = s.requestsList.Update(msg)
@@ -472,8 +486,8 @@ func (s *SidebarPane) SelectedItem() (RequestItem, bool) {
 }
 
 func (s *SidebarPane) SetSize(width, height int) {
-	s.width = width
-	s.height = height
+	s.width = max(width, 1)
+	s.height = max(height, 1)
 	s.requestsList.SetSize(s.listWidth(), s.listHeight())
 }
 

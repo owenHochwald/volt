@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 )
 
@@ -97,11 +97,7 @@ func TestRequestPane_HandleSubmit_BlocksSendOnConstraintViolation(t *testing.T) 
 	}
 	pane.BodyParams[0].Input.SetValue("999")
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if result.RequestInProgress {
 		t.Error("expected the out-of-range value to block sending")
 	}
@@ -189,11 +185,7 @@ func TestRequestPane_HandleSubmit_BlocksSendOnMissingRequiredField(t *testing.T)
 		t.Errorf("expected ValidateParam to leave an empty required field alone (that's RequiredFieldErrors' job), got %q", msg)
 	}
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if result.RequestInProgress {
 		t.Error("expected the missing required field to block sending")
 	}
@@ -224,11 +216,7 @@ func TestRequestPane_BlockedSend_ShowsErrorInlineNotInFooter(t *testing.T) {
 	pane.PanelFocused = true
 	// name left empty on purpose - never typed into.
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 
 	rendered := result.View()
 	if !strings.Contains(rendered, "! required") {
@@ -276,11 +264,7 @@ func TestRequestPane_HandleSubmit_FocusesFirstErrorField(t *testing.T) {
 	// being there.
 	pane.FocusManager.FocusIndex(2) // ServerSelector(0), MethodSelector(1), URLInput(2)
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if result.RequestInProgress {
 		t.Fatalf("expected the missing required field to block sending")
 	}
@@ -328,11 +312,7 @@ func TestRequestPane_HandleSubmit_FocusesFirstErrorField_InsideArrayItem(t *test
 	}
 	// "label" left empty on purpose.
 
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if result.RequestInProgress {
 		t.Fatalf("expected the missing required array item field to block sending")
 	}

@@ -133,22 +133,35 @@ func (m ResponsePane) renderLoadTestErrors() string {
 		b.WriteString(responseValueStyle.Render("No errors encountered!"))
 		b.WriteString("\n\n")
 		b.WriteString(faintStyle.Render("All requests completed successfully."))
-		return b.String()
-	}
-
-	// Render each stable error class.
-	errorClasses := make([]string, 0, len(stats.Errors))
-	for class := range stats.Errors {
-		errorClasses = append(errorClasses, class)
-	}
-	sort.Strings(errorClasses)
-
-	for _, class := range errorClasses {
-		count := stats.Errors[class]
-		b.WriteString(responseKeyStyle.Render(class))
-		b.WriteString(": ")
-		b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d occurrences", count)))
 		b.WriteString("\n\n")
+	} else {
+		classes := make([]string, 0, len(stats.Errors))
+		for class := range stats.Errors {
+			classes = append(classes, class)
+		}
+		sort.Strings(classes)
+		for _, class := range classes {
+			b.WriteString(responseKeyStyle.Render(class))
+			b.WriteString(": ")
+			b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d occurrences", stats.Errors[class])))
+			b.WriteString("\n\n")
+		}
+	}
+
+	if len(stats.StatusCodes) > 0 {
+		b.WriteString(responseLabelStyle.Render("HTTP Status Codes"))
+		b.WriteString("\n")
+		statuses := make([]int, 0, len(stats.StatusCodes))
+		for status := range stats.StatusCodes {
+			statuses = append(statuses, status)
+		}
+		sort.Ints(statuses)
+		for _, status := range statuses {
+			b.WriteString(responseKeyStyle.Render(fmt.Sprintf("%d", status)))
+			b.WriteString(": ")
+			b.WriteString(responseValueStyle.Render(fmt.Sprintf("%d responses", stats.StatusCodes[status])))
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()

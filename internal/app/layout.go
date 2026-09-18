@@ -1,118 +1,147 @@
 package app
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"charm.land/lipgloss/v2"
+	"github.com/owenHochwald/Volt/internal/ui"
+)
 
-// headerHeight returns the top banner's actual rendered height (see
-// view.go's headerView) - 0 when hidden (see showHeader/ToggleHeader),
-// freeing that space for mainHeight/sidebarContentHeight below rather
-// than leaving it as blank space once the header disappears.
-func (m Model) headerHeight() int {
-	if !m.showHeader {
-		return 0
+const (
+	minTerminalWidth   = 60
+	minTerminalHeight  = 20
+	wideTerminalWidth  = 110
+	wideTerminalHeight = 30
+)
+
+type layoutMode uint8
+
+const (
+	layoutTooSmall layoutMode = iota
+	layoutFocused
+	layoutWide
+)
+
+type terminalLayout struct {
+	mode layoutMode
+
+	width  int
+	height int
+
+	headerHeight  int
+	tabBarHeight  int
+	statusHeight  int
+	contentHeight int
+
+	sidebarWidth   int
+	mainWidth      int
+	requestHeight  int
+	responseHeight int
+
+	modalWidth  int
+	modalHeight int
+}
+
+func calculateLayout(width, height int) terminalLayout {
+	layout := terminalLayout{
+		width:       max(width, 0),
+		height:      max(height, 0),
+		modalWidth:  clamp(width-8, 30, 72),
+		modalHeight: clamp(height-4, 12, 30),
 	}
-	return lipgloss.Height(m.headerView(m.width))
-}
-
-// sidebarWidth returns the sidebar's column width, scaled with the
-// terminal but clamped so it never gets unusably narrow on small terminals
-// or wastes space on very wide ones.
-func (m Model) sidebarWidth() int {
-	width := m.width / 5
-	if width < 20 {
-		width = 20
+	if width < minTerminalWidth || height < minTerminalHeight {
+		layout.mode = layoutTooSmall
+		layout.modalWidth = max(min(width, layout.modalWidth), 0)
+		layout.modalHeight = max(min(height, layout.modalHeight), 0)
+		return layout
 	}
-	if width > 80 {
-		width = 80
+
+	if width >= wideTerminalWidth && height >= wideTerminalHeight {
+		layout.mode = layoutWide
+		layout.headerHeight = 8
+		layout.statusHeight = 1
+		layout.contentHeight = max(height-layout.headerHeight-layout.statusHeight, 0)
+		layout.sidebarWidth = clamp(width/4, 24, 34)
+		layout.mainWidth = max(width-layout.sidebarWidth, 0)
+		layout.requestHeight = max(layout.contentHeight*45/100, 1)
+		layout.responseHeight = max(layout.contentHeight-layout.requestHeight, 1)
+		return layout
 	}
-	return width
+
+	layout.mode = layoutFocused
+	layout.headerHeight = 3
+	layout.tabBarHeight = 1
+	layout.statusHeight = 1
+	layout.contentHeight = max(height-layout.headerHeight-layout.tabBarHeight-layout.statusHeight, 0)
+	layout.sidebarWidth = width
+	layout.mainWidth = width
+	layout.requestHeight = layout.contentHeight
+	layout.responseHeight = layout.contentHeight
+	return layout
 }
 
-// sidebarContentHeight returns the height available for the sidebar's
-// list.Model. It must match the box the sidebar is actually rendered into
-// in view.go (mainHeight-4) - update.go's SetSize and view.go's box size
-// diverging is exactly what caused the right panel to visibly shift while
-// navigating a long list, so both now go through this single calculation.
-func (m Model) sidebarContentHeight() int {
-	contentHeight := m.height - m.headerHeight() + 3
-	mainHeight := contentHeight - 2
-	return mainHeight - 4
+func clamp(value, minimum, maximum int) int {
+	if maximum < minimum {
+		return minimum
+	}
+	return min(max(value, minimum), maximum)
 }
 
-// mainWidth returns the width available to the request/response column,
-// to the right of the sidebar.
-func (m Model) mainWidth() int {
-	return m.width - m.sidebarWidth() - 4
-}
+// currentLayout computes the layout for the model's current terminal size,
+// then adjusts it for zoomedResponse (see ToggleZoomResponse, "z"), which
+// calculateLayout can't see on its own (it's a pure function of terminal
+// size alone) - zoomed hands the request column's share to the response
+// instead of splitting it.
+func (m Model) currentLayout() terminalLayout {
+	layout := calculateLayout(m.width, m.height)
+	if layout.mode == layoutTooSmall {
+		return layout
+	}
 
-// mainHeight returns the height available to the request+response column.
-// The "+3" alongside headerHeight (not just "m.height - headerHeight()")
-// preserves the exact vertical budget this whole layout.go was already
-// tuned against back when the header's height was always a fixed 8 lines
-// (see headerHeight, and the "-5" this replaced) - so hiding the header
-// (headerHeight 8 -> 0) hands mainHeight back exactly the 8 lines the
-// header used to occupy, rather than shifting the whole layout's tuning.
-func (m Model) mainHeight() int {
-	contentHeight := m.height - m.headerHeight() + 3
-	return contentHeight - 2
-}
-
-// boxBorderLines is how many extra lines a lipgloss bordered box (request/
-// response's RoundedBorder) renders on top of the content height passed to
-// .Height() - one for the top border, one for the bottom.
-const boxBorderLines = 2
-
-// rightColumnHeight is the total rendered height (borders included) the
-// request and response boxes together must add up to, so the right column
-// ends at the same row as the sidebar instead of falling short and leaving
-// blank space beneath it. Mirrors what the sidebar box itself actually
-// renders to: view.go's sidebarView is given mainHeight directly and
-// renders a content height of mainHeight-4 (matching sidebarContentHeight,
-// used for the list's own internal sizing) plus 2 border lines, i.e.
-// mainHeight-2 total.
-func (m Model) rightColumnHeight() int {
-	return m.mainHeight() - 2
-}
-
-// requestHeight/requestWidth are the box dimensions view.go actually
-// renders the request pane into. update.go's WindowSizeMsg handler must
-// call m.requestPane.SetHeight/SetWidth with these same values (not just
-// view.go, which alone doesn't persist them - see requestPane.View's value
-// receiver) so that a later Update() - e.g. handling a pgup/pgdown scroll -
-// sees a FieldsViewport sized to match what's actually on screen, rather
-// than the zero value.
-func (m Model) requestHeight() int {
-	// Zoomed (see zoomedResponse/ToggleZoomResponse), the request panel
-	// isn't rendered at all - view.go skips it entirely rather than
-	// giving it this 0, which is really just for whichever WindowSizeMsg
-	// handling still touches it while hidden.
 	if m.zoomedResponse {
-		return 0
+		layout.requestHeight = 0
+		layout.responseHeight = layout.contentHeight
 	}
-	// ~35% of the right column's content height goes to the request editor;
-	// responseHeight takes what's left (not a fixed proportion of its own),
-	// so the two always sum to rightColumnHeight exactly - no leftover gap
-	// regardless of rounding.
-	content := m.rightColumnHeight() - 2*boxBorderLines
-	return content * 35 / 100
+
+	return layout
 }
 
-func (m Model) requestWidth() int {
-	return m.mainWidth() - 10
-}
+func (m *Model) applyLayout(layout terminalLayout) {
+	m.headerPane.SetSize(layout.width, layout.mode != layoutWide)
+	m.shortcutPane.SetWidth(layout.modalWidth)
+	m.shortcutPane.SetHeight(layout.modalHeight)
+	m.groupsPane.SetWidth(layout.modalWidth)
+	m.groupsPane.SetHeight(layout.modalHeight)
+	m.importPane.SetWidth(layout.modalWidth)
+	m.importPane.SetHeight(layout.modalHeight)
 
-// responseHeight/responseWidth are the box dimensions view.go renders the
-// response pane into - see requestHeight for why this is "whatever's left"
-// rather than its own independent proportion. Zoomed, the response panel
-// is the only box in the right column, so it gets the whole thing minus
-// just its own border lines (not two boxes' worth).
-func (m Model) responseHeight() int {
-	if m.zoomedResponse {
-		return m.rightColumnHeight() - boxBorderLines
+	if layout.mode == layoutTooSmall {
+		return
 	}
-	content := m.rightColumnHeight() - 2*boxBorderLines
-	return content - m.requestHeight()
+
+	if layout.mode == layoutWide {
+		sidebarWidth, sidebarHeight := contentSize(ui.SidebarStyle, layout.sidebarWidth, layout.contentHeight)
+		requestWidth, requestHeight := contentSize(ui.RequestStyle, layout.mainWidth, layout.requestHeight)
+		responseWidth, responseHeight := contentSize(ui.ResponseStyle, layout.mainWidth, layout.responseHeight)
+		m.sidebarPane.SetSize(sidebarWidth, sidebarHeight)
+		m.requestPane.SetHeight(requestHeight)
+		m.requestPane.SetWidth(requestWidth)
+		m.responsePane.SetWidth(responseWidth)
+		m.responsePane.SetHeight(responseHeight)
+		m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
+		return
+	}
+
+	sidebarWidth, sidebarHeight := contentSize(ui.SidebarStyle, layout.width, layout.contentHeight)
+	requestWidth, requestHeight := contentSize(ui.RequestStyle, layout.width, layout.contentHeight)
+	responseWidth, responseHeight := contentSize(ui.ResponseStyle, layout.width, layout.contentHeight)
+	m.sidebarPane.SetSize(sidebarWidth, sidebarHeight)
+	m.requestPane.SetHeight(requestHeight)
+	m.requestPane.SetWidth(requestWidth)
+	m.responsePane.SetWidth(responseWidth)
+	m.responsePane.SetHeight(responseHeight)
+	m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
 }
 
-func (m Model) responseWidth() int {
-	return m.mainWidth() - 10
+func contentSize(style lipgloss.Style, outerWidth, outerHeight int) (int, int) {
+	return max(outerWidth-style.GetHorizontalFrameSize(), 1),
+		max(outerHeight-style.GetVerticalFrameSize(), 1)
 }

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	chromastyles "github.com/alecthomas/chroma/v2/styles"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
@@ -95,14 +95,14 @@ func (m *ResponsePane) resizeStyleList() {
 // own "/" filter and cursor movement), after which the live preview is
 // refreshed to match wherever the cursor now sits (see
 // effectiveBodyStyle).
-func (m *ResponsePane) handleStylePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *ResponsePane) handleStylePickerKey(msg tea.KeyPressMsg) (*ResponsePane, tea.Cmd) {
 	filtering := m.styleList.FilterState() == list.Filtering
 	if msg.String() == "esc" && !filtering {
 		m.pickingStyle = false
 		m.updateViewportForActiveTab()
 		return m, nil
 	}
-	if msg.String() == tea.KeyEnter.String() && !filtering {
+	if msg.String() == "enter" && !filtering {
 		return m, m.confirmStylePicker()
 	}
 

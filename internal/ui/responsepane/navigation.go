@@ -10,7 +10,7 @@ import "strconv"
 // (negative goes to the top, past-the-end goes to the bottom), so no
 // bounds checking is needed here.
 func (m *ResponsePane) scrollToLine(line int) {
-	m.viewport.SetYOffset(line - m.viewport.Height/2)
+	m.viewport.SetYOffset(line - m.viewport.Height()/2)
 }
 
 // isLineVisible reports whether line (0-based) is within the viewport's
@@ -19,7 +19,7 @@ func (m *ResponsePane) scrollToLine(line int) {
 // stays on screen) apart from a real jump elsewhere (gg/G/{n}g - it
 // doesn't).
 func (m *ResponsePane) isLineVisible(line int) bool {
-	top := m.viewport.YOffset
+	top := m.viewport.YOffset()
 	bottom := top + m.viewport.VisibleLineCount()
 	return line >= top && line < bottom
 }

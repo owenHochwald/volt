@@ -120,12 +120,12 @@ func (r *Request) Validate() error {
 		return fmt.Errorf("invalid method: %s", r.Method)
 	}
 
-	if r.URL != "" {
-		// A URL may also be a bare path (e.g. "/pets"), meant to be resolved
-		// against a group's server at send time - see EffectiveURL.
-		if !strings.HasPrefix(r.URL, "http") && !strings.HasPrefix(r.URL, "/") {
-			return fmt.Errorf("invalid url: %s", r.URL)
-		}
+	// A URL may also be a bare path (e.g. "/pets"), meant to be resolved
+	// against a group's/server's base URL at send time - see EffectiveURL -
+	// exempt from the scheme-prefix check below. HasPrefix (not the old
+	// r.URL[0:4] slice) so a URL shorter than the prefix can't panic.
+	if !strings.HasPrefix(r.URL, "http://") && !strings.HasPrefix(r.URL, "https://") && !strings.HasPrefix(r.URL, "/") {
+		return fmt.Errorf("invalid url: %s", r.URL)
 	}
 
 	if r.Headers != nil && len(r.Headers) > 100 {

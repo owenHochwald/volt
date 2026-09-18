@@ -424,41 +424,6 @@ func (s *SQLiteStorage) LoadBodyStyle() (string, error) {
 	return value, nil
 }
 
-// showHeaderKey is the app_state row SaveShowHeader/LoadShowHeader read
-// and write - whether the top banner (logo + help hint) is shown (see
-// app.Model.showHeader/ToggleHeader, "f4"), so the next app start
-// reopens with whatever visibility was last chosen instead of always
-// resetting to shown.
-const showHeaderKey = "show_header"
-
-// SaveShowHeader persists show as the header's visibility to restore on
-// the next app start - overwriting whatever was saved before, since only
-// the most recent choice matters.
-func (s *SQLiteStorage) SaveShowHeader(show bool) error {
-	value := "1"
-	if !show {
-		value = "0"
-	}
-	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-	_, err := s.db.Exec(q, showHeaderKey, value)
-	return err
-}
-
-// LoadShowHeader returns the visibility saved by SaveShowHeader, or
-// (true, nil) if nothing's been saved yet (a fresh database, or one from
-// before this existed) - shown is the header's ordinary starting state.
-func (s *SQLiteStorage) LoadShowHeader() (bool, error) {
-	q := `SELECT value FROM app_state WHERE key = ?`
-	var value string
-	if err := s.db.QueryRow(q, showHeaderKey).Scan(&value); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return true, nil
-		}
-		return true, err
-	}
-	return value != "0", nil
-}
-
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
 	q := `SELECT DISTINCT url FROM requests`
 	rows, err := s.db.Query(q)

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 )
@@ -106,19 +106,6 @@ func SaveBodyStyleCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
 	}
 }
 
-// SaveShowHeaderCmd persists show (see storage.SaveShowHeader) as the
-// top header banner's visibility to restore on the app's next start -
-// fire-and-forget, same rationale as SaveBodyStyleCmd. A nil db (as in
-// tests) is a no-op.
-func SaveShowHeaderCmd(db *storage.SQLiteStorage, show bool) tea.Cmd {
-	return func() tea.Msg {
-		if db != nil {
-			_ = db.SaveShowHeader(show)
-		}
-		return nil
-	}
-}
-
 func LoadRequestsCmd(db *storage.SQLiteStorage) tea.Cmd {
 	return func() tea.Msg {
 		requests, err := db.Load()
@@ -146,7 +133,7 @@ func WaitForLoadTestUpdatesCmd(updates <-chan *http.LoadTestStats, totalRequests
 			}
 		}
 
-		if stats.CompletedRequests >= stats.TotalRequests {
+		if !stats.EndTime.IsZero() {
 			return http.LoadTestCompleteMsg{
 				Stats:    stats,
 				Duration: stats.EndTime.Sub(stats.StartTime),

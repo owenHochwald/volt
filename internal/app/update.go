@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
+	"fmt"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/groupspane"
 	"github.com/owenHochwald/Volt/internal/ui/importpane"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
-	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
 	"github.com/owenHochwald/Volt/internal/utils"
@@ -18,24 +19,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
-
-		// Handle '?' to toggle help modal. Also stays out of the way while
-		// searching the sidebar, since '?' is a legitimate character to
-		// filter a URL's query string by.
-		if keybindings.Matches(msg, m.keys.ShowHelp) && noModalOpen && m.focusedPanel != utils.RequestPanel && !m.sidebarPane.IsFiltering() {
-			m.showHelpModal = true
-			m.shortcutPane.SetFocused(true)
-			return m, nil
+	case tea.KeyPressMsg:
+		if keybindings.Matches(msg, m.keys.ForceQuit) {
+			if m.loadTestCancel != nil {
+				m.loadTestCancel()
+			}
+			return m, tea.Quit
 		}
 
-		// If help modal is open, route ALL messages to it
+		noModalOpen := !m.showHelpModal && !m.showGroupsModal && !m.showImportModal
+
 		if m.showHelpModal {
-			var shortcutModel tea.Model
-			shortcutModel, cmd = m.shortcutPane.Update(msg)
-			m.shortcutPane = shortcutModel.(shortcutpane.ShortcutPane)
+			if keybindings.Matches(msg, m.keys.GlobalHelp) {
+				m.closeHelp()
+				return m, nil
+			}
+			m.shortcutPane, cmd = m.shortcutPane.Update(msg)
 			return m, cmd
+		}
+
+		if keybindings.Matches(msg, m.keys.GlobalHelp) {
+			m.openHelp(keybindings.ContextGlobal)
+			return m, nil
 		}
 
 		// Handle ctrl+g to toggle the groups & servers manager. Unlike '?',
@@ -48,9 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// If the groups modal is open, route ALL messages to it
 		if m.showGroupsModal {
-			var groupsModel tea.Model
-			groupsModel, cmd = m.groupsPane.Update(msg)
-			m.groupsPane = groupsModel.(groupspane.GroupsPane)
+			m.groupsPane, cmd = m.groupsPane.Update(msg)
 			return m, cmd
 		}
 
@@ -64,59 +67,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// If the import modal is open, route ALL messages to it
 		if m.showImportModal {
-			var importModel tea.Model
-			importModel, cmd = m.importPane.Update(msg)
-			m.importPane = importModel.(importpane.ImportPane)
+			m.importPane, cmd = m.importPane.Update(msg)
 			return m, cmd
 		}
 
-		// Global key handling (only when modal is closed). CyclePanel is
-		// bound to shift+tab, which the request pane also binds to its own
-		// PrevField - without this exclusion, shift+tab inside the request
-		// pane always cycled the app's panel focus instead of ever reaching
-		// PrevField, so shift-tabbing backward through its fields silently
-		// did nothing (moving focus away entirely, not just skipping a
-		// field).
-		if keybindings.Matches(msg, m.keys.CyclePanel) && m.focusedPanel != utils.RequestPanel {
-			m.focusPanel((m.focusedPanel + 1) % 3)
+		isEditing := m.focusedPanel == utils.RequestPanel && m.requestPane.IsEditing()
+		if keybindings.Matches(msg, m.keys.ContextHelp) && !isEditing {
+			m.openHelp(m.focusedContext())
 			return m, nil
 		}
-		// f1/f2/f3 jump directly to a panel from anywhere, including
-		// mid-edit in the request pane - unlike CyclePanel (shift+tab),
-		// which the request pane also needs for its own PrevField and so
-		// can't reliably reach a panel switch from there.
-		if keybindings.Matches(msg, m.keys.FocusSidebar) && noModalOpen {
-			m.focusPanel(utils.SidebarPanel)
+		if keybindings.Matches(msg, m.keys.PreviousPanel) {
+			m.movePanel(-1)
 			return m, nil
 		}
-		if keybindings.Matches(msg, m.keys.FocusRequest) && noModalOpen {
-			m.focusPanel(utils.RequestPanel)
+		if keybindings.Matches(msg, m.keys.NextPanel) {
+			m.movePanel(1)
 			return m, nil
 		}
-		if keybindings.Matches(msg, m.keys.FocusResponse) && noModalOpen {
-			m.focusPanel(utils.ResponsePanel)
+		if keybindings.Matches(msg, m.keys.CancelLoadTest) && m.loadTestCancel != nil {
+			m.loadTestCanceled = true
+			m.loadTestCancel()
+			m.notification = ui.Notification{Level: ui.NotificationWarning, Text: "Canceling load test…"}
 			return m, nil
 		}
-		// "f4" shows/hides the top banner from anywhere, the panels below
-		// it taking over whatever space it frees (see layout.go's
-		// headerHeight) - persisted so the next app start restores
-		// whatever visibility was last chosen.
-		if keybindings.Matches(msg, m.keys.ToggleHeader) && noModalOpen {
-			m.showHeader = !m.showHeader
-			m.resizeContentPanels()
-			return m, ui.SaveShowHeaderCmd(m.db, m.showHeader)
-		}
-		if keybindings.Matches(msg, m.keys.Quit) {
+		if keybindings.Matches(msg, m.keys.Quit) &&
+			(m.focusedPanel == utils.SidebarPanel || m.focusedPanel == utils.ResponsePanel) {
+			if m.loadTestCancel != nil {
+				m.loadTestCancel()
+			}
 			return m, tea.Quit
 		}
 		// "z" expands the response panel to the whole right column,
 		// hiding the request panel, while focused on it - the same key
-		// (checked before the panel-switch bindings above so it doesn't
-		// need its own noModalOpen/focus juggling) un-zooms it again, and
-		// so does leaving the response panel any other way (see
-		// focusPanel). Meaningless (and left unhandled) anywhere else.
+		// un-zooms it again, and so does leaving the response panel any
+		// other way (see setFocusedPanel). Meaningless (and left
+		// unhandled) anywhere else.
 		if keybindings.Matches(msg, m.keys.ToggleZoomResponse) && noModalOpen && m.focusedPanel == utils.ResponsePanel {
 			m.zoomedResponse = !m.zoomedResponse
+			m.resizeContentPanels()
 			return m, nil
 		}
 		// "t" (PickBodyStyle) puts the style picker's list in the request
@@ -129,25 +117,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keybindings.Matches(msg, m.keys.PickBodyStyle) && m.focusedPanel == utils.ResponsePanel {
 			m.zoomedResponse = false
 			// Un-zooming just now (above) only takes effect in
-			// requestHeight/requestWidth's own math starting this line -
-			// the next WindowSizeMsg (a real terminal resize) would
-			// eventually recompute this anyway, but that might be a long
-			// time from now, and the picker needs it sized correctly the
-			// instant it opens.
-			m.responsePane.SetStylePickerSize(m.requestWidth(), m.requestHeight())
+			// resizeContentPanels' own math starting this line - the next
+			// WindowSizeMsg (a real terminal resize) would eventually
+			// recompute this anyway, but that might be a long time from
+			// now, and the picker needs it sized correctly the instant it
+			// opens.
+			m.resizeContentPanels()
 		}
 		if keybindings.Matches(msg, m.keys.EscapePanel) {
-			if m.focusedPanel == utils.RequestPanel {
-				m.focusPanel(utils.SidebarPanel)
-				return m, nil
-			}
 			// Esc's own save-to-file/search/style-picker overlays (see
 			// SaveResponseRaw/SearchResponse/PickBodyStyle) take priority
 			// over the panel switch below - otherwise esc could never
 			// actually cancel any of them, since this would always
-			// intercept it first and switch panels instead.
-			if m.focusedPanel == utils.ResponsePanel && !m.responsePane.IsSavingToFile() && !m.responsePane.IsSearching() && !m.responsePane.IsPickingStyle() {
-				m.focusPanel(utils.RequestPanel)
+			// intercept it first and switch panels instead (it still
+			// reaches responsePane.Update below, which is what actually
+			// closes whichever overlay is open).
+			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle())
+			if !overlayOpen && m.focusedPanel != utils.SidebarPanel {
+				m.setFocusedPanel(utils.SidebarPanel)
 				return m, nil
 			}
 		}
@@ -157,14 +145,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// instead of immediately loading whatever's selected.
 			if m.focusedPanel == utils.SidebarPanel {
 				if item, ok := m.sidebarPane.SelectedItem(); ok {
-					m.focusPanel(utils.RequestPanel)
+					m.setFocusedPanel(utils.RequestPanel)
 					return m, ui.SetRequestPaneRequestCmd(item.Request)
 				}
 			}
 		}
 	case shortcutpane.CloseHelpModalMsg:
-		m.showHelpModal = false
-		m.shortcutPane.SetFocused(false)
+		m.closeHelp()
 		return m, nil
 
 	case groupspane.CloseGroupsModalMsg:
@@ -181,49 +168,76 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, ui.LoadRequestsCmd(m.db)
 
 	case importpane.ImportResultMsg:
-		var importModel tea.Model
-		importModel, cmd = m.importPane.Update(msg)
-		m.importPane = importModel.(importpane.ImportPane)
+		m.importPane, cmd = m.importPane.Update(msg)
 		return m, cmd
 
 	case http.ResultMsg:
 		m.requestPane.ResultMsgCleanup()
 		m.responsePane.SetResponse(msg.Response, msg.Request)
-		m.focusPanel(utils.ResponsePanel)
+		m.setFocusedPanel(utils.ResponsePanel)
+		switch {
+		case msg.Response == nil:
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request failed: empty response"}
+		case msg.Response.Error != "":
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request failed: " + msg.Response.Error}
+		case msg.Response.StatusCode >= 400:
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Request completed with " + msg.Response.Status}
+		default:
+			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request completed with " + msg.Response.Status}
+		}
 		return m, nil
 
 	case ui.RequestSavedMsg:
 		if msg.Err != nil {
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Save failed: " + msg.Err.Error()}
 			return m, nil
 		}
 		m.requestPane.MarkSaved(msg.Request)
+		m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request saved"}
 		return m, ui.LoadRequestsCmd(m.db)
 
 	case ui.RequestDeletedMsg:
 		if msg.Err != nil {
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Delete failed: " + msg.Err.Error()}
 			return m, nil
 		}
+		m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request deleted"}
 		return m, ui.LoadRequestsCmd(m.db)
 
 	case ui.RequestsLoadingMsg:
 		if msg.Err != nil {
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Loading requests failed: " + msg.Err.Error()}
 			return m, nil
 		}
-		var sidebarModel tea.Model
-		sidebarModel, cmd = m.sidebarPane.Update(msg)
-		m.sidebarPane = sidebarModel.(*ui.SidebarPane)
+		m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 		return m, cmd
+
+	case ui.NotificationMsg:
+		m.notification = msg.Notification
+		return m, nil
+
+	case responsepane.ResponseCopiedMsg:
+		if msg.Err != nil {
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Copy failed: " + msg.Err.Error()}
+		} else {
+			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Response copied"}
+		}
+		return m, nil
 
 	case http.LoadTestStartMsg:
 		updates := make(chan *http.LoadTestStats, 100)
 		m.loadTestUpdates = updates
+		runContext, cancel := context.WithCancel(context.Background())
+		m.loadTestCancel = cancel
+		m.loadTestCanceled = false
 
-		// start load test in background
 		go func() {
-			msg.Config.Run(context.Background(), updates)
+			msg.Config.Run(runContext, updates)
 		}()
 
-		m.responsePane.ClearLoadTestStats()
+		m.responsePane.SetLoadTestPending(msg.Config.TotalRequests)
+		m.notification = ui.Notification{Level: ui.NotificationInfo, Text: "Load test started"}
+		m.setFocusedPanel(utils.ResponsePanel)
 		return m, ui.WaitForLoadTestUpdatesCmd(updates, msg.Config.TotalRequests)
 
 	case http.LoadTestStatsMsg:
@@ -235,60 +249,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case http.LoadTestCompleteMsg:
-		// final update
 		m.loadTestUpdates = nil
+		m.loadTestCancel = nil
 		if msg.Stats != nil {
 			m.responsePane.SetLoadTestStats(msg.Stats)
 		}
 		m.requestPane.ExitLoadTestMode()
-		m.focusPanel(utils.ResponsePanel) // Switch focus to results
+		m.setFocusedPanel(utils.ResponsePanel)
+		switch {
+		case m.loadTestCanceled:
+			completed := 0
+			if msg.Stats != nil {
+				completed = msg.Stats.CompletedRequests
+			}
+			m.notification = ui.Notification{
+				Level: ui.NotificationWarning,
+				Text:  fmt.Sprintf("Load test canceled after %d requests", completed),
+			}
+		case msg.Stats == nil:
+			m.notification = ui.Notification{Level: ui.NotificationError, Text: "Load test ended without final statistics"}
+		case msg.Stats.FailedRequests > 0:
+			m.notification = ui.Notification{
+				Level: ui.NotificationError,
+				Text:  fmt.Sprintf("Load test complete: %d failed requests", msg.Stats.FailedRequests),
+			}
+		default:
+			m.notification = ui.Notification{
+				Level: ui.NotificationSuccess,
+				Text:  fmt.Sprintf("Load test complete: %d requests", msg.Stats.CompletedRequests),
+			}
+		}
+		m.loadTestCanceled = false
 		return m, nil
 
 	case http.LoadTestErrorMsg:
 		m.loadTestUpdates = nil
+		if m.loadTestCancel != nil {
+			m.loadTestCancel()
+			m.loadTestCancel = nil
+		}
 		m.requestPane.ExitLoadTestMode()
-		// TODO: Display error message
+		m.setFocusedPanel(utils.ResponsePanel)
+		errorText := "unknown error"
+		if msg.Error != nil {
+			errorText = msg.Error.Error()
+		}
+		m.notification = ui.Notification{Level: ui.NotificationError, Text: "Load test failed: " + errorText}
 		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-
-		// Update shortcut pane dimensions (modal sizing)
-		modalWidth := 60
-		modalHeight := 25
-		if m.width < 80 {
-			modalWidth = m.width - 10
-		}
-		if m.height < 30 {
-			modalHeight = m.height - 5
-		}
-		m.shortcutPane.SetWidth(modalWidth)
-		m.shortcutPane.SetHeight(modalHeight)
-		m.groupsPane.SetWidth(modalWidth)
-		m.groupsPane.SetHeight(modalHeight)
-		m.importPane.SetWidth(modalWidth)
-		m.importPane.SetHeight(modalHeight)
-
 		m.resizeContentPanels()
 	}
 
 	// Existing panel update routing (only when no modal is open)
 	if !m.showHelpModal && !m.showGroupsModal && !m.showImportModal {
 		if m.focusedPanel == utils.SidebarPanel {
-			var sidebarPaneModel tea.Model
-			sidebarPaneModel, cmd = m.sidebarPane.Update(msg)
-			m.sidebarPane = sidebarPaneModel.(*ui.SidebarPane)
+			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd
 		} else if m.focusedPanel == utils.RequestPanel {
-			m.requestPane.SetFocused(true)
-			var requestPaneModel tea.Model
-			requestPaneModel, cmd = m.requestPane.Update(msg)
-			m.requestPane = requestPaneModel.(requestpane.RequestPane)
+			m.requestPane, cmd = m.requestPane.Update(msg)
 			return m, cmd
 		} else if m.focusedPanel == utils.ResponsePanel {
-			var responsePaneModel tea.Model
-			responsePaneModel, cmd = m.responsePane.Update(msg)
-			m.responsePane = responsePaneModel.(*responsepane.ResponsePane)
+			m.responsePane, cmd = m.responsePane.Update(msg)
 			return m, cmd
 		}
 	}

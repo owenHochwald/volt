@@ -3,8 +3,8 @@ package requestpane
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -35,7 +35,7 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 	normalMode := &NormalMode{}
 
 	m := RequestPane{
-		FieldsViewport:      viewport.New(0, 0),
+		FieldsViewport:      viewport.New(),
 		MethodSelector:      methodSelector,
 		URLInput:            &urlInput,
 		NameInput:           &nameInput,
@@ -43,7 +43,7 @@ func SetupRequestPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) Reques
 		Body:                &body,
 		SubmitButton:        submitButton,
 		Client:              http.InitClient(0, false),
-		Stopwatch:           stopwatch.NewWithInterval(10 * time.Millisecond),
+		Stopwatch:           stopwatch.New(stopwatch.WithInterval(10 * time.Millisecond)),
 		Request:             http.NewDefaultRequest(),
 		DB:                  db,
 		keys:                keys,

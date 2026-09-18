@@ -3,7 +3,8 @@ package requestpane
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
 
@@ -17,6 +18,18 @@ var footerHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 // errorTextStyle renders a blocked-send reason (see ValidateParams) in the
 // footer, distinct from the plain help hint below it.
 var errorTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+// markInputError colors input's own typed text in errorTextStyle (both
+// focus states, since which one applies depends on whatever else is
+// currently focused) - the textinput.Model equivalent of the old v1
+// TextStyle field, which bubbles v2 replaced with a Styles()/SetStyles()
+// pair.
+func markInputError(input *textinput.Model) {
+	styles := input.Styles()
+	styles.Focused.Text = errorTextStyle
+	styles.Blurred.Text = errorTextStyle
+	input.SetStyles(styles)
+}
 
 // fieldOffset pairs a focusable with the 0-based line it starts on within
 // fieldsContent()'s rendered output - used to auto-scroll FieldsViewport so
@@ -194,7 +207,7 @@ func (m *RequestPane) scrollToFocused() {
 	// pgup/pgdown's jump size, but ensureLineVisible below needs the real
 	// height or it can scroll one line short, clipping exactly the field
 	// this is trying to reveal.
-	m.FieldsViewport.Height = max(m.Height-lipgloss.Height(m.renderFooter()), 1)
+	m.FieldsViewport.SetHeight(max(m.Height-lipgloss.Height(m.renderFooter()), 1))
 
 	current := m.FocusManager.Current()
 	for _, o := range offsets {
@@ -208,13 +221,13 @@ func (m *RequestPane) scrollToFocused() {
 // ensureLineVisible scrolls just enough to bring line within the viewport's
 // visible window, without otherwise disturbing the current scroll position.
 func (m *RequestPane) ensureLineVisible(line int) {
-	height := m.FieldsViewport.Height
+	height := m.FieldsViewport.Height()
 	if height <= 0 {
 		return
 	}
-	if line < m.FieldsViewport.YOffset {
+	if line < m.FieldsViewport.YOffset() {
 		m.FieldsViewport.SetYOffset(line)
-	} else if line >= m.FieldsViewport.YOffset+height {
+	} else if line >= m.FieldsViewport.YOffset()+height {
 		m.FieldsViewport.SetYOffset(line - height + 1)
 	}
 }
@@ -309,7 +322,7 @@ func (m RequestPane) View() string {
 	// clips to exactly its Height and can be scrolled (pgup/pgdown) to
 	// reach whatever doesn't fit.
 	footer := m.renderFooter()
-	m.FieldsViewport.Height = max(m.Height-lipgloss.Height(footer), 1)
+	m.FieldsViewport.SetHeight(max(m.Height-lipgloss.Height(footer), 1))
 	content, _ := m.fieldsContent()
 	m.FieldsViewport.SetContent(content)
 
@@ -381,7 +394,7 @@ func renderParamSection(title string, params []Param, showRequired bool) (string
 			// paramFocusables hands the focus cycle (&params[i].Input),
 			// not &p.Input (a copy's address, matching nothing).
 			if msg, ok := fieldError(p, showRequired); !ok {
-				p.Input.TextStyle = errorTextStyle
+				markInputError(&p.Input)
 				comment = errorTextStyle.Render("  ! " + msg)
 			}
 			field = p.Input.View()
@@ -433,7 +446,7 @@ func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []
 					focusable = f.Enum
 				} else {
 					if msg, ok := fieldError(f, showRequired); !ok {
-						f.Input.TextStyle = errorTextStyle
+						markInputError(&f.Input)
 						comment = errorTextStyle.Render("  ! " + msg)
 					}
 					field = f.Input.View()
@@ -457,7 +470,7 @@ func renderArrayParamSection(arrays []ArrayParam, showRequired bool) (string, []
 					focusable = f.Enum
 				} else {
 					if msg, ok := fieldError(f, showRequired); !ok {
-						f.Input.TextStyle = errorTextStyle
+						markInputError(&f.Input)
 						comment = errorTextStyle.Render("  ! " + msg)
 					}
 					field = f.Input.View()

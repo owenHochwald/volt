@@ -1,8 +1,8 @@
 package importpane
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
@@ -47,7 +47,7 @@ func newTextInput(placeholder string, charLimit, width int) textinput.Model {
 	ti := textinput.New()
 	ti.Placeholder = placeholder
 	ti.CharLimit = charLimit
-	ti.Width = width
+	ti.SetWidth(width)
 	return ti
 }
 
@@ -91,9 +91,9 @@ func (m *ImportPane) SetFocused(focused bool) {
 func (m *ImportPane) SetWidth(width int) {
 	m.width = width
 	w := max(width-10, 20)
-	m.pathInput.Width = w
-	m.groupInput.Width = w
-	m.baseURLInput.Width = w
+	m.pathInput.SetWidth(w)
+	m.groupInput.SetWidth(w)
+	m.baseURLInput.SetWidth(w)
 }
 
 func (m *ImportPane) SetHeight(height int) {

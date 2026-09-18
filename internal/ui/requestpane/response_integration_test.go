@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
@@ -48,11 +48,7 @@ func TestRequestPane_SendThenConnectionError_StillShowsBodyAndTiming(t *testing.
 	// Mirrors handleSubmit's own send-attempt path (see mode_normal.go) up
 	// to the point of actually dispatching the HTTP call, so this exercises
 	// the same resolvedRequest() a real send would use.
-	model, _ := pane.currentMode.HandleInput(&pane, tea.KeyMsg{Type: tea.KeyCtrlP})
-	result, ok := model.(*RequestPane)
-	if !ok {
-		t.Fatalf("expected *RequestPane, got %T", model)
-	}
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
 	if !result.RequestInProgress {
 		t.Fatalf("expected filled required fields to pass validation and start sending, got ParseErrors=%v", result.ParseErrors)
 	}
@@ -80,11 +76,8 @@ func TestRequestPane_SendThenConnectionError_StillShowsBodyAndTiming(t *testing.
 	// m.responsePane.SetResponse(msg.Response, msg.Request).
 	rp.SetResponse(errResp, sentReq)
 
-	tabModel, _ := rp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-	afterTab4, ok := tabModel.(*responsepane.ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", tabModel)
-	}
+	tabModel, _ := rp.Update(tea.KeyPressMsg(tea.Key{Code: '4', Text: "4"}))
+	afterTab4 := tabModel
 	requestTabContent := afterTab4.View()
 	for _, want := range []string{"POST", sentReq.URL, "server-1", "a@b.com"} {
 		if !strings.Contains(requestTabContent, want) {
@@ -92,11 +85,8 @@ func TestRequestPane_SendThenConnectionError_StillShowsBodyAndTiming(t *testing.
 		}
 	}
 
-	timingModel, _ := afterTab4.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
-	afterTab3, ok := timingModel.(*responsepane.ResponsePane)
-	if !ok {
-		t.Fatalf("expected *ResponsePane, got %T", timingModel)
-	}
+	timingModel, _ := afterTab4.Update(tea.KeyPressMsg(tea.Key{Code: '3', Text: "3"}))
+	afterTab3 := timingModel
 	timingContent := afterTab3.View()
 	if !strings.Contains(timingContent, "Request Timing") || !strings.Contains(timingContent, "no timing data available") {
 		t.Errorf("expected the Timing tab to explain a failed send has no real duration to show (not a misleading 0s/0ms), got:\n%s", timingContent)

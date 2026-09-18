@@ -3,7 +3,7 @@ package requestpane
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui"
 )
@@ -62,11 +62,7 @@ func TestRequestPane_ClearParams_Keybinding(t *testing.T) {
 	pane.reinitRequestPane(req)
 	pane.BodyParams[0].Input.SetValue("widget-1")
 
-	model, _ := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
-	result, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	result, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: 'x', Mod: tea.ModCtrl}))
 	if len(result.BodyParams) != 1 || result.BodyParams[0].Value() != "" {
 		t.Errorf("expected ctrl+x to clear the body param, got %+v", result.BodyParams)
 	}
@@ -95,10 +91,7 @@ func TestRequestPane_SaveRequest_PersistsFilledInValues(t *testing.T) {
 	pane.PathParams[0].Input.SetValue("42")
 	pane.BodyParams[0].Input.SetValue("widget-1")
 
-	model, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	if _, ok := model.(RequestPane); !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	_, cmd := pane.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
 	if cmd == nil {
 		t.Fatal("expected a non-nil save command")
 	}
@@ -142,17 +135,13 @@ func TestRequestPane_SaveRequest_AfterClear_PersistsClearedValues(t *testing.T) 
 	pane.BodyParams[0].Input.SetValue("widget-1")
 
 	// First save: filled-in value lands in the DB.
-	model, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	pane = model.(RequestPane)
+	pane, cmd := pane.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
 	cmd()
 
 	// Clear, then save again: the cleared (empty) state must be what's
 	// persisted for this second save, not the earlier filled-in value.
 	pane.clearParamValues()
-	model2, cmd2 := pane.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	if _, ok := model2.(RequestPane); !ok {
-		t.Fatalf("expected RequestPane, got %T", model2)
-	}
+	_, cmd2 := pane.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
 	if cmd2 == nil {
 		t.Fatal("expected a non-nil save command")
 	}
@@ -241,11 +230,7 @@ func TestRequestPane_SetRequestPaneRequestMsg_RestoresParamValues(t *testing.T) 
 		},
 	}
 
-	model, _ := pane.Update(ui.SetRequestPaneRequestMsg{Request: saved})
-	result, ok := model.(RequestPane)
-	if !ok {
-		t.Fatalf("expected RequestPane, got %T", model)
-	}
+	result, _ := pane.Update(ui.SetRequestPaneRequestMsg{Request: saved})
 	if len(result.PathParams) != 1 || result.PathParams[0].Value() != "99" {
 		t.Errorf("expected host_id=99 restored via the normal load path, got %+v", result.PathParams)
 	}
