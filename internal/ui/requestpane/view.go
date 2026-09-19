@@ -294,10 +294,16 @@ func (m RequestPane) renderFooter() string {
 	// height reserved for it and fell out of alignment with the sidebar.
 	footerWidth := max(m.Width, 1)
 	var helpText string
+	// "navigate" only ever meant tab/shift+tab - arrow keys have never
+	// moved focus between fields (up/down would collide with moving the
+	// cursor inside a multi-line Body/Headers textarea) - this used to
+	// claim "tab/↑/↓" (and, below, "←/→ or h/l" for the method and
+	// "ctrl+x: reset" for the actually-ctrl+r reset), which a user
+	// reported as literally not working since it never did.
 	if m.LoadTestMode {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
 	} else {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • ctrl+x: reset • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • h/l: change method • ctrl+p: send • ctrl+r: reset • ctrl+x: clear params • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
 	}
 
 	// A blocked send (a body param outside its schema's min/maxLength or
