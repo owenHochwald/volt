@@ -58,26 +58,10 @@ func saveBodyStyle(configDir, name string) error {
 		return fmt.Errorf("body style cannot be empty")
 	}
 
-	current := loadConfigFile(configDir)
-	theme := current.Theme
-	if theme == "" {
-		// Nothing's ever been saved to config.yaml yet (SaveThemeSelection
-		// requires a non-empty theme to round-trip - see
-		// loadSavedThemeSelection) - "default" matches DefaultTheme, the
-		// same fallback loadUserTheme itself reaches for when nothing's
-		// configured.
-		theme = "default"
-	}
-	motion := current.Motion
-	if motion == "" {
-		motion = MotionSystem
-	}
-	return writeConfigFile(configDir, AppConfig{
-		Version:   ThemeSchemaVersion,
-		Theme:     theme,
-		Motion:    motion,
-		BodyStyle: name,
-	})
+	config := loadConfigFile(configDir)
+	applyConfigDefaults(&config)
+	config.BodyStyle = name
+	return writeConfigFile(configDir, config)
 }
 
 // LoadBodyStyle returns the style name saved by SaveBodyStyle, or ("", nil)
@@ -86,9 +70,100 @@ func saveBodyStyle(configDir, name string) error {
 // own default in that case, the same way a missing/unset theme selection
 // falls back to DefaultTheme.
 func LoadBodyStyle() (string, error) {
+	config, err := loadUserConfig()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(config.BodyStyle), nil
+}
+
+// SaveAutoRememberCookies persists enabled - whether the response pane's
+// cookie/auth-header jar (see internal/authjar) captures a response's
+// Set-Cookie headers automatically, or only when the user explicitly asks
+// it to (see responsepane's "c") - to the same config.yaml the theme
+// selection and body style live in. Toggled from the Command Center's
+// Settings surface (see shortcutpane.ToggleAutoRememberCookiesMsg).
+func SaveAutoRememberCookies(enabled bool) error {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("find user config directory: %w", err)
+		return fmt.Errorf("find user config directory: %w", err)
+	}
+	return saveAutoRememberCookies(configDir, enabled)
+}
+
+func saveAutoRememberCookies(configDir string, enabled bool) error {
+	config := loadConfigFile(configDir)
+	applyConfigDefaults(&config)
+	config.AutoRememberCookies = enabled
+	return writeConfigFile(configDir, config)
+}
+
+// LoadAutoRememberCookies returns the setting saved by
+// SaveAutoRememberCookies, or (false, nil) if it was never explicitly
+// set - false is also the correct default for a fresh install (see
+// AppConfig's own field comment).
+func LoadAutoRememberCookies() (bool, error) {
+	config, err := loadUserConfig()
+	if err != nil {
+		return false, err
+	}
+	return config.AutoRememberCookies, nil
+}
+
+// SaveAutoRememberAuthHeaders/LoadAutoRememberAuthHeaders mirror
+// SaveAutoRememberCookies/LoadAutoRememberCookies for the jar's other
+// half - remembering the Authorization header a request was sent with
+// (see responsepane's "c"), independently togglable from cookie capture.
+func SaveAutoRememberAuthHeaders(enabled bool) error {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("find user config directory: %w", err)
+	}
+	return saveAutoRememberAuthHeaders(configDir, enabled)
+}
+
+func saveAutoRememberAuthHeaders(configDir string, enabled bool) error {
+	config := loadConfigFile(configDir)
+	applyConfigDefaults(&config)
+	config.AutoRememberAuthHeaders = enabled
+	return writeConfigFile(configDir, config)
+}
+
+func LoadAutoRememberAuthHeaders() (bool, error) {
+	config, err := loadUserConfig()
+	if err != nil {
+		return false, err
+	}
+	return config.AutoRememberAuthHeaders, nil
+}
+
+// applyConfigDefaults fills in Version/Theme/Motion when config was just
+// loadConfigFile's zero value (nothing's ever been saved yet) - "default"
+// matches DefaultTheme, the same fallback loadUserTheme itself reaches
+// for when nothing's configured, and config.yaml must round-trip with a
+// non-empty Version/Theme (see loadSavedThemeSelection) even when the
+// field actually being saved is BodyStyle or one of the AutoRemember
+// flags, not Theme itself.
+func applyConfigDefaults(config *AppConfig) {
+	config.Version = ThemeSchemaVersion
+	if config.Theme == "" {
+		config.Theme = "default"
+	}
+	if config.Motion == "" {
+		config.Motion = MotionSystem
+	}
+}
+
+// loadUserConfig reads the real config.yaml (os.UserConfigDir, with the
+// ~/.volt fallback loadSavedThemeSelection also checks), returning a
+// zero-value AppConfig if none exists yet - shared by LoadBodyStyle/
+// LoadAutoRememberCookies/LoadAutoRememberAuthHeaders, none of which need
+// loadSavedThemeSelection's own theme-specific validation (a non-empty,
+// schema-versioned Theme).
+func loadUserConfig() (AppConfig, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return AppConfig{}, fmt.Errorf("find user config directory: %w", err)
 	}
 	homeDir, _ := os.UserHomeDir()
 
@@ -98,15 +173,15 @@ func LoadBodyStyle() (string, error) {
 			continue
 		}
 		if err != nil {
-			return "", fmt.Errorf("read %s: %w", path, err)
+			return AppConfig{}, fmt.Errorf("read %s: %w", path, err)
 		}
 		var config AppConfig
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			return "", fmt.Errorf("parse %s: %w", path, err)
+			return AppConfig{}, fmt.Errorf("parse %s: %w", path, err)
 		}
-		return strings.TrimSpace(config.BodyStyle), nil
+		return config, nil
 	}
-	return "", nil
+	return AppConfig{}, nil
 }
 
 // loadConfigFile best-effort reads configDir's own config.yaml (not the

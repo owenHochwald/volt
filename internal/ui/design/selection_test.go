@@ -116,3 +116,72 @@ func TestLoadBodyStyle_RoundTrips(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "nord", got)
 }
+
+// TestLoadAutoRememberCookies_DefaultsToFalse verifies a fresh install (no
+// config.yaml at all) never starts silently remembering session state.
+func TestLoadAutoRememberCookies_DefaultsToFalse(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	got, err := LoadAutoRememberCookies()
+	assert.NoError(t, err)
+	assert.False(t, got)
+}
+
+func TestAutoRememberCookies_RoundTrips(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	assert.NoError(t, SaveAutoRememberCookies(true))
+	got, err := LoadAutoRememberCookies()
+	assert.NoError(t, err)
+	assert.True(t, got)
+
+	assert.NoError(t, SaveAutoRememberCookies(false))
+	got, err = LoadAutoRememberCookies()
+	assert.NoError(t, err)
+	assert.False(t, got)
+}
+
+func TestAutoRememberAuthHeaders_RoundTrips(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	assert.NoError(t, SaveAutoRememberAuthHeaders(true))
+	got, err := LoadAutoRememberAuthHeaders()
+	assert.NoError(t, err)
+	assert.True(t, got)
+
+	assert.NoError(t, SaveAutoRememberAuthHeaders(false))
+	got, err = LoadAutoRememberAuthHeaders()
+	assert.NoError(t, err)
+	assert.False(t, got)
+}
+
+// TestAutoRememberCookies_ToggleDoesNotAffectAuthHeaders (and its mirror)
+// are regression tests for the two flags sharing one config.yaml, the
+// same class of bug TestSaveBodyStylePreservesExistingTheme guards
+// against: saving one flag must never clobber the other, BodyStyle, or
+// Theme.
+func TestAutoRememberCookies_ToggleDoesNotAffectAuthHeaders(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveThemeSelection(configDir, "mono"))
+	assert.NoError(t, saveBodyStyle(configDir, "nord"))
+	assert.NoError(t, saveAutoRememberAuthHeaders(configDir, true))
+
+	assert.NoError(t, saveAutoRememberCookies(configDir, true))
+
+	config := loadConfigFile(configDir)
+	assert.Equal(t, "mono", config.Theme)
+	assert.Equal(t, "nord", config.BodyStyle)
+	assert.True(t, config.AutoRememberAuthHeaders)
+	assert.True(t, config.AutoRememberCookies)
+}
+
+func TestAutoRememberAuthHeaders_ToggleDoesNotAffectCookies(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveAutoRememberCookies(configDir, true))
+
+	assert.NoError(t, saveAutoRememberAuthHeaders(configDir, true))
+
+	config := loadConfigFile(configDir)
+	assert.True(t, config.AutoRememberCookies)
+	assert.True(t, config.AutoRememberAuthHeaders)
+}

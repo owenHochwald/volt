@@ -9,11 +9,19 @@ type ColorValue string
 // style (see responsepane's style picker) - stored alongside the theme
 // rather than in the database, since both are the same kind of thing:
 // a user's persisted display preference, not application data.
+// AutoRememberCookies/AutoRememberAuthHeaders control whether the
+// response pane's cookie/auth-header jar (see internal/authjar) captures
+// automatically on every response, or only when the user explicitly asks
+// it to (see responsepane's "c"/"v" actions) - each defaults to false
+// (omitted from a freshly-written config entirely, via omitempty) so a
+// fresh install never starts silently remembering session state.
 type AppConfig struct {
-	Version   int        `yaml:"version"`
-	Theme     string     `yaml:"theme"`
-	Motion    MotionMode `yaml:"motion"`
-	BodyStyle string     `yaml:"body_style,omitempty"`
+	Version                 int        `yaml:"version"`
+	Theme                   string     `yaml:"theme"`
+	Motion                  MotionMode `yaml:"motion"`
+	BodyStyle               string     `yaml:"body_style,omitempty"`
+	AutoRememberCookies     bool       `yaml:"auto_remember_cookies,omitempty"`
+	AutoRememberAuthHeaders bool       `yaml:"auto_remember_auth_headers,omitempty"`
 }
 
 // ThemeConfig is the parsed, unresolved representation of a user theme.
