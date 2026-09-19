@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/authjar"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -121,8 +122,9 @@ type ResponsePane struct {
 	// something like a minified HTML page). Browsing the list only ever
 	// changes what effectiveBodyStyle returns, never bodyStyleName itself
 	// - so esc cancelling has nothing to undo, and only enter (see
-	// confirmStylePicker) actually applies and persists (see DB below) the
-	// selection. stylePickerWidth/Height are the request pane's own box
+	// confirmStylePicker) actually applies and persists (see
+	// design.SaveBodyStyle) the selection. stylePickerWidth/Height are the
+	// request pane's own box
 	// dimensions (set by app/update.go's WindowSizeMsg handling, the same
 	// way requestPane.SetHeight/SetWidth already are - see
 	// SetStylePickerSize), since that's the box the list is sized to fill,
@@ -130,6 +132,24 @@ type ResponsePane struct {
 	pickingStyle                        bool
 	styleList                           list.Model
 	stylePickerWidth, stylePickerHeight int
+
+	// jar remembers cookies and authorization headers per host, in memory
+	// only (see internal/authjar) - nil-safe, like DB below, so tests that
+	// never call SetJar just get no capture/injection at all rather than
+	// a nil-pointer panic. autoRememberCookies/autoRememberAuthHeaders
+	// (see SetAutoRememberCookies/SetAutoRememberAuthHeaders) gate whether
+	// SetResponse captures automatically on every response - independent
+	// of CaptureAuth ("c" - see jar_capture.go), which always captures
+	// regardless of these. viewingJar/jarList/jarViewerWidth/Height drive
+	// ViewAuthJar ("v" - see jar_viewer.go), the same request-pane-slot
+	// overlay pattern pickingStyle/styleList/stylePickerWidth/Height above
+	// already use for the style picker.
+	jar                             *authjar.Store
+	autoRememberCookies             bool
+	autoRememberAuthHeaders         bool
+	viewingJar                      bool
+	jarList                         list.Model
+	jarViewerWidth, jarViewerHeight int
 
 	keys   keybindings.KeyMap
 	styles design.Styles
@@ -182,6 +202,40 @@ func (m *ResponsePane) IsGotoPending() bool {
 	return m.gPending
 }
 
+// IsViewingJar reports whether the saved-cookies/auth-headers viewer (see
+// ViewAuthJar, "v") is currently open - checked by app/update.go for the
+// same reason as IsSavingToFile/IsSearching/IsPickingStyle/IsGotoPending:
+// so esc closes the viewer first instead of the panel-switch swallowing
+// it before the viewer ever sees it.
+func (m *ResponsePane) IsViewingJar() bool {
+	return m.viewingJar
+}
+
+// SetJar wires the shared in-memory cookie/auth-header jar (see
+// internal/authjar) into this pane - called once from app.SetupModel with
+// the same *authjar.Store handed to requestpane.RequestPane.SetJar, so
+// what's captured here is what actually gets injected into future
+// requests. Left nil (the zero value) in tests that never call this is
+// safe - every authjar.Store method is nil-receiver-safe.
+func (m *ResponsePane) SetJar(jar *authjar.Store) {
+	m.jar = jar
+}
+
+// SetAutoRememberCookies/SetAutoRememberAuthHeaders gate whether
+// SetResponse captures a response's Set-Cookie headers / the sent
+// request's Authorization header automatically on every response, or
+// only when the user explicitly presses CaptureAuth ("c") - see
+// jar_capture.go. Called once at startup with the persisted setting (see
+// design.LoadAutoRememberCookies/LoadAutoRememberAuthHeaders) and again
+// every time it's toggled from the Command Center's Settings surface.
+func (m *ResponsePane) SetAutoRememberCookies(enabled bool) {
+	m.autoRememberCookies = enabled
+}
+
+func (m *ResponsePane) SetAutoRememberAuthHeaders(enabled bool) {
+	m.autoRememberAuthHeaders = enabled
+}
+
 func (m *ResponsePane) SetStyles(styles design.Styles) {
 	m.styles = styles
 	if m.isLoadTest {
@@ -203,6 +257,12 @@ func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Re
 	m.SentRequest = sentRequest
 	m.isLoadTest = false
 	m.resetLoadTestSeries(time.Time{})
+	if m.autoRememberCookies {
+		m.captureCookies()
+	}
+	if m.autoRememberAuthHeaders {
+		m.captureAuthHeader()
+	}
 	m.updateViewportForActiveTab()
 }
 
@@ -282,6 +342,18 @@ func (m *ResponsePane) SetStylePickerSize(width, height int) {
 	m.stylePickerHeight = height
 	if m.pickingStyle {
 		m.resizeStyleList()
+	}
+}
+
+// SetJarViewerSize sizes the saved-cookies/auth-headers viewer's list (see
+// JarViewerListView) the same way SetStylePickerSize sizes the style
+// picker's - the request pane's own box dimensions, called from
+// app/update.go's WindowSizeMsg handling.
+func (m *ResponsePane) SetJarViewerSize(width, height int) {
+	m.jarViewerWidth = width
+	m.jarViewerHeight = height
+	if m.viewingJar {
+		m.resizeJarList()
 	}
 }
 

@@ -93,6 +93,17 @@ type KeyMap struct {
 	// leaving the response panel any other way (see app.Model.setFocusedPanel).
 	ToggleZoomResponse key.Binding
 
+	// CaptureAuth ("c") remembers the current response's Set-Cookie
+	// headers and the sent request's Authorization header for its host
+	// (see internal/authjar), regardless of the auto-remember settings -
+	// those only gate whether the same capture also happens automatically
+	// on every response (see responsepane.ResponsePane.SetResponse).
+	// ViewAuthJar ("v") opens a list of everything currently remembered
+	// for the response's host, letting individual entries be deleted or
+	// everything cleared at once - see responsepane's jar_viewer.go.
+	CaptureAuth key.Binding
+	ViewAuthJar key.Binding
+
 	// Help modal
 	CloseHelp     key.Binding
 	NextTab       key.Binding
@@ -161,6 +172,8 @@ func DefaultKeyMap() KeyMap {
 		SearchPrevFromPosition: registry.MustBinding(ActionSearchPrevFromPos),
 		PickBodyStyle:          registry.MustBinding(ActionPickBodyStyle),
 		ToggleZoomResponse:     registry.MustBinding(ActionToggleZoomResponse),
+		CaptureAuth:            registry.MustBinding(ActionCaptureAuth),
+		ViewAuthJar:            registry.MustBinding(ActionViewAuthJar),
 		CloseHelp:              registry.MustBinding(ActionCloseHelp),
 		NextTab:                registry.MustBinding(ActionNextHelpTab),
 		PrevTab:                registry.MustBinding(ActionPreviousHelpTab),

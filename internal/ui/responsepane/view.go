@@ -80,7 +80,7 @@ func (m ResponsePane) footerHint() string {
 	if m.wrapBody {
 		wrapHint = "w: unwrap"
 	}
-	hint := fmt.Sprintf("%s · %s · s: save to file · y: copy · /: search (regex) · gg/G: top/bottom · t: style", rawHint, wrapHint)
+	hint := fmt.Sprintf("%s · %s · s: save to file · y: copy · /: search (regex) · gg/G: top/bottom · t: style · c: remember auth · v: view saved", rawHint, wrapHint)
 	if m.searchQuery != "" && len(m.searchMatches) > 0 {
 		hint = fmt.Sprintf("/%s (%d/%d) · n/b: next/prev · N/P: next/prev from here · %s", m.searchQuery, m.searchMatchIdx+1, len(m.searchMatches), hint)
 	}
@@ -245,7 +245,26 @@ func (m ResponsePane) renderHeaderBar() string {
 		duration += " (direct)"
 	}
 	size := fmt.Sprintf(" %s", utils.FormatSize(len(m.Response.Body)))
-	return lipgloss.JoinHorizontal(lipgloss.Left, " | ", status, " | ", duration, " | ", size)
+	parts := []string{" | ", status, " | ", duration, " | ", size}
+	if indicator := m.jarIndicator(); indicator != "" {
+		parts = append(parts, " | ", indicator)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Left, parts...)
+}
+
+// jarIndicator renders a short hint when something's remembered (see
+// internal/authjar) for the current response's host - "" when there's
+// nothing to show, so a request with no saved cookies/auth doesn't
+// clutter the status bar.
+func (m ResponsePane) jarIndicator() string {
+	host := m.currentHost()
+	if host == "" {
+		return ""
+	}
+	if m.jar.Snapshot(host).IsEmpty() {
+		return ""
+	}
+	return m.styles.Text.Muted.Render("🔑 saved for " + host)
 }
 
 // renderActiveTabContent renders the content for the currently active tab.

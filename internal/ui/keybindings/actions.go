@@ -84,6 +84,8 @@ const (
 	ActionSearchPrevFromPos  ActionID = "search_prev_from_position"
 	ActionPickBodyStyle      ActionID = "pick_body_style"
 	ActionToggleZoomResponse ActionID = "toggle_zoom_response"
+	ActionCaptureAuth        ActionID = "capture_auth"
+	ActionViewAuthJar        ActionID = "view_auth_jar"
 
 	ActionCloseGroups ActionID = "close_groups"
 	ActionCloseImport ActionID = "close_import"
@@ -242,6 +244,8 @@ func DefaultRegistry() Registry {
 		// purely so it's listed. The leading "g" matters: without it,
 		// digits are ActionDirectTab's own tab-jump instead.
 		{ActionGotoLine, []Context{ContextResponse}, nil, "g{n}g", "go to line n", 36},
+		{ActionCaptureAuth, []Context{ContextResponse}, []string{"c"}, "c", "remember cookies & auth for server", 35},
+		{ActionViewAuthJar, []Context{ContextResponse}, []string{"v"}, "v", "view/reset saved cookies & auth", 34},
 
 		{ActionCloseGroups, []Context{ContextGroups}, []string{"q", "esc"}, "q/esc", "close", 80},
 		{ActionCreateItem, []Context{ContextGroups}, []string{"n"}, "n", "new", 70},

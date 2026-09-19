@@ -72,6 +72,12 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 			return m.handleStylePickerKey(msg)
 		}
 
+		// The saved-cookies/auth-headers viewer (see ViewAuthJar) claims
+		// every key while open, same reason as the filename prompt above.
+		if m.viewingJar {
+			return m.handleJarViewerKey(msg)
+		}
+
 		// gg (go to top) / g{n}g (go to line n) - see navigation.go. Armed
 		// by a bare "g" below; while armed, every key either continues the
 		// sequence or cancels it and falls through to be handled normally.
@@ -117,6 +123,24 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 		if keybindings.Matches(msg, m.keys.PickBodyStyle) {
 			if !m.isLoadTest {
 				m.openStylePicker()
+			}
+			return m, nil
+		}
+
+		// "c" remembers this response's cookies/auth header for its host
+		// (see jar_capture.go) regardless of the auto-remember settings;
+		// "v" opens the viewer over whatever's currently remembered (see
+		// jar_viewer.go). Both meaningless in load-test mode - there's no
+		// single response/host to key by there.
+		if keybindings.Matches(msg, m.keys.CaptureAuth) {
+			if !m.isLoadTest {
+				m.captureNow()
+			}
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.ViewAuthJar) {
+			if !m.isLoadTest {
+				m.openJarViewer()
 			}
 			return m, nil
 		}
