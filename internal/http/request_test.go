@@ -55,6 +55,27 @@ func TestRequest_Validate(t *testing.T) {
 	}
 }
 
+func TestHostOf(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"absolute https", "https://api.example.com/v1/pets", "api.example.com"},
+		{"absolute http with port", "http://localhost:8080/health", "localhost:8080"},
+		{"mixed case host is lowercased", "https://API.Example.COM/v1", "api.example.com"},
+		{"relative group path has no host", "/v1/pets", ""},
+		{"empty URL has no host", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HostOf(tt.url); got != tt.want {
+				t.Errorf("HostOf(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRequestValidateRejectsMalformedJSON(t *testing.T) {
 	request := &Request{
 		Method:  POST,

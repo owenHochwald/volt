@@ -166,6 +166,21 @@ func (r *Request) EffectiveURL(server *Server) string {
 	return strings.TrimRight(server.BaseURL, "/") + r.URL
 }
 
+// HostOf returns rawURL's host (lowercased, including a non-default port
+// if one's given - e.g. "api.example.com:8443") for a fully-resolved,
+// absolute URL, or "" if rawURL can't be parsed as one (a still-relative
+// group path with no server to resolve it against, or garbage input).
+// Used to key the in-memory per-host cookie/auth-header jar (see
+// internal/authjar) - independent of whether a request has a ServerID at
+// all, since an ad-hoc absolute-URL request with none still has a host.
+func HostOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return strings.ToLower(u.Host)
+}
+
 func isJSONRequest(headers map[string]string) bool {
 	for key, value := range headers {
 		if strings.EqualFold(key, "Content-Type") && strings.Contains(strings.ToLower(value), "application/json") {
