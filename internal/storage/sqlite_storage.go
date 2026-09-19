@@ -441,8 +441,12 @@ func (s *SQLiteStorage) SaveServer(server *http.Server) error {
 	if err != nil {
 		return err
 	}
-	q := `INSERT INTO servers (name, base_url, headers) VALUES (?, ?, ?)`
-	res, err := s.db.Exec(q, server.Name, server.BaseURL, headerString)
+	variableString, err := serializeHeaders(server.Variables)
+	if err != nil {
+		return err
+	}
+	q := `INSERT INTO servers (name, base_url, headers, variables) VALUES (?, ?, ?, ?)`
+	res, err := s.db.Exec(q, server.Name, server.BaseURL, headerString, variableString)
 	if err != nil {
 		return err
 	}
@@ -455,22 +459,22 @@ func (s *SQLiteStorage) SaveServer(server *http.Server) error {
 }
 
 func (s *SQLiteStorage) GetServerByName(name string) (*http.Server, error) {
-	q := `SELECT id, name, base_url, headers FROM servers WHERE name = ?`
+	q := `SELECT id, name, base_url, headers, variables FROM servers WHERE name = ?`
 	return scanServer(s.db.QueryRow(q, name))
 }
 
 func (s *SQLiteStorage) GetServerByID(id int64) (*http.Server, error) {
-	q := `SELECT id, name, base_url, headers FROM servers WHERE id = ?`
+	q := `SELECT id, name, base_url, headers, variables FROM servers WHERE id = ?`
 	return scanServer(s.db.QueryRow(q, id))
 }
 
-// scanServer reads one servers row (id, name, base_url, headers) from a
-// *sql.Row, shared by GetServerByName/GetServerByID so the headers
-// deserialization only lives in one place.
+// scanServer reads one servers row (id, name, base_url, headers,
+// variables) from a *sql.Row, shared by GetServerByName/GetServerByID so
+// the headers/variables deserialization only lives in one place.
 func scanServer(row *sql.Row) (*http.Server, error) {
 	var server http.Server
-	var headerString string
-	err := row.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString)
+	var headerString, variableString string
+	err := row.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString, &variableString)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -481,12 +485,17 @@ func scanServer(row *sql.Row) (*http.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	variables, err := deserializeHeaders(variableString)
+	if err != nil {
+		return nil, err
+	}
 	server.Headers = headers
+	server.Variables = variables
 	return &server, nil
 }
 
 func (s *SQLiteStorage) ListServers() ([]http.Server, error) {
-	q := `SELECT id, name, base_url, headers FROM servers ORDER BY name`
+	q := `SELECT id, name, base_url, headers, variables FROM servers ORDER BY name`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -496,15 +505,20 @@ func (s *SQLiteStorage) ListServers() ([]http.Server, error) {
 	var servers []http.Server
 	for rows.Next() {
 		var server http.Server
-		var headerString string
-		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString); err != nil {
+		var headerString, variableString string
+		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString, &variableString); err != nil {
 			return nil, err
 		}
 		headers, err := deserializeHeaders(headerString)
 		if err != nil {
 			return nil, err
 		}
+		variables, err := deserializeHeaders(variableString)
+		if err != nil {
+			return nil, err
+		}
 		server.Headers = headers
+		server.Variables = variables
 		servers = append(servers, server)
 	}
 	return servers, nil
@@ -520,6 +534,22 @@ func (s *SQLiteStorage) UpdateServerHeaders(name string, headers map[string]stri
 	}
 	q := `UPDATE servers SET headers = ? WHERE name = ?`
 	res, err := s.db.Exec(q, headerString, name)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "server", name)
+}
+
+// UpdateServerVariables replaces the named server's {{name}} placeholder
+// values - the ones substituted into every request that resolves against
+// it (see http.SubstituteVariables).
+func (s *SQLiteStorage) UpdateServerVariables(name string, variables map[string]string) error {
+	variableString, err := serializeHeaders(variables)
+	if err != nil {
+		return err
+	}
+	q := `UPDATE servers SET variables = ? WHERE name = ?`
+	res, err := s.db.Exec(q, variableString, name)
 	if err != nil {
 		return err
 	}
@@ -809,7 +839,7 @@ func (s *SQLiteStorage) RemoveGroupServer(groupName, serverName string) error {
 // database. An empty (non-nil) slice, not an error, when the group allows
 // none yet.
 func (s *SQLiteStorage) ListGroupServers(groupID int64) ([]http.Server, error) {
-	q := `SELECT s.id, s.name, s.base_url, s.headers FROM group_servers gs JOIN servers s ON s.id = gs.server_id WHERE gs.group_id = ? ORDER BY s.name`
+	q := `SELECT s.id, s.name, s.base_url, s.headers, s.variables FROM group_servers gs JOIN servers s ON s.id = gs.server_id WHERE gs.group_id = ? ORDER BY s.name`
 	rows, err := s.db.Query(q, groupID)
 	if err != nil {
 		return nil, err
@@ -819,15 +849,20 @@ func (s *SQLiteStorage) ListGroupServers(groupID int64) ([]http.Server, error) {
 	servers := make([]http.Server, 0)
 	for rows.Next() {
 		var server http.Server
-		var headerString string
-		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString); err != nil {
+		var headerString, variableString string
+		if err := rows.Scan(&server.ID, &server.Name, &server.BaseURL, &headerString, &variableString); err != nil {
 			return nil, err
 		}
 		headers, err := deserializeHeaders(headerString)
 		if err != nil {
 			return nil, err
 		}
+		variables, err := deserializeHeaders(variableString)
+		if err != nil {
+			return nil, err
+		}
 		server.Headers = headers
+		server.Variables = variables
 		servers = append(servers, server)
 	}
 	return servers, rows.Err()
@@ -896,7 +931,7 @@ func (s *SQLiteStorage) ResolveEffectiveServer(request *http.Request) (*http.Ser
 		return nil, nil
 	}
 
-	q := `SELECT s.id, s.name, s.base_url, s.headers FROM request_groups g JOIN servers s ON s.id = g.server_id WHERE g.id = ?`
+	q := `SELECT s.id, s.name, s.base_url, s.headers, s.variables FROM request_groups g JOIN servers s ON s.id = g.server_id WHERE g.id = ?`
 	server, err := scanServer(s.db.QueryRow(q, *request.GroupID))
 	if err != nil {
 		return nil, err

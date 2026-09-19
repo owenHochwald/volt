@@ -395,6 +395,41 @@ func TestSQLiteStorage_ServerHeaders(t *testing.T) {
 	assert.Error(t, db.UpdateServerHeaders("nope", map[string]string{"a": "b"}))
 }
 
+// TestSQLiteStorage_ServerVariables mirrors TestSQLiteStorage_ServerHeaders
+// for the {{name}} placeholder values a server carries (see
+// http.SubstituteVariables) - independent of Headers, sharing the same
+// servers row.
+func TestSQLiteStorage_ServerVariables(t *testing.T) {
+	db := setupTestDB(t)
+
+	server := &http.Server{Name: "prod", BaseURL: "https://api.example.com"}
+	assert.NoError(t, db.SaveServer(server))
+
+	found, err := db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Zero(t, len(found.Variables), "a freshly created server has no variables")
+
+	assert.NoError(t, db.UpdateServerVariables("prod", map[string]string{"token": "abc123", "host": "api.example.com"}))
+
+	found, err = db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", found.Variables["token"])
+	assert.Equal(t, "api.example.com", found.Variables["host"])
+
+	byID, err := db.GetServerByID(found.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, found.Variables, byID.Variables)
+
+	// Replacing variables overwrites the whole set, not a merge.
+	assert.NoError(t, db.UpdateServerVariables("prod", map[string]string{"token": "xyz789"}))
+	found, err = db.GetServerByName("prod")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(found.Variables))
+	assert.Equal(t, "xyz789", found.Variables["token"])
+
+	assert.Error(t, db.UpdateServerVariables("nope", map[string]string{"a": "b"}))
+}
+
 func TestSQLiteStorage_ResolveEffectiveServer(t *testing.T) {
 	db := setupTestDB(t)
 
