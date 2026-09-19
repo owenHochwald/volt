@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/authjar"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -87,7 +88,17 @@ type RequestPane struct {
 
 	RequestInProgress bool
 
-	DB     *storage.SQLiteStorage
+	DB *storage.SQLiteStorage
+
+	// Jar remembers cookies and authorization headers per host, in memory
+	// only (see internal/authjar) - consulted by resolvedRequest to
+	// inject them into every request sent to a matching host, as the
+	// lowest-precedence layer (server headers and the request's own
+	// headers both still override it - see mergeHeaders). Nil-safe, like
+	// DB above: left unset (as in most tests), resolvedRequest just
+	// injects nothing.
+	Jar *authjar.Store
+
 	keys   keybindings.KeyMap
 	styles design.Styles
 
@@ -121,6 +132,14 @@ func (m *RequestPane) SetFocused(focused bool) {
 func (m *RequestPane) SetStyles(styles design.Styles) {
 	m.styles = styles
 	m.MethodSelector.SetStyles(styles)
+}
+
+// SetJar wires the shared in-memory cookie/auth-header jar (see
+// internal/authjar) into this pane - called once from app.SetupModel with
+// the same *authjar.Store handed to responsepane.ResponsePane.SetJar, so
+// what's captured there is what actually gets injected here.
+func (m *RequestPane) SetJar(jar *authjar.Store) {
+	m.Jar = jar
 }
 
 // approxFooterLines is a rough, constant estimate of the pinned footer's

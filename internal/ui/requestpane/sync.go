@@ -150,10 +150,46 @@ func (m *RequestPane) resolvedRequest() *http.Request {
 		}
 	}
 
+	// Remembered cookies/auth headers (see internal/authjar) are the
+	// lowest-precedence layer of all - keyed by host alone, so this runs
+	// regardless of whether the request has a configured server at all,
+	// but still only ever fills in what neither the server's own headers
+	// nor the request's own headers already set (mergeHeaders keeps
+	// resolvedReq.Headers - already server-merged above - as the
+	// override).
+	if host := http.HostOf(resolvedReq.URL); host != "" {
+		if jarHeaders := m.Jar.HeadersFor(host); len(jarHeaders) > 0 {
+			resolvedReq.Headers = mergeHeaders(jarHeaders, resolvedReq.Headers)
+			changed = true
+		}
+	}
+
 	if !changed {
 		return m.Request
 	}
 	return &resolvedReq
+}
+
+// mergeHeaders overlays override onto base, override winning on any
+// name collision (compared case-insensitively, matching hasHeader/HTTP's
+// own header semantics) - used to layer the jar's remembered headers
+// underneath whatever resolvedRequest already resolved from the request
+// and its server.
+func mergeHeaders(base, override map[string]string) map[string]string {
+	merged := make(map[string]string, len(base)+len(override))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range override {
+		for existing := range merged {
+			if strings.EqualFold(existing, k) {
+				delete(merged, existing)
+				break
+			}
+		}
+		merged[k] = v
+	}
+	return merged
 }
 
 // validateRequest checks the request-level concerns syncRequest itself

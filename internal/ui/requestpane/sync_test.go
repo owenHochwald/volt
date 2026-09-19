@@ -1,9 +1,11 @@
 package requestpane
 
 import (
+	stdhttp "net/http"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/authjar"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -360,5 +362,130 @@ func TestRequestPane_ResolvedRequest_NoContentTypeForFreeformBody(t *testing.T) 
 
 	if _, ok := resolved.Headers["Content-Type"]; ok {
 		t.Errorf("expected no auto-added Content-Type for a freeform-body request, got %v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_InjectsJarHeaders_NoServer verifies the
+// jar's remembered headers (see internal/authjar) get injected for an
+// ad-hoc, absolute-URL request with no configured server at all - keyed
+// by host alone, not ServerID/GroupID.
+func TestRequestPane_ResolvedRequest_InjectsJarHeaders_NoServer(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	jar := authjar.NewStore()
+	jar.RememberAuthHeader("api.example.com", "Authorization", "Bearer jar-token")
+	pane.Jar = jar
+
+	pane.Request = &http.Request{Method: http.GET, URL: "https://api.example.com/pets"}
+
+	resolved := pane.resolvedRequest()
+	if resolved.Headers["Authorization"] != "Bearer jar-token" {
+		t.Errorf("expected the jar's Authorization header to be injected, got %+v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_RequestHeaderOverridesJar verifies the
+// jar is the lowest-precedence layer - a header the request already sets
+// itself must win, the same way it already wins over a server's default
+// header.
+func TestRequestPane_ResolvedRequest_RequestHeaderOverridesJar(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	jar := authjar.NewStore()
+	jar.RememberAuthHeader("api.example.com", "Authorization", "Bearer jar-token")
+	pane.Jar = jar
+
+	pane.Request = &http.Request{
+		Method:  http.GET,
+		URL:     "https://api.example.com/pets",
+		Headers: map[string]string{"Authorization": "Bearer explicit-token"},
+	}
+
+	resolved := pane.resolvedRequest()
+	if resolved.Headers["Authorization"] != "Bearer explicit-token" {
+		t.Errorf("expected the request's own header to win over the jar, got %+v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_ServerHeaderOverridesJar mirrors
+// TestRequestPane_ResolvedRequest_RequestHeaderOverridesJar for a
+// server's own configured header.
+func TestRequestPane_ResolvedRequest_ServerHeaderOverridesJar(t *testing.T) {
+	pane, db := setupTestPane(t)
+	jar := authjar.NewStore()
+	jar.RememberAuthHeader("api.example.com", "Authorization", "Bearer jar-token")
+	pane.Jar = jar
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := db.UpdateServerHeaders("prod", map[string]string{"Authorization": "Bearer server-token"}); err != nil {
+		t.Fatalf("failed to set server headers: %v", err)
+	}
+
+	pane.Request = &http.Request{Method: http.GET, URL: "/pets", ServerID: &prod.ID}
+
+	resolved := pane.resolvedRequest()
+	if resolved.Headers["Authorization"] != "Bearer server-token" {
+		t.Errorf("expected the server's header to win over the jar, got %+v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_JarCookiesInjectedAlongsideServerHeaders
+// verifies the jar and server headers both apply together when they
+// don't collide - a cookie remembered from an earlier login response
+// riding alongside the server's own unrelated default header.
+func TestRequestPane_ResolvedRequest_JarCookiesInjectedAlongsideServerHeaders(t *testing.T) {
+	pane, db := setupTestPane(t)
+	jar := authjar.NewStore()
+	jar.RememberCookies("api.example.com", []*stdhttp.Cookie{{Name: "session", Value: "abc123"}})
+	pane.Jar = jar
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := db.UpdateServerHeaders("prod", map[string]string{"X-Env": "prod"}); err != nil {
+		t.Fatalf("failed to set server headers: %v", err)
+	}
+
+	pane.Request = &http.Request{Method: http.GET, URL: "/pets", ServerID: &prod.ID}
+
+	resolved := pane.resolvedRequest()
+	if resolved.Headers["X-Env"] != "prod" {
+		t.Errorf("expected the server header to still apply, got %+v", resolved.Headers)
+	}
+	if resolved.Headers["Cookie"] != "session=abc123" {
+		t.Errorf("expected the jar's cookie to be injected, got %+v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_NoJarHeaders_UnaffectedRequestStaysSame
+// verifies an empty jar is still a true no-op, matching
+// TestRequestPane_ResolvedRequest_NoGroup's same-pointer assertion.
+func TestRequestPane_ResolvedRequest_NoJarHeaders_UnaffectedRequestStaysSame(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.Jar = authjar.NewStore()
+	pane.Request = &http.Request{Method: http.GET, URL: "http://example.com/x"}
+
+	resolved := pane.resolvedRequest()
+	if resolved != pane.Request {
+		t.Errorf("expected the same request when the jar has nothing for this host, got a different pointer/value: %+v", resolved)
+	}
+}
+
+func TestMergeHeaders_OverrideWinsCaseInsensitively(t *testing.T) {
+	base := map[string]string{"Cookie": "session=old", "X-Env": "prod"}
+	override := map[string]string{"cookie": "session=new"}
+
+	merged := mergeHeaders(base, override)
+
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 headers (no duplicate differently-cased Cookie), got %v", merged)
+	}
+	if merged["cookie"] != "session=new" {
+		t.Errorf("expected override's cookie value to win, got %+v", merged)
+	}
+	if merged["X-Env"] != "prod" {
+		t.Errorf("expected base's unrelated header to survive, got %+v", merged)
 	}
 }
