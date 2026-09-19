@@ -45,13 +45,14 @@ func deserializeHeaders(jsonStr string) (map[string]string, error) {
 	return headers, nil
 }
 
-// serializePathParamSchema/deserializePathParamSchema mirror
-// serializeHeaders/deserializeHeaders for http.Request.PathParamSchema,
-// except a nil schema round-trips as an empty string rather than the
-// literal 4-byte "null" - matching path_param_schema's migration default
-// (empty string, not SQL NULL) for every row saved before this column
-// existed, so Load doesn't need to special-case old rows differently from
-// new ones with no path params.
+// serializeFieldSchema/deserializeFieldSchema mirror
+// serializeHeaders/deserializeHeaders for http.Request.PathParamSchema/
+// QueryParamSchema, except a nil schema round-trips as an empty string
+// rather than the literal 4-byte "null" - matching path_param_schema's/
+// query_param_schema's migration default (empty string, not SQL NULL)
+// for every row saved before each column existed, so Load doesn't need
+// to special-case old rows differently from new ones with no path/query
+// params.
 //
 // A non-nil but *empty* schema (map[string]http.BodyFieldSchema{}, as
 // opposed to a nil one) is deliberately serialized as a real "{}"
@@ -62,7 +63,7 @@ func deserializeHeaders(jsonStr string) (map[string]string, error) {
 // not), and collapsing that distinction to the same "" a hand-typed
 // request's genuinely-nil schema produces would make the two
 // indistinguishable again once loaded back from the database.
-func serializePathParamSchema(schema map[string]http.BodyFieldSchema) (string, error) {
+func serializeFieldSchema(schema map[string]http.BodyFieldSchema) (string, error) {
 	if schema == nil {
 		return "", nil
 	}
@@ -73,7 +74,7 @@ func serializePathParamSchema(schema map[string]http.BodyFieldSchema) (string, e
 	return string(data), nil
 }
 
-func deserializePathParamSchema(jsonStr string) (map[string]http.BodyFieldSchema, error) {
+func deserializeFieldSchema(jsonStr string) (map[string]http.BodyFieldSchema, error) {
 	if jsonStr == "" {
 		return nil, nil
 	}
@@ -85,12 +86,12 @@ func deserializePathParamSchema(jsonStr string) (map[string]http.BodyFieldSchema
 }
 
 // serializeParamValues/deserializeParamValues mirror
-// serializePathParamSchema/deserializePathParamSchema for
+// serializeFieldSchema/deserializeFieldSchema for
 // http.Request.ParamValues - an empty/zero value round-trips as an empty
 // string (the param_values column's migration default), not the literal
 // 4-byte "null".
 func serializeParamValues(values http.ParamValues) (string, error) {
-	if len(values.PathParamValues) == 0 && len(values.BodyParamValues) == 0 && len(values.ArrayParamValues) == 0 {
+	if len(values.PathParamValues) == 0 && len(values.QueryParamValues) == 0 && len(values.BodyParamValues) == 0 && len(values.ArrayParamValues) == 0 {
 		return "", nil
 	}
 	data, err := json.Marshal(values)
@@ -170,7 +171,11 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 	if err != nil {
 		return err
 	}
-	pathParamSchemaString, err := serializePathParamSchema(request.PathParamSchema)
+	pathParamSchemaString, err := serializeFieldSchema(request.PathParamSchema)
+	if err != nil {
+		return err
+	}
+	queryParamSchemaString, err := serializeFieldSchema(request.QueryParamSchema)
 	if err != nil {
 		return err
 	}
@@ -186,20 +191,20 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 			return err
 		}
 		if err == nil && existingName == request.Name {
-			q := `UPDATE requests SET name = ?, method = ?, url = ?, headers = ?, body = ?, group_id = ?, server_id = ?, path_param_schema = ?, param_values = ? WHERE id = ?`
-			_, err = s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, paramValuesString, request.ID)
+			q := `UPDATE requests SET name = ?, method = ?, url = ?, headers = ?, body = ?, group_id = ?, server_id = ?, path_param_schema = ?, query_param_schema = ?, param_values = ? WHERE id = ?`
+			_, err = s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString, request.ID)
 			return err
 		}
 		// Row no longer exists, or the name changed - fall through to
 		// insert a new row below.
 	}
 
-	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema, param_values) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	// database/sql's default converter turns a nil *int64 into SQL NULL and
 	// dereferences a non-nil one, so request.GroupID/ServerID can be passed
 	// as-is.
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, paramValuesString)
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString)
 	if err != nil {
 		return err
 	}
@@ -212,29 +217,33 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 }
 
 // UpdateRequestSchema overwrites an existing request's name, headers,
-// body, and path param schema - used by `volt import -force` to refresh a
-// previously imported request from a changed OpenAPI spec without
-// touching its group/server association or its identity (method/url,
-// which is what matched it to the existing row in the first place - see
-// cli.dedupKey). Deliberately leaves group_id/server_id/method/url alone:
-// those are either the match key itself or a user-controlled association
-// unrelated to the spec's content.
-func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string, pathParamSchema map[string]http.BodyFieldSchema) error {
+// body, and path/query param schemas - used by `volt import -force` to
+// refresh a previously imported request from a changed OpenAPI spec
+// without touching its group/server association or its identity (method/
+// url, which is what matched it to the existing row in the first place -
+// see cli.dedupKey). Deliberately leaves group_id/server_id/method/url
+// alone: those are either the match key itself or a user-controlled
+// association unrelated to the spec's content.
+func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string, pathParamSchema, queryParamSchema map[string]http.BodyFieldSchema) error {
 	headerString, err := serializeHeaders(headers)
 	if err != nil {
 		return err
 	}
-	pathParamSchemaString, err := serializePathParamSchema(pathParamSchema)
+	pathParamSchemaString, err := serializeFieldSchema(pathParamSchema)
 	if err != nil {
 		return err
 	}
-	q := `UPDATE requests SET name = ?, headers = ?, body = ?, path_param_schema = ? WHERE id = ?`
-	_, err = s.db.Exec(q, name, headerString, body, pathParamSchemaString, id)
+	queryParamSchemaString, err := serializeFieldSchema(queryParamSchema)
+	if err != nil {
+		return err
+	}
+	q := `UPDATE requests SET name = ?, headers = ?, body = ?, path_param_schema = ?, query_param_schema = ? WHERE id = ?`
+	_, err = s.db.Exec(q, name, headerString, body, pathParamSchemaString, queryParamSchemaString, id)
 	return err
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema, param_values FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -245,19 +254,20 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 
 	for rows.Next() {
 		var (
-			id              int64
-			name            string
-			method          string
-			url             string
-			headers         string
-			body            string
-			groupID         sql.NullInt64
-			serverID        sql.NullInt64
-			pathParamSchema string
-			paramValues     string
+			id               int64
+			name             string
+			method           string
+			url              string
+			headers          string
+			body             string
+			groupID          sql.NullInt64
+			serverID         sql.NullInt64
+			pathParamSchema  string
+			queryParamSchema string
+			paramValues      string
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema, &paramValues); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema, &queryParamSchema, &paramValues); err != nil {
 			return nil, err
 
 		}
@@ -265,7 +275,11 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 		if err != nil {
 			return nil, err
 		}
-		pathParamSchemaMap, err := deserializePathParamSchema(pathParamSchema)
+		pathParamSchemaMap, err := deserializeFieldSchema(pathParamSchema)
+		if err != nil {
+			return nil, err
+		}
+		queryParamSchemaMap, err := deserializeFieldSchema(queryParamSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -274,14 +288,15 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			return nil, err
 		}
 		request := http.Request{
-			ID:              id,
-			Name:            name,
-			Method:          method,
-			URL:             url,
-			Headers:         headersMap,
-			Body:            body,
-			PathParamSchema: pathParamSchemaMap,
-			ParamValues:     paramValuesStruct,
+			ID:               id,
+			Name:             name,
+			Method:           method,
+			URL:              url,
+			Headers:          headersMap,
+			Body:             body,
+			PathParamSchema:  pathParamSchemaMap,
+			QueryParamSchema: queryParamSchemaMap,
+			ParamValues:      paramValuesStruct,
 		}
 		if groupID.Valid {
 			gid := groupID.Int64

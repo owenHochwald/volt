@@ -774,6 +774,19 @@ func TestParseOpenAPIURLs_PathParamSchema(t *testing.T) {
 	if _, ok := getRegion.PathParamSchema["verbose"]; ok {
 		t.Error("expected the 'in: query' parameter to be excluded from PathParamSchema")
 	}
+	verboseSchema, ok := getRegion.QueryParamSchema["verbose"]
+	if !ok {
+		t.Fatal("expected the 'in: query' parameter to appear in QueryParamSchema")
+	}
+	if verboseSchema.Type != "boolean" {
+		t.Errorf("expected verbose.Type=boolean, got %q", verboseSchema.Type)
+	}
+	if verboseSchema.Required {
+		t.Error("expected verbose to default to not required (the spec never says required: true)")
+	}
+	if _, ok := getRegion.QueryParamSchema["region"]; ok {
+		t.Error("expected the 'in: path' parameter to be excluded from QueryParamSchema")
+	}
 }
 
 // TestParseOpenAPIURLs_SetsSchemaMarkerEvenWithNoPathParams is a
@@ -814,5 +827,11 @@ func TestParseOpenAPIURLs_SetsSchemaMarkerEvenWithNoPathParams(t *testing.T) {
 	}
 	if ping.Body != "" {
 		t.Errorf("expected no body for an operation with no requestBody, got %q", ping.Body)
+	}
+	if ping.QueryParamSchema == nil {
+		t.Error("expected a non-nil QueryParamSchema even for an operation with no query parameters")
+	}
+	if len(ping.QueryParamSchema) != 0 {
+		t.Errorf("expected an empty QueryParamSchema, got %+v", ping.QueryParamSchema)
 	}
 }

@@ -61,6 +61,16 @@ type Request struct {
 	// placeholder is just edited as unconstrained free text (see
 	// requestpane.rebuildParams).
 	PathParamSchema map[string]BodyFieldSchema `json:"path_param_schema,omitempty"`
+	// QueryParamSchema mirrors PathParamSchema for a request's query
+	// string parameters (an OpenAPI parameter with "in: query") - editable
+	// as individually-validated fields (see requestpane.QueryParams)
+	// instead of typed directly into the URL's own "?..." suffix. Only
+	// ever set by `volt import` (always, even to an empty non-nil map, for
+	// an operation with no query parameters of its own - same "explicit
+	// marker" reasoning as PathParamSchema); a hand-typed request has no
+	// schema to derive one from, so it keeps typing "?key=value" straight
+	// into the URL, same as before this existed.
+	QueryParamSchema map[string]BodyFieldSchema `json:"query_param_schema,omitempty"`
 	// ParamValues holds every currently typed/selected path/body/array
 	// param value for this request (see ParamValues), independent of the
 	// schema/template itself (Body/PathParamSchema) - so reloading a saved
@@ -80,6 +90,7 @@ type Request struct {
 // requestpane.simpleArrayItemName).
 type ParamValues struct {
 	PathParamValues  map[string]string              `json:"path_param_values,omitempty"`
+	QueryParamValues map[string]string              `json:"query_param_values,omitempty"`
 	BodyParamValues  map[string]string              `json:"body_param_values,omitempty"`
 	ArrayParamValues map[string][]map[string]string `json:"array_param_values,omitempty"`
 }

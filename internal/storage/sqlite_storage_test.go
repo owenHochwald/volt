@@ -110,7 +110,8 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 	originalID := req.ID
 
 	newPathSchema := map[string]http.BodyFieldSchema{"id": {Type: "integer", Required: true}}
-	err := db.UpdateRequestSchema(originalID, "new name", map[string]string{"X-New": "2"}, "new body", newPathSchema)
+	newQuerySchema := map[string]http.BodyFieldSchema{"page": {Type: "integer"}}
+	err := db.UpdateRequestSchema(originalID, "new name", map[string]string{"X-New": "2"}, "new body", newPathSchema, newQuerySchema)
 	assert.NoError(t, err)
 
 	requests, err := db.Load()
@@ -123,6 +124,7 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 	assert.Equal(t, "new body", updated.Body)
 	assert.Equal(t, map[string]string{"X-New": "2"}, updated.Headers)
 	assert.Equal(t, newPathSchema, updated.PathParamSchema)
+	assert.Equal(t, newQuerySchema, updated.QueryParamSchema)
 	// Untouched by design.
 	assert.Equal(t, "GET", updated.Method)
 	assert.Equal(t, "http://localhost:8080/widgets/{id}", updated.URL)
@@ -163,6 +165,37 @@ func TestSQLiteStorage_PathParamSchema_DistinguishesNilFromEmpty(t *testing.T) {
 	}
 	if got := byID[handTyped.ID].PathParamSchema; got != nil {
 		t.Errorf("expected the hand-typed request's PathParamSchema to round-trip nil, got %+v", got)
+	}
+}
+
+// TestSQLiteStorage_QueryParamSchema_DistinguishesNilFromEmpty mirrors
+// TestSQLiteStorage_PathParamSchema_DistinguishesNilFromEmpty for
+// QueryParamSchema.
+func TestSQLiteStorage_QueryParamSchema_DistinguishesNilFromEmpty(t *testing.T) {
+	db := setupTestDB(t)
+
+	imported := &http.Request{Method: "GET", URL: "http://localhost:8080/no-query", QueryParamSchema: map[string]http.BodyFieldSchema{}}
+	handTyped := &http.Request{Method: "GET", URL: "http://localhost:8080/typed?q=1"}
+
+	assert.NoError(t, db.Save(imported))
+	assert.NoError(t, db.Save(handTyped))
+
+	loaded, err := db.Load()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(loaded))
+
+	byID := make(map[int64]http.Request, len(loaded))
+	for _, r := range loaded {
+		byID[r.ID] = r
+	}
+
+	if got := byID[imported.ID].QueryParamSchema; got == nil {
+		t.Error("expected the imported (empty-schema) request's QueryParamSchema to round-trip non-nil")
+	} else if len(got) != 0 {
+		t.Errorf("expected an empty map, got %+v", got)
+	}
+	if got := byID[handTyped.ID].QueryParamSchema; got != nil {
+		t.Errorf("expected the hand-typed request's QueryParamSchema to round-trip nil, got %+v", got)
 	}
 }
 
@@ -275,7 +308,7 @@ func TestSQLiteStorage_UpdateRequestSchema_DoesNotTouchParamValues(t *testing.T)
 	}
 	assert.NoError(t, db.Save(req))
 
-	assert.NoError(t, db.UpdateRequestSchema(req.ID, "new name", map[string]string{}, "new body", nil))
+	assert.NoError(t, db.UpdateRequestSchema(req.ID, "new name", map[string]string{}, "new body", nil, nil))
 
 	loaded, err := db.Load()
 	assert.NoError(t, err)

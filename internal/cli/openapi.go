@@ -108,6 +108,9 @@ func ParseOpenAPIURLs(data []byte, isYAML bool, baseURLOverride string, allowRel
 			// endpoint doesn't look indistinguishable from a hand-typed
 			// request once loaded back from the database.
 			req.PathParamSchema = pathParamFields(doc, item, op)
+			// Same "always set, even empty" reasoning as PathParamSchema
+			// above - see queryParamFields.
+			req.QueryParamSchema = queryParamFields(doc, item, op)
 
 			if err := req.Validate(); err != nil {
 				warnings = append(warnings, fmt.Sprintf("skipped %s %s: %v", method, req.URL, err))
@@ -294,6 +297,43 @@ func pathParamFields(doc, item, op map[string]interface{}) map[string]http.BodyF
 			// shouldn't crash), defaulting to true otherwise rather than
 			// treating an unspecified one as silently optional.
 			field.Required = true
+			if req, ok := param["required"].(bool); ok {
+				field.Required = req
+			}
+			fields[name] = field
+		}
+	}
+	collect(item["parameters"])
+	collect(op["parameters"])
+	return fields
+}
+
+// queryParamFields mirrors pathParamFields for a spec's "in: query"
+// parameters (http.Request.QueryParamSchema - see requestpane.QueryParams),
+// so an imported endpoint's query string is editable as individually
+// validated fields instead of typed directly into the URL. Unlike a path
+// parameter, a query parameter isn't spec-mandated required by virtue of
+// existing - it defaults to false (an ordinary optional query string
+// value) unless the spec explicitly says otherwise, the same default
+// "required" itself already has anywhere else in this package.
+func queryParamFields(doc, item, op map[string]interface{}) map[string]http.BodyFieldSchema {
+	fields := make(map[string]http.BodyFieldSchema)
+	collect := func(raw interface{}) {
+		params, _ := raw.([]interface{})
+		for _, p := range params {
+			param, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if in, _ := param["in"].(string); in != "query" {
+				continue
+			}
+			name, _ := param["name"].(string)
+			if name == "" {
+				continue
+			}
+			paramSchema, _ := param["schema"].(map[string]interface{})
+			field := extractFieldSchema(doc, paramSchema, 0)
 			if req, ok := param["required"].(bool); ok {
 				field.Required = req
 			}
