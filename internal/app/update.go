@@ -14,6 +14,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/groupspane"
 	"github.com/owenHochwald/Volt/internal/ui/importpane"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
+	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
 	"github.com/owenHochwald/Volt/internal/utils"
@@ -352,6 +353,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the response.", "Try again after checking clipboard access."))
 		} else {
 			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Response copied"}
+		}
+		return m, nil
+
+	case requestpane.RequestCopiedMsg:
+		if msg.Err != nil {
+			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the curl command.", "Try again after checking clipboard access."))
+		} else {
+			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Copied as curl"}
 		}
 		return m, nil
 

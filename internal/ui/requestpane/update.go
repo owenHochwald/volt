@@ -64,6 +64,10 @@ func (m RequestPane) Update(msg tea.Msg) (RequestPane, tea.Cmd) {
 			m.clearParamValues()
 			return m, nil
 		}
+		if keybindings.Matches(msg, m.keys.CopyAsCurl) {
+			m.syncRequest()
+			return m, m.copyAsCurl()
+		}
 		if keybindings.Matches(msg, m.keys.NextField) {
 			m.FocusManager.Next()
 			m.scrollToFocused()

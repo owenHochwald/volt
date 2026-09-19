@@ -297,7 +297,7 @@ func (m RequestPane) renderFooter() string {
 	if m.LoadTestMode {
 		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
 	} else {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • ctrl+x: reset • enter/→: accept URL • ctrl+s: save")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/↑/↓: navigate • pgup/pgdn: scroll • ←/→ or h/l: change method • ctrl+p: send • ctrl+x: reset • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
 	}
 
 	// A blocked send (a body param outside its schema's min/maxLength or

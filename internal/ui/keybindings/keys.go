@@ -32,6 +32,7 @@ type KeyMap struct {
 	SaveRequest      key.Binding
 	ResetRequest     key.Binding
 	ClearParams      key.Binding
+	CopyAsCurl       key.Binding
 	ToggleLoadTest   key.Binding
 	NextField        key.Binding
 	PrevField        key.Binding
@@ -143,6 +144,7 @@ func DefaultKeyMap() KeyMap {
 		SaveRequest:            registry.MustBinding(ActionSaveRequest),
 		ResetRequest:           registry.MustBinding(ActionResetRequest),
 		ClearParams:            registry.MustBinding(ActionClearParams),
+		CopyAsCurl:             registry.MustBinding(ActionCopyAsCurl),
 		ToggleLoadTest:         registry.MustBinding(ActionToggleLoadTest),
 		NextField:              registry.MustBinding(ActionNextField),
 		PrevField:              registry.MustBinding(ActionPreviousField),

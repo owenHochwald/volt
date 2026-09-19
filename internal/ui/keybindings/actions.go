@@ -68,6 +68,7 @@ const (
 
 	ActionResetRequest     ActionID = "reset_request"
 	ActionClearParams      ActionID = "clear_params"
+	ActionCopyAsCurl       ActionID = "copy_as_curl"
 	ActionScrollFieldsUp   ActionID = "scroll_fields_up"
 	ActionScrollFieldsDown ActionID = "scroll_fields_down"
 
@@ -223,6 +224,7 @@ func DefaultRegistry() Registry {
 
 		{ActionResetRequest, []Context{ContextRequest}, []string{"ctrl+r"}, "ctrl+r", "reset request", 45},
 		{ActionClearParams, []Context{ContextRequest}, []string{"ctrl+x"}, "ctrl+x", "clear params", 44},
+		{ActionCopyAsCurl, []Context{ContextRequest}, []string{"ctrl+y"}, "ctrl+y", "copy as curl", 43},
 		{ActionScrollFieldsUp, []Context{ContextRequest}, []string{"pgup"}, "pgup", "scroll fields up", 40},
 		{ActionScrollFieldsDown, []Context{ContextRequest}, []string{"pgdown"}, "pgdown", "scroll fields down", 40},
 
