@@ -123,6 +123,12 @@ func (m *ResponsePane) handleHistoryViewerKey(msg tea.KeyPressMsg) (*ResponsePan
 			}
 			m.viewingHistory = false
 			return m, nil
+		case "x":
+			if item, ok := m.historyList.SelectedItem().(historyEntryItem); ok {
+				m.startDiff(item.entry)
+			}
+			m.viewingHistory = false
+			return m, nil
 		case "d":
 			if item, ok := m.historyList.SelectedItem().(historyEntryItem); ok {
 				m.history.Delete(item.entry.ID)
@@ -148,6 +154,6 @@ func (m *ResponsePane) handleHistoryViewerKey(msg tea.KeyPressMsg) (*ResponsePan
 // while open - see ResponsePane.Update).
 func (m ResponsePane) HistoryViewerListView() string {
 	header := m.styles.Text.Label.Render("Past sends (this session)")
-	hint := footerHelpStyle.Render("enter: view · d: delete · D: clear all · esc: close · /: filter")
+	hint := footerHelpStyle.Render("enter: view · x: diff vs current · d: delete · D: clear all · esc: close · /: filter")
 	return lipgloss.JoinVertical(lipgloss.Left, header, m.historyList.View(), hint)
 }

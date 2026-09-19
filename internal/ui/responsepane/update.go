@@ -84,6 +84,22 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 			return m.handleHistoryViewerKey(msg)
 		}
 
+		// Diff mode (see startDiff/"x" in history_viewer.go) isn't a
+		// claims-every-key overlay the way the ones above are - scrolling
+		// and search still work over the diff content exactly like they
+		// do over a normal tab's (see updateViewportForActiveTab), since
+		// both just feed the same viewport. Only esc (exit back to the
+		// normal tabs) and a tab switch (which implies "I don't want to
+		// see the diff anymore, show me that tab instead") need special
+		// handling.
+		if m.diffing && msg.String() == "esc" {
+			m.exitDiff()
+			return m, nil
+		}
+		if m.diffing && (keybindings.Matches(msg, m.keys.DirectTab) || keybindings.Matches(msg, m.keys.TabNavPrev) || keybindings.Matches(msg, m.keys.TabNavNext)) {
+			m.diffing = false
+		}
+
 		// gg (go to top) / g{n}g (go to line n) - see navigation.go. Armed
 		// by a bare "g" below; while armed, every key either continues the
 		// sequence or cancels it and falls through to be handled normally.
@@ -344,6 +360,11 @@ func copyCommand(content string, write func(string) error) tea.Cmd {
 
 // updateViewportForActiveTab updates the viewport content based on the active tab
 func (m *ResponsePane) updateViewportForActiveTab() {
+	if m.diffing {
+		m.setViewportContent(m.diffContent)
+		return
+	}
+
 	if m.isLoadTest {
 		m.updateLoadTestTabContent()
 		return

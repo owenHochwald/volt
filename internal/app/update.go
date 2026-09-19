@@ -100,7 +100,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// function, which is what actually closes whichever overlay is
 			// open).
 			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending())
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending() || m.responsePane.IsDiffing())
 			if overlayOpen {
 				m.disarmQuit()
 			} else {

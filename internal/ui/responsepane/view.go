@@ -103,9 +103,12 @@ func (m ResponsePane) renderNormalView() (head, trailer string) {
 	// nothing but the raw error text, with no way to see what was actually
 	// sent.
 	var statusBar string
-	if m.Response.Error != "" {
+	switch {
+	case m.diffing:
+		statusBar = m.styles.Badge.Info.Render("DIFF") + " " + m.styles.Text.Muted.Render(m.diffLabel)
+	case m.Response.Error != "":
 		statusBar = m.styles.Badge.Error.Render("ERROR")
-	} else {
+	default:
 		statusBar = m.renderHeaderBar()
 	}
 

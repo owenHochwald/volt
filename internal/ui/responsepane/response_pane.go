@@ -163,6 +163,18 @@ type ResponsePane struct {
 	historyList                             list.Model
 	historyViewerWidth, historyViewerHeight int
 
+	// Diff mode (diff.go): started by "x" from within the history viewer
+	// (see handleHistoryViewerKey), diffing a selected past entry against
+	// whatever's currently displayed. Unlike pickingStyle/viewingJar/
+	// viewingHistory above, this isn't a request-pane-slot overlay - it
+	// reuses this pane's own viewport/tab machinery (see
+	// updateViewportForActiveTab's early check), so diffContent is just
+	// fed in like any other tab's content would be. diffLabel is shown in
+	// place of the normal status bar while diffing (see renderNormalView).
+	diffing     bool
+	diffContent string
+	diffLabel   string
+
 	keys   keybindings.KeyMap
 	styles design.Styles
 }
