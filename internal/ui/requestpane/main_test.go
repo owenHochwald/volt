@@ -17,10 +17,14 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dir)
 
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	os.Setenv("HOME", dir)
 
-	os.Exit(m.Run())
+	// os.Exit below skips deferred calls, so the cleanup can't be a plain
+	// defer - it has to run explicitly, after m.Run() returns but before
+	// exiting, or this directory would leak on every test run.
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
 }
