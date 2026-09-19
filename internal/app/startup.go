@@ -21,10 +21,11 @@ type startupAdvanceMsg struct {
 // then adjusts it for state calculateLayout can't see on its own (a pure
 // function of terminal size alone): the startup animation's current frame
 // (headerHeight/resizeContentForHeader), whether a load test is running
-// (resizeContentForLoadTest), and zoomedResponse (see ToggleZoomResponse,
+// (resizeContentForLoadTest), whether the WebSocket pane is docked
+// (resizeContentForWSDock), and zoomedResponse (see ToggleZoomResponse,
 // "z"), which hands the request column's share to the response instead of
 // splitting it - checked last so a zoomed response always wins over
-// whatever the load-test split above it computed.
+// whatever the load-test/WS-dock split above it computed.
 func (m Model) currentLayout() terminalLayout {
 	layout := calculateLayout(m.width, m.height)
 	if layout.mode == layoutTooSmall {
@@ -38,9 +39,11 @@ func (m Model) currentLayout() terminalLayout {
 
 	resizeContentForHeader(&layout)
 	m.resizeContentForLoadTest(&layout)
+	m.resizeContentForWSDock(&layout)
 
 	if m.zoomedResponse {
 		layout.requestHeight = 0
+		layout.wsHeight = 0
 		layout.responseHeight = layout.contentHeight
 	}
 
@@ -73,6 +76,24 @@ func (m Model) resizeContentForLoadTest(layout *terminalLayout) {
 		layout.requestHeight = min(layout.requestHeight, max(layout.contentHeight-7, 1))
 	}
 	layout.responseHeight = max(layout.contentHeight-layout.requestHeight, 1)
+}
+
+// resizeContentForWSDock splits the wide layout's content column three
+// ways - 25% request / 50% response / 25% WebSocket - instead of
+// resizeContentForHeader's plain request/response split, whenever the
+// WebSocket pane is docked (see Model.wsDocked, "ctrl+t"). Runs after
+// resizeContentForLoadTest so docking always wins over the load-test
+// split (simpler and more predictable than trying to blend both), and
+// does nothing in the focused layout, where a docked WebSocket pane is
+// just a fourth full-size tab (see app/view.go's panelTabs/focusedView)
+// rather than a box sharing height with siblings.
+func (m Model) resizeContentForWSDock(layout *terminalLayout) {
+	if layout.mode != layoutWide || !m.wsDocked {
+		return
+	}
+	layout.requestHeight = max(layout.contentHeight*25/100, 1)
+	layout.responseHeight = max(layout.contentHeight*50/100, 1)
+	layout.wsHeight = max(layout.contentHeight-layout.requestHeight-layout.responseHeight, 1)
 }
 
 func startupAdvanceCmd(frame int, motion design.MotionMode) tea.Cmd {

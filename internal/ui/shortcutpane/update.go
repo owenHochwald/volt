@@ -35,6 +35,8 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 					m.activeTab = int(Groups)
 				case "6":
 					m.activeTab = int(Import)
+				case "7":
+					m.activeTab = int(WebSocket)
 				}
 				m.helpViewport.GotoTop()
 				return m, nil

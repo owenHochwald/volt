@@ -160,12 +160,29 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Handle ctrl+k to toggle the WebSocket live-session modal. Unlike
-		// '?', this doesn't collide with typing, so it works from any
-		// panel.
+		// Handle ctrl+k to jump to the WebSocket pane - however it's
+		// currently shown. Docked, that just means focusing the fourth
+		// panel (same as ctrl+w/ctrl+e would eventually cycle to);
+		// undocked, it opens the floating modal (see wspane's package
+		// doc). Unlike '?', this doesn't collide with typing, so it
+		// works from any panel.
 		if keybindings.Matches(msg, m.keys.OpenWebSocket) && noModalOpen {
-			m.showWSModal = true
-			m.wsPane.Open()
+			if m.wsDocked {
+				m.setFocusedPanel(utils.WSPanel)
+			} else {
+				m.showWSModal = true
+				m.wsPane.Open()
+			}
+			return m, nil
+		}
+
+		// Handle ctrl+t to dock/undock the WebSocket pane (see
+		// toggleWSDock) - deliberately allowed even while showWSModal
+		// (the floating modal is exactly what docking converts away
+		// from), so this checks Help/Import directly rather than
+		// noModalOpen, which also excludes showWSModal.
+		if keybindings.Matches(msg, m.keys.ToggleWSDock) && !m.showHelpModal && !m.showImportModal {
+			m.toggleWSDock()
 			return m, nil
 		}
 
@@ -175,13 +192,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// this routing (and the CloseWSModalMsg/EventMsg/ConnectResultMsg/
 		// SendResultMsg cases below) is the only place that visibility is
 		// tracked; the session itself doesn't know or care whether it's
-		// being looked at.
+		// being looked at. Docked, wsPane is never routed here - it goes
+		// through the normal per-panel dispatch at the bottom of this
+		// function instead, the same as sidebar/request/response.
 		if m.showWSModal {
 			m.wsPane, cmd = m.wsPane.Update(msg)
 			return m, cmd
 		}
 
-		isEditing := m.focusedPanel == utils.RequestPanel && m.requestPane.IsEditing()
+		// isEditing suppresses "?" (ContextHelp) while it would otherwise
+		// collide with typing a literal "?" into a text field - the
+		// request pane's own fields, or (docked only - floating already
+		// captures every key above) the WebSocket pane's URL/compose
+		// fields, e.g. a "?" in a URL's query string or a chat message.
+		isEditing := (m.focusedPanel == utils.RequestPanel && m.requestPane.IsEditing()) ||
+			(m.focusedPanel == utils.WSPanel && m.wsPane.IsEditing())
 		if keybindings.Matches(msg, m.keys.ContextHelp) && !isEditing {
 			m.openHelp(m.focusedContext())
 			return m, nil
@@ -484,8 +509,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeContentPanels()
 	}
 
-	// Existing panel update routing (only when no modal is open)
-	if !m.showHelpModal && !m.showImportModal {
+	// Existing panel update routing (only when no modal is open) - docked,
+	// utils.WSPanel is a real panel like any of the other three here, not
+	// a modal (that's showWSModal, the floating case, routed separately
+	// above).
+	if !m.showHelpModal && !m.showImportModal && !m.showWSModal {
 		if m.focusedPanel == utils.SidebarPanel {
 			m.sidebarPane, cmd = m.sidebarPane.Update(msg)
 			return m, cmd
@@ -500,6 +528,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		} else if m.focusedPanel == utils.ResponsePanel {
 			m.responsePane, cmd = m.responsePane.Update(msg)
+			return m, cmd
+		} else if m.focusedPanel == utils.WSPanel {
+			m.wsPane, cmd = m.wsPane.Update(msg)
 			return m, cmd
 		}
 	}

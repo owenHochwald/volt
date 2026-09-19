@@ -22,10 +22,10 @@ func TestDefaultRegistryDefinesCoreActions(t *testing.T) {
 		{ActionPreviousPanel, []Context{ContextGlobal}, []string{"ctrl+e", "alt+h"}},
 		{ActionNextPanel, []Context{ContextGlobal}, []string{"ctrl+w", "alt+l"}},
 		{ActionNavigationCount, []Context{ContextSidebar}, []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}},
-		{ActionPreviousField, []Context{ContextRequest}, []string{"shift+tab"}},
-		{ActionNextField, []Context{ContextRequest}, []string{"tab"}},
+		{ActionPreviousField, []Context{ContextRequest, ContextWebSocket}, []string{"shift+tab"}},
+		{ActionNextField, []Context{ContextRequest, ContextWebSocket}, []string{"tab"}},
 		{ActionSubmit, []Context{ContextRequest}, []string{"alt+enter", "ctrl+p"}},
-		{ActionActivateControl, []Context{ContextRequest}, []string{"enter"}},
+		{ActionActivateControl, []Context{ContextRequest, ContextWebSocket}, []string{"enter"}},
 	}
 
 	registry := DefaultRegistry()

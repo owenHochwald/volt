@@ -46,6 +46,14 @@ type Model struct {
 	// once you've moved on from it.
 	zoomedResponse bool
 
+	// wsDocked shows the WebSocket pane as a real fourth panel (see
+	// utils.WSPanel) - stacked 25/50/25 with the request/response panes
+	// in the wide layout, a fourth WEBSOCKET tab in the focused layout -
+	// instead of the floating modal ctrl+k otherwise opens (see
+	// toggleWSDock, "ctrl+t"). Session-only, like zoomedResponse, not
+	// persisted across restarts.
+	wsDocked bool
+
 	width, height int
 	startupFrame  int
 

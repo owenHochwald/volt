@@ -34,6 +34,10 @@ type terminalLayout struct {
 	mainWidth      int
 	requestHeight  int
 	responseHeight int
+	// wsHeight is only meaningful in wide mode while the WebSocket pane
+	// is docked (see Model.resizeContentForWSDock) - a third box stacked
+	// below response, sharing mainWidth. Zero (and unused) otherwise.
+	wsHeight int
 
 	modalWidth  int
 	modalHeight int
@@ -96,8 +100,14 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	m.shortcutPane.SetHeight(layout.modalHeight)
 	m.importPane.SetWidth(layout.modalWidth)
 	m.importPane.SetHeight(layout.modalHeight)
-	m.wsPane.SetWidth(layout.modalWidth)
-	m.wsPane.SetHeight(layout.modalHeight)
+	// Docked, wsPane is sized below as a real panel (its own box, not the
+	// floating modal's) - these modal dimensions would be wrong for it
+	// (and are simply unused: DockedView doesn't read m.width/m.height
+	// through the modal's own border/padding math the way View does).
+	if !m.wsDocked {
+		m.wsPane.SetWidth(layout.modalWidth)
+		m.wsPane.SetHeight(layout.modalHeight)
+	}
 
 	if layout.mode == layoutTooSmall {
 		return
@@ -115,6 +125,11 @@ func (m *Model) applyLayout(layout terminalLayout) {
 		m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
 		m.responsePane.SetJarViewerSize(requestWidth, requestHeight)
 		m.responsePane.SetHistoryViewerSize(requestWidth, requestHeight)
+		if m.wsDocked {
+			wsWidth, wsHeight := contentSize(m.styles.Panel.Base, layout.mainWidth, layout.wsHeight)
+			m.wsPane.SetWidth(wsWidth)
+			m.wsPane.SetHeight(wsHeight)
+		}
 		return
 	}
 
@@ -129,6 +144,15 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
 	m.responsePane.SetJarViewerSize(requestWidth, requestHeight)
 	m.responsePane.SetHistoryViewerSize(requestWidth, requestHeight)
+	if m.wsDocked {
+		// Focused layout: the docked WebSocket pane is a fourth
+		// full-size tab (see app/view.go's panelTabs/focusedView), the
+		// same content area sidebar/request/response each already get
+		// one at a time - not a fraction of it.
+		wsWidth, wsHeight := contentSize(m.styles.Panel.Base, layout.width, layout.contentHeight)
+		m.wsPane.SetWidth(wsWidth)
+		m.wsPane.SetHeight(wsHeight)
+	}
 }
 
 func contentSize(style lipgloss.Style, outerWidth, outerHeight int) (int, int) {

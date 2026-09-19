@@ -22,6 +22,12 @@ const (
 	// that modal is open, not everywhere.
 	ContextGroups Context = "Groups"
 	ContextImport Context = "Import"
+	// ContextWebSocket is the WebSocket live-session pane (ctrl+k, see
+	// wspane) - documentation-only, like ContextGroups/ContextImport
+	// above: wspane handles its own keys via raw string checks rather
+	// than keybindings.Matches, so nothing here is actually consumed for
+	// matching, only for the Help modal's own listing.
+	ContextWebSocket Context = "WebSocket"
 )
 
 // ActionID is a stable identifier used by input handling and tests.
@@ -63,9 +69,11 @@ const (
 	ActionPreviousHelpTab ActionID = "previous_help_tab"
 	ActionDirectHelpTab   ActionID = "direct_help_tab"
 
-	ActionOpenGroups    ActionID = "open_groups"
-	ActionOpenImport    ActionID = "open_import"
-	ActionOpenWebSocket ActionID = "open_websocket"
+	ActionOpenGroups     ActionID = "open_groups"
+	ActionOpenImport     ActionID = "open_import"
+	ActionOpenWebSocket  ActionID = "open_websocket"
+	ActionToggleWSDock   ActionID = "toggle_ws_dock"
+	ActionCloseWebSocket ActionID = "close_websocket"
 
 	ActionResetRequest     ActionID = "reset_request"
 	ActionClearParams      ActionID = "clear_params"
@@ -200,9 +208,9 @@ func DefaultRegistry() Registry {
 		{ActionSubmit, []Context{ContextRequest}, []string{"alt+enter", "ctrl+p"}, "alt+enter", "send request", 70},
 		{ActionSaveRequest, []Context{ContextRequest}, []string{"ctrl+s"}, "ctrl+s", "save request", 65},
 		{ActionToggleLoadTest, []Context{ContextRequest}, []string{"ctrl+l"}, "ctrl+l", "toggle load test", 65},
-		{ActionNextField, []Context{ContextRequest}, []string{"tab"}, "tab", "next field", 60},
-		{ActionPreviousField, []Context{ContextRequest}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
-		{ActionActivateControl, []Context{ContextRequest}, []string{"enter"}, "enter", "activate focused control", 55},
+		{ActionNextField, []Context{ContextRequest, ContextWebSocket}, []string{"tab"}, "tab", "next field", 60},
+		{ActionPreviousField, []Context{ContextRequest, ContextWebSocket}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
+		{ActionActivateControl, []Context{ContextRequest, ContextWebSocket}, []string{"enter"}, "enter", "activate focused control", 55},
 		{ActionNextMethod, []Context{ContextRequest}, []string{"l"}, "l", "next method", 50},
 		{ActionPreviousMethod, []Context{ContextRequest}, []string{"h"}, "h", "previous method", 50},
 
@@ -219,11 +227,12 @@ func DefaultRegistry() Registry {
 		{ActionCloseHelp, []Context{ContextHelp}, []string{"q", "?"}, "q/?", "close help", 80},
 		{ActionPreviousHelpTab, []Context{ContextHelp}, []string{"h"}, "h", "previous section", 70},
 		{ActionNextHelpTab, []Context{ContextHelp}, []string{"l"}, "l", "next section", 70},
-		{ActionDirectHelpTab, []Context{ContextHelp}, []string{"1", "2", "3", "4", "5", "6"}, "1-6", "jump to section", 60},
+		{ActionDirectHelpTab, []Context{ContextHelp}, []string{"1", "2", "3", "4", "5", "6", "7"}, "1-7", "jump to section", 60},
 
 		{ActionOpenGroups, []Context{ContextGlobal}, []string{"ctrl+g"}, "ctrl+g", "groups & servers", 40},
 		{ActionOpenImport, []Context{ContextGlobal}, []string{"ctrl+n"}, "ctrl+n", "import OpenAPI spec", 35},
 		{ActionOpenWebSocket, []Context{ContextGlobal}, []string{"ctrl+k"}, "ctrl+k", "websocket", 34},
+		{ActionToggleWSDock, []Context{ContextGlobal}, []string{"ctrl+t"}, "ctrl+t", "dock/undock websocket", 33},
 
 		{ActionResetRequest, []Context{ContextRequest}, []string{"ctrl+r"}, "ctrl+r", "reset request", 45},
 		{ActionClearParams, []Context{ContextRequest}, []string{"ctrl+x"}, "ctrl+x", "clear params", 44},
@@ -259,5 +268,7 @@ func DefaultRegistry() Registry {
 		{ActionDeleteItem, []Context{ContextGroups}, []string{"d"}, "d", "delete", 60},
 
 		{ActionCloseImport, []Context{ContextImport}, []string{"esc"}, "esc", "close", 80},
+
+		{ActionCloseWebSocket, []Context{ContextWebSocket}, []string{"esc"}, "esc", "hide (floating only - docked esc behaves like any other panel)", 80},
 	})
 }

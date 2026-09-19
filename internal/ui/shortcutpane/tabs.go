@@ -11,6 +11,7 @@ const (
 	Response
 	Groups
 	Import
+	WebSocket
 )
 
 // TabIndex represents a tab position

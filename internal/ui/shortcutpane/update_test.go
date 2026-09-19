@@ -19,12 +19,12 @@ func TestHelpTabNavigationKeys(t *testing.T) {
 	}{
 		{name: "j advances", start: Global, key: helpKeyPress('j', "j"), want: Sidebar},
 		{name: "k moves backward", start: Response, key: helpKeyPress('k', "k"), want: Request},
-		// Wraps past index 5 (the Import help group, the last of our 6
+		// Wraps past index 6 (the WebSocket help group, the last of our 7
 		// contextual groups - see keybindings.KeyMap.GetKeyGroups), not
 		// Response - main only has the first 4 groups (Global/Sidebar/
-		// Request/Response); ours adds Groups and Import.
-		{name: "j wraps", start: TabIndex(5), key: helpKeyPress('j', "j"), want: Global},
-		{name: "k wraps", start: Global, key: helpKeyPress('k', "k"), want: TabIndex(5)},
+		// Request/Response); ours adds Groups, Import, and WebSocket.
+		{name: "j wraps", start: TabIndex(6), key: helpKeyPress('j', "j"), want: Global},
+		{name: "k wraps", start: Global, key: helpKeyPress('k', "k"), want: TabIndex(6)},
 		{name: "one selects global", start: Response, key: helpKeyPress('1', "1"), want: Global},
 		{name: "two selects sidebar", start: Global, key: helpKeyPress('2', "2"), want: Sidebar},
 		{name: "three selects request", start: Global, key: helpKeyPress('3', "3"), want: Request},

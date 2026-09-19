@@ -39,6 +39,7 @@ func (km KeyMap) GetKeyGroups() []KeyGroup {
 		ContextResponse,
 		ContextGroups,
 		ContextImport,
+		ContextWebSocket,
 	}
 	groups := make([]KeyGroup, 0, len(contexts))
 	for _, context := range contexts {
