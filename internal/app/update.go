@@ -90,8 +90,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Esc's own save-to-file/search/style-picker/jar-viewer/
-			// goto-line overlays (see SaveResponseRaw/SearchResponse/
-			// PickBodyStyle/ViewAuthJar/GotoTop) take priority over both
+			// history-viewer/goto-line overlays (see SaveResponseRaw/
+			// SearchResponse/PickBodyStyle/ViewAuthJar/ViewHistory/GotoTop)
+			// take priority over both
 			// the panel switch and quit-arming below - otherwise esc could
 			// never actually cancel any of them, since this would always
 			// intercept it first (it still reaches responsePane.Update
@@ -99,7 +100,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// function, which is what actually closes whichever overlay is
 			// open).
 			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsGotoPending())
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending())
 			if overlayOpen {
 				m.disarmQuit()
 			} else {
@@ -183,9 +184,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// to show it in, so un-zoom first. Deliberately doesn't return -
 		// the key still needs to reach responsePane.Update below (via the
 		// normal routing at the bottom of this function), which is what
-		// actually opens the picker. "v" (ViewAuthJar) needs the same slot
-		// for the same reason - see JarViewerListView.
-		if (keybindings.Matches(msg, m.keys.PickBodyStyle) || keybindings.Matches(msg, m.keys.ViewAuthJar)) && m.focusedPanel == utils.ResponsePanel {
+		// actually opens the picker. "v" (ViewAuthJar) and "H" (ViewHistory)
+		// need the same slot for the same reason - see JarViewerListView/
+		// HistoryViewerListView.
+		if (keybindings.Matches(msg, m.keys.PickBodyStyle) || keybindings.Matches(msg, m.keys.ViewAuthJar) || keybindings.Matches(msg, m.keys.ViewHistory)) && m.focusedPanel == utils.ResponsePanel {
 			m.zoomedResponse = false
 			// Un-zooming just now (above) only takes effect in
 			// resizeContentPanels' own math starting this line - the next

@@ -80,7 +80,7 @@ func (m ResponsePane) footerHint() string {
 	if m.wrapBody {
 		wrapHint = "w: unwrap"
 	}
-	hint := fmt.Sprintf("%s · %s · s: save to file · y: copy · /: search (regex) · gg/G: top/bottom · t: style · c: remember auth · v: view saved", rawHint, wrapHint)
+	hint := fmt.Sprintf("%s · %s · s: save to file · y: copy · /: search (regex) · gg/G: top/bottom · t: style · c: remember auth · v: view saved · H: history", rawHint, wrapHint)
 	if m.searchQuery != "" && len(m.searchMatches) > 0 {
 		hint = fmt.Sprintf("/%s (%d/%d) · n/b: next/prev · N/P: next/prev from here · %s", m.searchQuery, m.searchMatchIdx+1, len(m.searchMatches), hint)
 	}

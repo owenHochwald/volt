@@ -78,6 +78,12 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 			return m.handleJarViewerKey(msg)
 		}
 
+		// The past-sends viewer (see ViewHistory) claims every key while
+		// open, same reason as the filename prompt above.
+		if m.viewingHistory {
+			return m.handleHistoryViewerKey(msg)
+		}
+
 		// gg (go to top) / g{n}g (go to line n) - see navigation.go. Armed
 		// by a bare "g" below; while armed, every key either continues the
 		// sequence or cancels it and falls through to be handled normally.
@@ -141,6 +147,18 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 		if keybindings.Matches(msg, m.keys.ViewAuthJar) {
 			if !m.isLoadTest {
 				m.openJarViewer()
+			}
+			return m, nil
+		}
+
+		// "H" opens the past-sends viewer (see history_viewer.go) -
+		// meaningless in load-test mode, same reasoning as CaptureAuth/
+		// ViewAuthJar above (a load test's own many requests were never
+		// recorded into history to begin with - see ResponsePane.
+		// SetResponse, which SetLoadTestStats never calls).
+		if keybindings.Matches(msg, m.keys.ViewHistory) {
+			if !m.isLoadTest {
+				m.openHistoryViewer()
 			}
 			return m, nil
 		}

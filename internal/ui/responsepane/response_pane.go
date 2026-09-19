@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/authjar"
+	"github.com/owenHochwald/Volt/internal/history"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
@@ -151,6 +152,17 @@ type ResponsePane struct {
 	jarList                         list.Model
 	jarViewerWidth, jarViewerHeight int
 
+	// history remembers a bounded number of past sends, in memory only
+	// (see internal/history) - nil-safe, like jar above, so tests that
+	// never call SetHistory just record nothing. viewingHistory/
+	// historyList/historyViewerWidth/Height drive ViewHistory ("H" - see
+	// history_viewer.go), the same request-pane-slot overlay pattern
+	// pickingStyle/viewingJar above already use.
+	history                                 *history.Store
+	viewingHistory                          bool
+	historyList                             list.Model
+	historyViewerWidth, historyViewerHeight int
+
 	keys   keybindings.KeyMap
 	styles design.Styles
 }
@@ -221,6 +233,22 @@ func (m *ResponsePane) SetJar(jar *authjar.Store) {
 	m.jar = jar
 }
 
+// IsViewingHistory reports whether the past-sends viewer (see
+// ViewHistory, "H") is currently open - checked by app/update.go for the
+// same reason as IsViewingJar: so esc closes the viewer first instead of
+// the panel-switch swallowing it before the viewer ever sees it.
+func (m *ResponsePane) IsViewingHistory() bool {
+	return m.viewingHistory
+}
+
+// SetHistory wires the shared in-memory history of past sends (see
+// internal/history) into this pane - called once from app.SetupModel.
+// Left nil (the zero value) in tests that never call this is safe -
+// every history.Store method is nil-receiver-safe.
+func (m *ResponsePane) SetHistory(h *history.Store) {
+	m.history = h
+}
+
 // SetAutoRememberCookies/SetAutoRememberAuthHeaders gate whether
 // SetResponse captures a response's Set-Cookie headers / the sent
 // request's Authorization header automatically on every response, or
@@ -253,16 +281,30 @@ func (m *ResponsePane) SetStyles(styles design.Styles) {
 // after Body/Headers/Timing/Request all started needing the same handling
 // once every tab became scrollable - see renderActiveTabContent).
 func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Request) {
-	m.Response = response
-	m.SentRequest = sentRequest
-	m.isLoadTest = false
-	m.resetLoadTestSeries(time.Time{})
+	m.displayResponse(response, sentRequest)
+	if m.history != nil {
+		m.history.Record(sentRequest, response, time.Now())
+	}
 	if m.autoRememberCookies {
 		m.captureCookies()
 	}
 	if m.autoRememberAuthHeaders {
 		m.captureAuthHeader()
 	}
+}
+
+// displayResponse makes response/sentRequest what's currently shown,
+// without any of SetResponse's side effects (recording it into history,
+// capturing cookies/auth) - shared with viewHistoryEntry (see
+// history_viewer.go), which shows a *past* entry without treating it as
+// a new arrival: re-recording it would duplicate it in its own history,
+// and re-capturing its cookies/auth would silently overwrite whatever's
+// actually current with a possibly much older value.
+func (m *ResponsePane) displayResponse(response *http.Response, sentRequest *http.Request) {
+	m.Response = response
+	m.SentRequest = sentRequest
+	m.isLoadTest = false
+	m.resetLoadTestSeries(time.Time{})
 	m.updateViewportForActiveTab()
 }
 
@@ -354,6 +396,18 @@ func (m *ResponsePane) SetJarViewerSize(width, height int) {
 	m.jarViewerHeight = height
 	if m.viewingJar {
 		m.resizeJarList()
+	}
+}
+
+// SetHistoryViewerSize sizes the past-sends viewer's list (see
+// HistoryViewerListView) the same way SetJarViewerSize sizes the jar
+// viewer's - the request pane's own box dimensions, called from
+// app/update.go's WindowSizeMsg handling.
+func (m *ResponsePane) SetHistoryViewerSize(width, height int) {
+	m.historyViewerWidth = width
+	m.historyViewerHeight = height
+	if m.viewingHistory {
+		m.resizeHistoryList()
 	}
 }
 

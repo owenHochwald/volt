@@ -87,6 +87,7 @@ const (
 	ActionToggleZoomResponse ActionID = "toggle_zoom_response"
 	ActionCaptureAuth        ActionID = "capture_auth"
 	ActionViewAuthJar        ActionID = "view_auth_jar"
+	ActionViewHistory        ActionID = "view_history"
 
 	ActionCloseGroups ActionID = "close_groups"
 	ActionCloseImport ActionID = "close_import"
@@ -248,6 +249,7 @@ func DefaultRegistry() Registry {
 		{ActionGotoLine, []Context{ContextResponse}, nil, "g{n}g", "go to line n", 36},
 		{ActionCaptureAuth, []Context{ContextResponse}, []string{"c"}, "c", "remember cookies & auth for server", 35},
 		{ActionViewAuthJar, []Context{ContextResponse}, []string{"v"}, "v", "view/reset saved cookies & auth", 34},
+		{ActionViewHistory, []Context{ContextResponse}, []string{"H"}, "H", "view past sends", 33},
 
 		{ActionCloseGroups, []Context{ContextGroups}, []string{"q", "esc"}, "q/esc", "close", 80},
 		{ActionCreateItem, []Context{ContextGroups}, []string{"n"}, "n", "new", 70},

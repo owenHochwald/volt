@@ -105,6 +105,12 @@ type KeyMap struct {
 	CaptureAuth key.Binding
 	ViewAuthJar key.Binding
 
+	// ViewHistory ("H") opens a list of every send this session has
+	// recorded (see internal/history) - "enter" on one shows it as the
+	// currently displayed response, "d"/"D" delete one/clear all - see
+	// responsepane's history_viewer.go.
+	ViewHistory key.Binding
+
 	// Help modal
 	CloseHelp     key.Binding
 	NextTab       key.Binding
@@ -176,6 +182,7 @@ func DefaultKeyMap() KeyMap {
 		ToggleZoomResponse:     registry.MustBinding(ActionToggleZoomResponse),
 		CaptureAuth:            registry.MustBinding(ActionCaptureAuth),
 		ViewAuthJar:            registry.MustBinding(ActionViewAuthJar),
+		ViewHistory:            registry.MustBinding(ActionViewHistory),
 		CloseHelp:              registry.MustBinding(ActionCloseHelp),
 		NextTab:                registry.MustBinding(ActionNextHelpTab),
 		PrevTab:                registry.MustBinding(ActionPreviousHelpTab),

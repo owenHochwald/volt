@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/authjar"
 	"github.com/owenHochwald/Volt/internal/buildinfo"
+	"github.com/owenHochwald/Volt/internal/history"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -91,6 +92,12 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	jar := authjar.NewStore()
 	requestPane.SetJar(jar)
 	responsePane.SetJar(jar)
+
+	// history remembers a bounded number of past sends this session - in
+	// memory only, per the user's explicit choice, cleared on every
+	// restart (see internal/history) - browsed from the response pane
+	// alone, so only it needs a reference.
+	responsePane.SetHistory(history.NewStore())
 
 	// autoRememberCookies/autoRememberAuthHeaders default to false (a
 	// fresh install never starts silently remembering session state) -

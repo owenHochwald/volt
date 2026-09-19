@@ -112,6 +112,7 @@ func (m *Model) applyLayout(layout terminalLayout) {
 		m.responsePane.SetHeight(responseHeight)
 		m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
 		m.responsePane.SetJarViewerSize(requestWidth, requestHeight)
+		m.responsePane.SetHistoryViewerSize(requestWidth, requestHeight)
 		return
 	}
 
@@ -125,6 +126,7 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	m.responsePane.SetHeight(responseHeight)
 	m.responsePane.SetStylePickerSize(requestWidth, requestHeight)
 	m.responsePane.SetJarViewerSize(requestWidth, requestHeight)
+	m.responsePane.SetHistoryViewerSize(requestWidth, requestHeight)
 }
 
 func contentSize(style lipgloss.Style, outerWidth, outerHeight int) (int, int) {
