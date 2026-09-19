@@ -4,6 +4,7 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/authjar"
 	"github.com/owenHochwald/Volt/internal/buildinfo"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
@@ -55,6 +56,16 @@ type Model struct {
 	themeSessionOpen bool
 	quitArmed        bool
 	quitSequence     uint64
+
+	// autoRememberCookies/autoRememberAuthHeaders mirror what's persisted
+	// in config.yaml (see design.LoadAutoRememberCookies/
+	// LoadAutoRememberAuthHeaders) and what responsePane currently has set
+	// (see SetAutoRememberCookies/SetAutoRememberAuthHeaders) - kept here
+	// too so a Toggle*Msg (see shortcutpane.ToggleAutoRememberCookiesMsg)
+	// and the Settings surface being reopened later both have a single
+	// source of truth to read from (see openHelp/openGroups).
+	autoRememberCookies     bool
+	autoRememberAuthHeaders bool
 }
 
 func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoadResult) Model {
@@ -73,6 +84,24 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	importPane := importpane.SetupImportPane(db, keys)
 	requestPane := requestpane.SetupRequestPane(db, keys, styles)
 
+	// jar is shared between requestPane (which injects what's remembered
+	// into outgoing requests) and responsePane (which captures/views/
+	// clears it) - in memory only, for this process' lifetime, never
+	// persisted (see internal/authjar).
+	jar := authjar.NewStore()
+	requestPane.SetJar(jar)
+	responsePane.SetJar(jar)
+
+	// autoRememberCookies/autoRememberAuthHeaders default to false (a
+	// fresh install never starts silently remembering session state) -
+	// LoadAutoRemember* returning an error (a malformed config.yaml) is
+	// treated the same as "unset", the same tolerant fallback
+	// design.LoadUserTheme itself uses.
+	autoRememberCookies, _ := design.LoadAutoRememberCookies()
+	autoRememberAuthHeaders, _ := design.LoadAutoRememberAuthHeaders()
+	responsePane.SetAutoRememberCookies(autoRememberCookies)
+	responsePane.SetAutoRememberAuthHeaders(autoRememberAuthHeaders)
+
 	// Restore the last request actually sent (see requestpane's
 	// handleSubmit, which is what saves it in the first place - never a
 	// request that was merely being edited, so nothing to restore means
@@ -89,21 +118,23 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	}
 
 	m := Model{
-		db:            db,
-		keys:          keys,
-		theme:         theme,
-		styles:        styles,
-		themeSource:   appearance.Source,
-		sidebarPane:   ui.NewSidebar(db, keys, styles),
-		requestPane:   requestPane,
-		responsePane:  &responsePane,
-		shortcutPane:  shortcutPane,
-		importPane:    importPane,
-		focusedPanel:  focusedPanel,
-		headerPane:    ui.SetupHeader(buildinfo.Version(), styles),
-		showHelpModal: false,
-		width:         minTerminalWidth,
-		height:        minTerminalHeight,
+		db:                      db,
+		keys:                    keys,
+		theme:                   theme,
+		styles:                  styles,
+		themeSource:             appearance.Source,
+		sidebarPane:             ui.NewSidebar(db, keys, styles),
+		requestPane:             requestPane,
+		responsePane:            &responsePane,
+		shortcutPane:            shortcutPane,
+		importPane:              importPane,
+		focusedPanel:            focusedPanel,
+		headerPane:              ui.SetupHeader(buildinfo.Version(), styles),
+		showHelpModal:           false,
+		width:                   minTerminalWidth,
+		height:                  minTerminalHeight,
+		autoRememberCookies:     autoRememberCookies,
+		autoRememberAuthHeaders: autoRememberAuthHeaders,
 	}
 	if appearance.Warning != "" {
 		m.notification = ui.Notification{

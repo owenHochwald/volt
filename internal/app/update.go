@@ -88,16 +88,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-			// Esc's own save-to-file/search/style-picker/goto-line overlays
-			// (see SaveResponseRaw/SearchResponse/PickBodyStyle/GotoTop)
-			// take priority over both the panel switch and quit-arming
-			// below - otherwise esc could never actually cancel any of
-			// them, since this would always intercept it first (it still
-			// reaches responsePane.Update below, via the normal routing at
-			// the bottom of this function, which is what actually closes
-			// whichever overlay is open).
+			// Esc's own save-to-file/search/style-picker/jar-viewer/
+			// goto-line overlays (see SaveResponseRaw/SearchResponse/
+			// PickBodyStyle/ViewAuthJar/GotoTop) take priority over both
+			// the panel switch and quit-arming below - otherwise esc could
+			// never actually cancel any of them, since this would always
+			// intercept it first (it still reaches responsePane.Update
+			// below, via the normal routing at the bottom of this
+			// function, which is what actually closes whichever overlay is
+			// open).
 			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsGotoPending())
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsGotoPending())
 			if overlayOpen {
 				m.disarmQuit()
 			} else {
@@ -181,8 +182,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// to show it in, so un-zoom first. Deliberately doesn't return -
 		// the key still needs to reach responsePane.Update below (via the
 		// normal routing at the bottom of this function), which is what
-		// actually opens the picker.
-		if keybindings.Matches(msg, m.keys.PickBodyStyle) && m.focusedPanel == utils.ResponsePanel {
+		// actually opens the picker. "v" (ViewAuthJar) needs the same slot
+		// for the same reason - see JarViewerListView.
+		if (keybindings.Matches(msg, m.keys.PickBodyStyle) || keybindings.Matches(msg, m.keys.ViewAuthJar)) && m.focusedPanel == utils.ResponsePanel {
 			m.zoomedResponse = false
 			// Un-zooming just now (above) only takes effect in
 			// resizeContentPanels' own math starting this line - the next
@@ -266,6 +268,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Level: ui.NotificationSuccess,
 			Text:  "Theme saved: " + msg.themeName,
 		}
+		return m, nil
+
+	case shortcutpane.ToggleAutoRememberCookiesMsg:
+		m.autoRememberCookies = msg.Enabled
+		m.responsePane.SetAutoRememberCookies(msg.Enabled)
+		return m, saveAutoRememberCookiesCmd(msg.Enabled)
+
+	case shortcutpane.ToggleAutoRememberAuthHeadersMsg:
+		m.autoRememberAuthHeaders = msg.Enabled
+		m.responsePane.SetAutoRememberAuthHeaders(msg.Enabled)
+		return m, saveAutoRememberAuthHeadersCmd(msg.Enabled)
+
+	case preferenceSavedMsg:
+		m.handlePreferenceSaved(msg)
 		return m, nil
 
 	case quitSequenceExpiredMsg:

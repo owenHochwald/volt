@@ -310,6 +310,15 @@ func TestPanelNavigationKeySequences(t *testing.T) {
 func newTestModel(t *testing.T) Model {
 	t.Helper()
 
+	// TestMain sandboxes XDG_CONFIG_HOME/HOME for the whole test binary
+	// (see main_test.go), but that one shared directory is only safe for
+	// reads - a test that actually persists a preference (see
+	// preferences_test.go's saveAutoRememberCookiesCmd) would otherwise
+	// leak it into every other test in this package that also goes
+	// through SetupModel. A fresh, per-test directory keeps that write
+	// contained to the test that made it.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	db, err := storage.NewSQLiteStorage(filepath.Join(t.TempDir(), "volt.db"))
 	if err != nil {
 		t.Fatalf("create test storage: %v", err)

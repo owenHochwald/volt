@@ -63,13 +63,13 @@ func (m Model) wideView(layout terminalLayout, header string) string {
 	// is the only box in the right column - the request panel isn't
 	// rendered at all, not just shrunk to nothing, since even a
 	// zero-height bordered box would still draw its own border lines.
-	// Picking a body style (see below) always un-zooms first (see
-	// update.go's PickBodyStyle handling), so this and that are mutually
-	// exclusive in practice - the picker takes priority here too, in case
-	// that invariant ever changes, since it needs the request slot to
-	// show its list in.
+	// Picking a body style or viewing the saved-cookies/auth-headers jar
+	// (see below) always un-zooms first (see update.go's PickBodyStyle/
+	// ViewAuthJar handling), so this and those are mutually exclusive in
+	// practice - they take priority here too, in case that invariant ever
+	// changes, since both need the request slot to show their list in.
 	var rightSide string
-	if m.zoomedResponse && !m.responsePane.IsPickingStyle() {
+	if m.zoomedResponse && !m.responsePane.IsPickingStyle() && !m.responsePane.IsViewingJar() {
 		rightSide = response
 	} else {
 		var request string
@@ -82,6 +82,11 @@ func (m Model) wideView(layout terminalLayout, header string) string {
 			// live-previewing whatever style the list's cursor is on (see
 			// responsepane.ResponsePane.effectiveBodyStyle).
 			request = m.renderPanel(m.styles.Panel.Base, true, false, layout.mainWidth, layout.requestHeight, m.responsePane.StylePickerListView())
+		case m.responsePane.IsViewingJar():
+			// The saved-cookies/auth-headers viewer (see ViewAuthJar) goes
+			// here too, the same slot and same reasoning as the style
+			// picker above.
+			request = m.renderPanel(m.styles.Panel.Base, true, false, layout.mainWidth, layout.requestHeight, m.responsePane.JarViewerListView())
 		case m.requestPane.LoadTestMode:
 			// Load test mode gets its own fixed yellow border regardless
 			// of focus or in-progress state, not the usual focus/running
@@ -122,14 +127,18 @@ func (m Model) focusedView(layout terminalLayout, header string) string {
 			)
 		}
 	case utils.ResponsePanel:
-		// wideView gives the style picker its own slot alongside the
-		// response panel (see StylePickerListView) - a focused/narrow
-		// layout only has room for one box, so the picker takes over this
-		// one instead, the same way it takes priority over a zoomed
-		// response panel there.
+		// wideView gives the style picker/jar viewer their own slot
+		// alongside the response panel (see StylePickerListView/
+		// JarViewerListView) - a focused/narrow layout only has room for
+		// one box, so whichever's open takes over this one instead, the
+		// same way either takes priority over a zoomed response panel
+		// there.
 		content := m.responsePane.View()
-		if m.responsePane.IsPickingStyle() {
+		switch {
+		case m.responsePane.IsPickingStyle():
 			content = m.responsePane.StylePickerListView()
+		case m.responsePane.IsViewingJar():
+			content = m.responsePane.JarViewerListView()
 		}
 		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, content)
 	default:

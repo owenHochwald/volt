@@ -59,6 +59,7 @@ func (m *Model) openHelp(context keybindings.Context) {
 	}
 	m.themeSessionOpen = true
 	m.shortcutPane.SetThemeOptions(m.settingsThemeOptions(), m.themeSource)
+	m.shortcutPane.SetPreferences(m.autoRememberCookies, m.autoRememberAuthHeaders)
 	m.shortcutPane.BeginSession()
 	m.shortcutPane.SetContext(context)
 	m.shortcutPane.SetFocused(true)
@@ -76,6 +77,7 @@ func (m *Model) openGroups() {
 	}
 	m.themeSessionOpen = true
 	m.shortcutPane.SetThemeOptions(m.settingsThemeOptions(), m.themeSource)
+	m.shortcutPane.SetPreferences(m.autoRememberCookies, m.autoRememberAuthHeaders)
 	m.shortcutPane.BeginSession()
 	m.shortcutPane.SetSurface(shortcutpane.SurfaceGroups)
 	m.shortcutPane.SetFocused(true)
