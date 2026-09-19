@@ -150,3 +150,70 @@ func TestClient_Send(t *testing.T) {
 		})
 	}
 }
+
+// TestClient_Send_PopulatesTiming verifies a successful send fills in
+// Response.Timing - the first request on a fresh client opens its own
+// connection (Reused false, TCPConnection > 0), a second request to the
+// same server reuses it (Reused true, TCPConnection == 0) since InitClient
+// keeps a client-wide keep-alive transport across calls.
+func TestClient_Send_PopulatesTiming(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client := InitClient(time.Second, false)
+
+	send := func() *Response {
+		res := make(chan *Response)
+		go client.Send(&Request{Method: http.MethodGet, URL: server.URL}, res)
+		return <-res
+	}
+
+	first := send()
+	if first.Error != "" {
+		t.Fatalf("unexpected error: %v", first.Error)
+	}
+	if first.Timing == nil {
+		t.Fatal("expected Timing to be populated")
+	}
+	if first.Timing.Reused {
+		t.Error("expected the first request's connection not to be reused")
+	}
+	if first.Timing.TCPConnection <= 0 {
+		t.Error("expected a nonzero TCP connection time for a fresh connection")
+	}
+	if first.Timing.TimeToFirstByte <= 0 {
+		t.Error("expected a nonzero time to first byte")
+	}
+
+	second := send()
+	if second.Timing == nil {
+		t.Fatal("expected Timing to be populated")
+	}
+	if !second.Timing.Reused {
+		t.Error("expected the second request to reuse the first's connection")
+	}
+	if second.Timing.TCPConnection != 0 {
+		t.Errorf("expected no TCP connection time on a reused connection, got %s", second.Timing.TCPConnection)
+	}
+}
+
+// TestClient_Send_NoTimingOnFailure verifies a request that never reaches
+// a server (so Client.Send returns before assembling a Response at all)
+// leaves Timing nil rather than a zero-valued, misleadingly "measured"
+// struct.
+func TestClient_Send_NoTimingOnFailure(t *testing.T) {
+	client := InitClient(200*time.Millisecond, false)
+	res := make(chan *Response)
+	go client.Send(&Request{Method: http.MethodGet, URL: "http://127.0.0.1:1"}, res)
+	result := <-res
+
+	if result.Error == "" {
+		t.Fatal("expected an error connecting to a closed port")
+	}
+	if result.Timing != nil {
+		t.Errorf("expected no Timing on a failed request, got %+v", result.Timing)
+	}
+}

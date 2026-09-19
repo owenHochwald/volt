@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // renderBody renders the response body with appropriate formatting and syntax highlighting
@@ -152,9 +153,41 @@ func (m ResponsePane) renderTiming() string {
 	}
 	b.WriteString("\n\n")
 
-	b.WriteString(m.styles.Text.Faint.Render(
-		"Note: Detailed timing breakdown (DNS, TLS, TTFB) coming in a future release!",
-	))
+	b.WriteString(m.renderTimingBreakdown())
 
 	return b.String()
+}
+
+// renderTimingBreakdown renders the DNS/connect/TLS/TTFB phase breakdown
+// (see http.Timing) below renderTiming's existing total-duration/
+// connection-type summary. Falls back to a plain note for anything that
+// skipped Client.Send's httptrace instrumentation - a load test response,
+// or one an older session recorded into history before this existed.
+func (m ResponsePane) renderTimingBreakdown() string {
+	t := m.Response.Timing
+	if t == nil {
+		return m.styles.Text.Faint.Render("No detailed timing breakdown available for this response.")
+	}
+
+	var b strings.Builder
+	b.WriteString(m.styles.Text.ResponseLabel.Render("Breakdown"))
+	b.WriteString("\n")
+
+	if t.Reused {
+		b.WriteString(m.styles.Text.Faint.Render("  (reused connection - DNS lookup/TCP connect/TLS handshake happened on an earlier request)"))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(m.renderTimingRow("DNS Lookup", t.DNSLookup))
+		b.WriteString(m.renderTimingRow("TCP Connection", t.TCPConnection))
+		if t.TLSHandshake > 0 {
+			b.WriteString(m.renderTimingRow("TLS Handshake", t.TLSHandshake))
+		}
+	}
+	b.WriteString(m.renderTimingRow("Time to First Byte", t.TimeToFirstByte))
+
+	return b.String()
+}
+
+func (m ResponsePane) renderTimingRow(label string, d time.Duration) string {
+	return fmt.Sprintf("  %s: %s\n", m.styles.Text.ResponseLabel.Render(label), m.styles.Text.Value.Render(d.String()))
 }

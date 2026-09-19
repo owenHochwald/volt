@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 
@@ -54,6 +55,13 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 		start = time.Now()
 	}
 
+	// traceStart anchors the DNS/connect/TLS/TTFB breakdown (see Timing)
+	// independent of the RoundTrip toggle above - that toggle only
+	// changes what the aggregate Duration field measures, not when these
+	// finer-grained phases actually happened.
+	traceStart := time.Now()
+	timing, trace := newTimingTrace(traceStart)
+
 	// This context's cancellation must stay in scope for the whole
 	// send - headers *and* body - not just until makeCustomRequest
 	// returns (that used to be a real bug: deferring cancel() inside
@@ -71,6 +79,7 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
 		defer cancel()
 	}
+	ctx = httptrace.WithClientTrace(ctx, trace)
 
 	logging.Logf("http: -> %s %s (%d header(s), %d byte body)", req.Method, req.URL, len(req.Headers), len(req.Body))
 
@@ -108,6 +117,7 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 		Headers:    res.Header,
 		Duration:   duration,
 		RoundTrip:  c.RoundTrip,
+		Timing:     timing,
 	}
 }
 

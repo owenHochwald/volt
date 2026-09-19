@@ -40,4 +40,10 @@ type Response struct {
 	Error      string          `json:"error,omitempty"`
 	RoundTrip  bool            `json:"round_trip,omitempty"`
 	Failure    *apperror.Error `json:"-"`
+
+	// Timing is the DNS/connect/TLS/TTFB breakdown for this response (see
+	// Timing's own doc) - nil for anything that skipped Client.Send's
+	// httptrace instrumentation (a load test response, or a failed
+	// request that never got this far).
+	Timing *Timing `json:"timing,omitempty"`
 }
