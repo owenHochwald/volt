@@ -10,7 +10,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/owenHochwald/Volt)](https://goreportcard.com/report/github.com/owenHochwald/Volt)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
-[What's New](#whats-new-in-v020) • [Installation](#installation) • [Quick Start](#quick-start) • [Interactive Load Testing](#interactive-load-testing) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [CLI Mode](#cli-load-testing)
+[What's New](#whats-new-in-v020) • [Installation](#installation) • [Quick Start](#quick-start) • [Features](docs/features.md) • [Interactive Load Testing](#interactive-load-testing) • [AI Agents and CI](#ai-agents-and-ci) • [Customization](CUSTOMIZATION.md) • [Keybindings](docs/keybindings.md) • [CLI Mode](#cli-load-testing)
 
 ![Demo](demo.gif)
 
@@ -150,7 +150,9 @@ volt
 - Press `Esc` twice to quit, or `Ctrl+C` to quit immediately
 
 See the [keybindings guide](docs/keybindings.md) for every contextual shortcut
-and macOS Option-key setup.
+and macOS Option-key setup, and the [features guide](docs/features.md) for
+Groups/Servers/variables, OpenAPI import, request params, curl export,
+history/diff, the cookie/auth jar, and WebSocket.
 
 ## Interactive Load Testing
 
