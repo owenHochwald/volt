@@ -147,6 +147,21 @@ func (m *RequestPane) resolvedRequest() *http.Request {
 			resolvedReq.URL = resolvedReq.EffectiveURL(server)
 			resolvedReq.Headers = server.MergeHeaders(resolvedReq.Headers)
 			changed = true
+
+			// {{name}} placeholders (see http.SubstituteVariables) are the
+			// server's own values, so this only ever runs once a server's
+			// actually resolved - an ad-hoc request with no server has
+			// nothing to substitute from, and any placeholder it happens
+			// to contain is left exactly as typed. Runs last, over
+			// whatever URL/Body/Headers already are at this point, so a
+			// placeholder works the same whether it came from the
+			// request's own template, the server's own base URL (e.g.
+			// "https://{{env}}.example.com"), or a server default header.
+			if len(server.Variables) > 0 {
+				resolvedReq.URL = http.SubstituteVariables(resolvedReq.URL, server.Variables)
+				resolvedReq.Body = http.SubstituteVariables(resolvedReq.Body, server.Variables)
+				resolvedReq.Headers = substituteHeaderValues(resolvedReq.Headers, server.Variables)
+			}
 		}
 	}
 
@@ -190,6 +205,17 @@ func mergeHeaders(base, override map[string]string) map[string]string {
 		merged[k] = v
 	}
 	return merged
+}
+
+// substituteHeaderValues returns a copy of headers with each value's
+// {{name}} placeholders replaced from vars (see http.SubstituteVariables)
+// - header names themselves are never templated, only their values.
+func substituteHeaderValues(headers map[string]string, vars map[string]string) map[string]string {
+	substituted := make(map[string]string, len(headers))
+	for k, v := range headers {
+		substituted[k] = http.SubstituteVariables(v, vars)
+	}
+	return substituted
 }
 
 // validateRequest checks the request-level concerns syncRequest itself

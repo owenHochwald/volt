@@ -489,3 +489,80 @@ func TestMergeHeaders_OverrideWinsCaseInsensitively(t *testing.T) {
 		t.Errorf("expected base's unrelated header to survive, got %+v", merged)
 	}
 }
+
+// TestRequestPane_ResolvedRequest_SubstitutesServerVariables is a
+// regression test for Phase 1 of "environment variables": {{name}}
+// placeholders in the URL, headers, and body all resolve from the
+// effective server's own Variables (see http.SubstituteVariables) - a
+// server plays the role of an "environment" here, so dev/staging/prod
+// each get their own variable values just by being different servers.
+func TestRequestPane_ResolvedRequest_SubstitutesServerVariables(t *testing.T) {
+	pane, db := setupTestPane(t)
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := db.UpdateServerVariables("prod", map[string]string{"token": "prod-secret", "widget_id": "42"}); err != nil {
+		t.Fatalf("failed to set server variables: %v", err)
+	}
+
+	pane.Request = &http.Request{
+		Method:   http.POST,
+		URL:      "/widgets/{{widget_id}}",
+		Body:     `{"note": "using {{token}}"}`,
+		Headers:  map[string]string{"Authorization": "Bearer {{token}}"},
+		ServerID: &prod.ID,
+	}
+
+	resolved := pane.resolvedRequest()
+	if resolved.URL != "https://api.example.com/widgets/42" {
+		t.Errorf("expected the URL placeholder to resolve, got %q", resolved.URL)
+	}
+	if resolved.Headers["Authorization"] != "Bearer prod-secret" {
+		t.Errorf("expected the header placeholder to resolve, got %+v", resolved.Headers)
+	}
+	if resolved.Body != `{"note": "using prod-secret"}` {
+		t.Errorf("expected the body placeholder to resolve, got %q", resolved.Body)
+	}
+	// The stored request keeps its raw placeholders, same as PathParams.
+	if pane.Request.URL != "/widgets/{{widget_id}}" {
+		t.Errorf("expected the stored request's URL to keep its placeholder, got %q", pane.Request.URL)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_UnknownVariableStaysLiteral verifies a
+// typo'd or not-yet-defined variable name is visibly wrong in the
+// resolved request rather than silently disappearing.
+func TestRequestPane_ResolvedRequest_UnknownVariableStaysLiteral(t *testing.T) {
+	pane, db := setupTestPane(t)
+
+	prod, err := db.UpsertServer("prod", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := db.UpdateServerVariables("prod", map[string]string{"token": "prod-secret"}); err != nil {
+		t.Fatalf("failed to set server variables: %v", err)
+	}
+
+	pane.Request = &http.Request{Method: http.GET, URL: "/x", ServerID: &prod.ID, Headers: map[string]string{"X-Missing": "{{nope}}"}}
+
+	resolved := pane.resolvedRequest()
+	if resolved.Headers["X-Missing"] != "{{nope}}" {
+		t.Errorf("expected an unknown placeholder to stay literal, got %+v", resolved.Headers)
+	}
+}
+
+// TestRequestPane_ResolvedRequest_NoServerVariables_PlaceholderStaysLiteral
+// covers an ad-hoc request with no configured server at all - there's no
+// server to hold variable values, so a placeholder is left untouched
+// rather than erroring out.
+func TestRequestPane_ResolvedRequest_NoServerVariables_PlaceholderStaysLiteral(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.Request = &http.Request{Method: http.GET, URL: "https://example.com/{{id}}"}
+
+	resolved := pane.resolvedRequest()
+	if resolved.URL != "https://example.com/{{id}}" {
+		t.Errorf("expected the placeholder to stay literal with no server, got %q", resolved.URL)
+	}
+}
