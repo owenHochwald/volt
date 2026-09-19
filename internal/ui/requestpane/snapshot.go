@@ -26,6 +26,12 @@ func (m *RequestPane) paramValues() http.ParamValues {
 			pathValues[p.Name] = v
 		}
 	}
+	queryValues := make(map[string]string, len(m.QueryParams))
+	for _, p := range m.QueryParams {
+		if v := p.Value(); v != "" {
+			queryValues[p.Name] = v
+		}
+	}
 	bodyValues := make(map[string]string, len(m.BodyParams))
 	for _, p := range m.BodyParams {
 		if v := p.Value(); v != "" {
@@ -49,6 +55,7 @@ func (m *RequestPane) paramValues() http.ParamValues {
 
 	return http.ParamValues{
 		PathParamValues:  pathValues,
+		QueryParamValues: queryValues,
 		BodyParamValues:  bodyValues,
 		ArrayParamValues: arrayValues,
 	}
@@ -66,6 +73,11 @@ func (m *RequestPane) applyParamValues(values http.ParamValues) {
 	for i := range m.PathParams {
 		if v, ok := values.PathParamValues[m.PathParams[i].Name]; ok {
 			m.PathParams[i].SetValue(v)
+		}
+	}
+	for i := range m.QueryParams {
+		if v, ok := values.QueryParamValues[m.QueryParams[i].Name]; ok {
+			m.QueryParams[i].SetValue(v)
 		}
 	}
 	for i := range m.BodyParams {
@@ -121,9 +133,10 @@ func (m *RequestPane) ApplySnapshot(request *http.Request) {
 // a different request".
 //
 // A cleared request can't stay tied to an imported schema (its Body/URL
-// templates and PathParamSchema all go, so ShowRequiredErrors/
-// extractBodySpecs/syncPathParams naturally derive zero structured
-// fields) or to a group (GroupID cleared) - and a request with no group
+// templates and PathParamSchema/QueryParamSchema all go, so
+// ShowRequiredErrors/extractBodySpecs/syncPathParams/syncQueryParams
+// naturally derive zero structured fields) or to a group (GroupID
+// cleared) - and a request with no group
 // has nothing to offer a server from (see ShowServerSelector/
 // rebuildServerSelector), so ServerID is cleared alongside it rather than
 // left pointing at a server the UI no longer even shows a way to change.
@@ -134,6 +147,7 @@ func (m *RequestPane) clearParamValues() {
 	req.Body = ""
 	req.URL = ""
 	req.PathParamSchema = nil
+	req.QueryParamSchema = nil
 	req.GroupID = nil
 	req.ServerID = nil
 	m.reinitRequestPane(&req)

@@ -203,20 +203,21 @@ func RequiredFieldErrors(params []Param) []string {
 }
 
 // firstErrorFocusIndex returns the focus index of the first PathParams,
-// BodyParams, or ArrayParams field that's currently invalid (ValidateParam)
-// or a required field left empty (RequiredFieldErrors' semantics) - the
-// same checks handleSubmit blocks a send on (see mode_normal.go/
-// mode_loadtest.go) - so a blocked send can jump focus straight to the
-// field that caused it instead of leaving the cursor wherever it happened
-// to be with only the ParseErrors list under the button to notice. The
-// index matches NormalMode/LoadTestMode's shared components() prefix:
-// ServerSelector (only for a grouped request - see ShowServerSelector),
-// NameInput, MethodSelector, URLInput, then PathParams start - both
-// modes' components() must keep that same prefix (length 3, or 4 with a
-// server - order among them doesn't matter here, only the count) for
-// this to stay correct. ok is false when nothing in PathParams/
-// BodyParams/ArrayParams has a problem - e.g. the block came from a
-// malformed Headers line instead, which has no single field to jump to.
+// QueryParams, BodyParams, or ArrayParams field that's currently invalid
+// (ValidateParam) or a required field left empty (RequiredFieldErrors'
+// semantics) - the same checks handleSubmit blocks a send on (see
+// mode_normal.go/mode_loadtest.go) - so a blocked send can jump focus
+// straight to the field that caused it instead of leaving the cursor
+// wherever it happened to be with only the ParseErrors list under the
+// button to notice. The index matches NormalMode/LoadTestMode's shared
+// components() prefix: ServerSelector (only for a grouped request - see
+// ShowServerSelector), NameInput, MethodSelector, URLInput, then
+// PathParams start - both modes' components() must keep that same prefix
+// (length 3, or 4 with a server - order among them doesn't matter here,
+// only the count) for this to stay correct. ok is false when nothing in
+// PathParams/QueryParams/BodyParams/ArrayParams has a problem - e.g. the
+// block came from a malformed Headers line instead, which has no single
+// field to jump to.
 func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
 	focusPrefixLen := 3 // NameInput, MethodSelector, URLInput
 	if m.ShowServerSelector() {
@@ -231,6 +232,12 @@ func (m *RequestPane) firstErrorFocusIndex() (int, bool) {
 
 	idx := focusPrefixLen
 	for _, p := range m.PathParams {
+		if fieldInvalid(p) {
+			return idx, true
+		}
+		idx++
+	}
+	for _, p := range m.QueryParams {
 		if fieldInvalid(p) {
 			return idx, true
 		}

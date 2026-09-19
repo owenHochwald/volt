@@ -175,16 +175,19 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// value into another's - only re-editing the *same* request should
 	// keep values as you type.
 	m.PathParams = nil
+	m.QueryParams = nil
 	m.BodyParams = nil
 	m.ArrayParams = nil
 	m.rebuildServerSelector()
 	m.syncPathParams()
+	m.syncQueryParams()
 	m.syncBodyParams()
 	// Restores whatever was typed/selected into request's fields the last
 	// time it was saved/sent (see http.Request.ParamValues) - after
-	// syncPathParams/syncBodyParams have (re)built the fields to apply
-	// them onto, and before the rebuildFocusManager below, since applying
-	// array item counts can itself change the focus cycle's shape.
+	// syncPathParams/syncQueryParams/syncBodyParams have (re)built the
+	// fields to apply them onto, and before the rebuildFocusManager below,
+	// since applying array item counts can itself change the focus
+	// cycle's shape.
 	m.applyParamValues(request.ParamValues)
 	// Every reinitRequestPane call starts a request fresh - not just
 	// rebuildFocusManager's usual "keep focus where it currently is"

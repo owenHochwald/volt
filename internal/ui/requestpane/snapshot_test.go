@@ -27,11 +27,17 @@ func TestRequestPane_Snapshot_CapturesFieldValues(t *testing.T) {
 		PathParamSchema: map[string]http.BodyFieldSchema{
 			"host_id": {Type: "integer"},
 		},
+		QueryParamSchema: map[string]http.BodyFieldSchema{
+			"verbose": {Type: "boolean"},
+		},
 	}
 	pane.reinitRequestPane(req)
 
 	for i := range pane.PathParams {
 		pane.PathParams[i].Input.SetValue("42")
+	}
+	for i := range pane.QueryParams {
+		pane.QueryParams[i].Enum.SetValue("true")
 	}
 	for i := range pane.BodyParams {
 		if pane.BodyParams[i].Name == "name" {
@@ -45,6 +51,9 @@ func TestRequestPane_Snapshot_CapturesFieldValues(t *testing.T) {
 
 	if snap.ParamValues.PathParamValues["host_id"] != "42" {
 		t.Errorf("expected host_id=42, got %+v", snap.ParamValues.PathParamValues)
+	}
+	if snap.ParamValues.QueryParamValues["verbose"] != "true" {
+		t.Errorf("expected verbose=true, got %+v", snap.ParamValues.QueryParamValues)
 	}
 	if snap.ParamValues.BodyParamValues["name"] != "widget-1" {
 		t.Errorf("expected name=widget-1, got %+v", snap.ParamValues.BodyParamValues)
@@ -76,9 +85,13 @@ func TestRequestPane_ApplySnapshot_RestoresFieldValues(t *testing.T) {
 		PathParamSchema: map[string]http.BodyFieldSchema{
 			"host_id": {Type: "integer"},
 		},
+		QueryParamSchema: map[string]http.BodyFieldSchema{
+			"verbose": {Type: "boolean"},
+		},
 		ParamValues: http.ParamValues{
-			PathParamValues: map[string]string{"host_id": "42"},
-			BodyParamValues: map[string]string{"name": "widget-1"},
+			PathParamValues:  map[string]string{"host_id": "42"},
+			QueryParamValues: map[string]string{"verbose": "true"},
+			BodyParamValues:  map[string]string{"name": "widget-1"},
 			ArrayParamValues: map[string][]map[string]string{
 				"tags": {
 					{"key": "env", "value": "prod"},
@@ -92,6 +105,9 @@ func TestRequestPane_ApplySnapshot_RestoresFieldValues(t *testing.T) {
 
 	if len(pane.PathParams) != 1 || pane.PathParams[0].Value() != "42" {
 		t.Fatalf("expected host_id=42, got %+v", pane.PathParams)
+	}
+	if len(pane.QueryParams) != 1 || pane.QueryParams[0].Value() != "true" {
+		t.Fatalf("expected verbose=true, got %+v", pane.QueryParams)
 	}
 	var nameVal string
 	for _, p := range pane.BodyParams {

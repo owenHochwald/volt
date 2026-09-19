@@ -115,6 +115,7 @@ func (m *RequestPane) syncRequest() {
 func (m *RequestPane) resolvedRequest() *http.Request {
 	resolvedReq := *m.Request
 	resolvedReq.URL = SubstitutePathParams(m.Request.URL, m.PathParams)
+	resolvedReq.URL = appendQueryString(resolvedReq.URL, BuildQueryString(m.QueryParams))
 	headersChanged := false
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		resolvedReq.Body = BuildRequestBody(m.BodyParams, m.ArrayParams)

@@ -84,9 +84,11 @@ func (ltm *LoadTestMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*Req
 		m.syncRequest()
 
 		errs := ValidateParams(m.PathParams)
+		errs = append(errs, ValidateParams(m.QueryParams)...)
 		errs = append(errs, ValidateParams(m.BodyParams)...)
 		errs = append(errs, ValidateArrayParams(m.ArrayParams)...)
 		errs = append(errs, RequiredFieldErrors(m.PathParams)...)
+		errs = append(errs, RequiredFieldErrors(m.QueryParams)...)
 		errs = append(errs, RequiredFieldErrors(m.BodyParams)...)
 		errs = append(errs, RequiredArrayFieldErrors(m.ArrayParams)...)
 		if len(errs) > 0 {
@@ -129,6 +131,7 @@ func (ltm *LoadTestMode) components(m *RequestPane) []ui.Focusable {
 	}
 	components = append(components, m.NameInput, m.MethodSelector, m.URLInput)
 	components = append(components, paramFocusables(m.PathParams)...)
+	components = append(components, paramFocusables(m.QueryParams)...)
 	if len(m.BodyParams) > 0 || len(m.ArrayParams) > 0 {
 		components = append(components, paramFocusables(m.BodyParams)...)
 		components = append(components, arrayParamFocusables(m.ArrayParams)...)

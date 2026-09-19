@@ -58,6 +58,7 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	primaryLine := lipgloss.JoinHorizontal(lipgloss.Left, methodRendered, " ", m.URLInput.View())
 
 	pathParamsBlock, pathOffsets := renderParamSection(m.styles, "Path Params", m.PathParams, m.ShowRequiredErrors)
+	queryParamsBlock, queryOffsets := renderParamSection(m.styles, "Query Params", m.QueryParams, m.ShowRequiredErrors)
 
 	nameLabel := fieldGroupLabelStyle.Render("Name ")
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Left, nameLabel, m.NameInput.View())
@@ -90,8 +91,8 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	}
 	arrayParamsBlock, arrayOffsets := renderArrayParamSection(m.styles, m.ArrayParams, m.ShowRequiredErrors)
 
-	// Field order: server, name, method+URL, path params, body params,
-	// array params, headers, then mode-specific content (load-test config
+	// Field order: server, name, method+URL, path params, query params,
+	// body params, array params, headers, then mode-specific content (load-test config
 	// fields, or nothing). Server, then name, then the request itself -
 	// name is rarely touched once a request is built from an imported
 	// schema, so it sits above the fields that actually matter each time,
@@ -140,6 +141,13 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 		base := lineCount()
 		elements = append(elements, "", pathParamsBlock)
 		for _, o := range pathOffsets {
+			offsets = append(offsets, fieldOffset{o.focusable, base + 1 + o.line})
+		}
+	}
+	if queryParamsBlock != "" {
+		base := lineCount()
+		elements = append(elements, "", queryParamsBlock)
+		for _, o := range queryOffsets {
 			offsets = append(offsets, fieldOffset{o.focusable, base + 1 + o.line})
 		}
 	}

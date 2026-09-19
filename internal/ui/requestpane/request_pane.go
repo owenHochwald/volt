@@ -51,8 +51,17 @@ type RequestPane struct {
 	// URL (e.g. "/cluster/{cluster_id}/repository"), kept in sync with the
 	// URL by syncPathParams. They sit between the URL and Name fields.
 	PathParams []Param
-	NameInput  *textinput.Model
-	Headers    *textarea.Model
+	// QueryParams holds one editable field per query string parameter
+	// declared by an imported request's schema (`volt import`'s "in:
+	// query" parameters - see http.Request.QueryParamSchema), kept in
+	// sync by syncQueryParams. Unlike PathParams, names come from the
+	// schema itself rather than the URL text (a hand-typed request has no
+	// query params here at all - it keeps typing "?key=value" straight
+	// into the URL, same as BodyParams' relationship to the freeform Body
+	// textarea). They sit right after PathParams.
+	QueryParams []Param
+	NameInput   *textinput.Model
+	Headers     *textarea.Model
 	// BodyParams holds one editable field per top-level property of a JSON
 	// request body (populated by `volt import` from the OpenAPI
 	// requestBody schema), kept in sync with Body by syncBodyParams. When
