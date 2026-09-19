@@ -10,8 +10,8 @@ require (
 	github.com/alecthomas/chroma/v2 v2.20.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/x/ansi v0.11.7
+	github.com/coder/websocket v1.8.15
 	github.com/influxdata/tdigest v0.0.1
-	github.com/muesli/termenv v0.16.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/stretchr/testify v1.11.0
 	github.com/valyala/fasthttp v1.68.0
@@ -22,7 +22,6 @@ require (
 require (
 	github.com/alecthomas/repr v0.5.1 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
-	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260703014108-f5a850f9c2b7 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect

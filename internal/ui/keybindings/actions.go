@@ -63,8 +63,9 @@ const (
 	ActionPreviousHelpTab ActionID = "previous_help_tab"
 	ActionDirectHelpTab   ActionID = "direct_help_tab"
 
-	ActionOpenGroups ActionID = "open_groups"
-	ActionOpenImport ActionID = "open_import"
+	ActionOpenGroups    ActionID = "open_groups"
+	ActionOpenImport    ActionID = "open_import"
+	ActionOpenWebSocket ActionID = "open_websocket"
 
 	ActionResetRequest     ActionID = "reset_request"
 	ActionClearParams      ActionID = "clear_params"
@@ -222,6 +223,7 @@ func DefaultRegistry() Registry {
 
 		{ActionOpenGroups, []Context{ContextGlobal}, []string{"ctrl+g"}, "ctrl+g", "groups & servers", 40},
 		{ActionOpenImport, []Context{ContextGlobal}, []string{"ctrl+n"}, "ctrl+n", "import OpenAPI spec", 35},
+		{ActionOpenWebSocket, []Context{ContextGlobal}, []string{"ctrl+k"}, "ctrl+k", "websocket", 34},
 
 		{ActionResetRequest, []Context{ContextRequest}, []string{"ctrl+r"}, "ctrl+r", "reset request", 45},
 		{ActionClearParams, []Context{ContextRequest}, []string{"ctrl+x"}, "ctrl+x", "clear params", 44},

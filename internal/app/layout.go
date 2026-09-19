@@ -96,6 +96,8 @@ func (m *Model) applyLayout(layout terminalLayout) {
 	m.shortcutPane.SetHeight(layout.modalHeight)
 	m.importPane.SetWidth(layout.modalWidth)
 	m.importPane.SetHeight(layout.modalHeight)
+	m.wsPane.SetWidth(layout.modalWidth)
+	m.wsPane.SetHeight(layout.modalHeight)
 
 	if layout.mode == layoutTooSmall {
 		return

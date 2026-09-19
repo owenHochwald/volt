@@ -28,6 +28,8 @@ func (m Model) View() tea.View {
 		content = m.overlayHelpModal()
 	case m.showImportModal:
 		content = m.overlayModal(m.importPane.View())
+	case m.showWSModal:
+		content = m.overlayModal(m.wsPane.View())
 	}
 
 	return newView(content)

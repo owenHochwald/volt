@@ -129,6 +129,28 @@ func TestFirstEscapeClosesHelpWithoutQuitting(t *testing.T) {
 	}
 }
 
+// TestFirstEscapeClosesWSModalWithoutQuitting is a regression test: esc
+// used to fall through to the quit-arming logic instead of closing this
+// modal (only showHelpModal had its own special case in that block), so
+// esc silently never hid the WebSocket modal at all - discovered live,
+// not by this test failing first, since nothing exercised it before the
+// modal existed.
+func TestFirstEscapeClosesWSModalWithoutQuitting(t *testing.T) {
+	model := newTestModel(t)
+	model.showWSModal = true
+	model.wsPane.Open()
+
+	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
+	got := updated.(Model)
+
+	if commandQuits(cmd) {
+		t.Fatal("first escape quit instead of closing the WebSocket modal")
+	}
+	if got.showWSModal {
+		t.Fatal("first escape did not close the WebSocket modal")
+	}
+}
+
 func TestControlCAlwaysQuits(t *testing.T) {
 	model := newTestModel(t)
 	model.setFocusedPanel(utils.RequestPanel)

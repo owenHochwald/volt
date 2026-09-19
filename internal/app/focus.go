@@ -83,6 +83,16 @@ func (m *Model) openGroups() {
 	m.shortcutPane.SetFocused(true)
 }
 
+// closeWS hides the WebSocket modal - unlike closeHelp, it deliberately
+// doesn't touch wsPane's session or log (see wspane's package doc: esc
+// only hides, it never disconnects), so this is safe to call from
+// anywhere esc might reach it, including before the modal's own Update
+// ever sees the keypress (see update.go's Quit-handling special case).
+func (m *Model) closeWS() {
+	m.showWSModal = false
+	m.wsPane.SetFocused(false)
+}
+
 func (m *Model) closeHelp() {
 	if m.themeSessionOpen {
 		m.applyTheme(m.themeSession.Theme, m.themeSession.Source)

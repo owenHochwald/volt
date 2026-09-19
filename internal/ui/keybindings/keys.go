@@ -16,6 +16,7 @@ type KeyMap struct {
 	NextPanel     key.Binding
 	OpenGroups    key.Binding
 	OpenImport    key.Binding
+	OpenWebSocket key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
@@ -138,6 +139,7 @@ func DefaultKeyMap() KeyMap {
 		NextPanel:              registry.MustBinding(ActionNextPanel),
 		OpenGroups:             registry.MustBinding(ActionOpenGroups),
 		OpenImport:             registry.MustBinding(ActionOpenImport),
+		OpenWebSocket:          registry.MustBinding(ActionOpenWebSocket),
 		LoadRequest:            registry.MustBinding(ActionLoadRequest),
 		DeleteRequest:          registry.MustBinding(ActionDeleteRequest),
 		NavCount:               registry.MustBinding(ActionNavigationCount),

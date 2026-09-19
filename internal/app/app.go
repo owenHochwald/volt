@@ -16,6 +16,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
+	"github.com/owenHochwald/Volt/internal/ui/wspane"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -32,6 +33,7 @@ type Model struct {
 	headerPane   *ui.Header
 	shortcutPane shortcutpane.ShortcutPane
 	importPane   importpane.ImportPane
+	wsPane       wspane.WSPane
 
 	savedRequests []http.Request
 
@@ -52,6 +54,7 @@ type Model struct {
 	loadTestCanceled bool
 	showHelpModal    bool
 	showImportModal  bool
+	showWSModal      bool
 	notification     ui.Notification
 	themeSession     design.ThemeLoadResult
 	themeSessionOpen bool
@@ -83,6 +86,7 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	responsePane := responsepane.SetupResponsePane(keys, styles)
 	shortcutPane := shortcutpane.SetupShortcutPane(keys, db, styles)
 	importPane := importpane.SetupImportPane(db, keys)
+	wsPane := wspane.SetupWSPane(keys)
 	requestPane := requestpane.SetupRequestPane(db, keys, styles)
 
 	// jar is shared between requestPane (which injects what's remembered
@@ -135,6 +139,7 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 		responsePane:            &responsePane,
 		shortcutPane:            shortcutPane,
 		importPane:              importPane,
+		wsPane:                  wsPane,
 		focusedPanel:            focusedPanel,
 		headerPane:              ui.SetupHeader(buildinfo.Version(), styles),
 		showHelpModal:           false,

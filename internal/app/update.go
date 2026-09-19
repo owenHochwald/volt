@@ -17,6 +17,7 @@ import (
 	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/ui/shortcutpane"
+	"github.com/owenHochwald/Volt/internal/ui/wspane"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
@@ -75,11 +76,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		noModalOpen := !m.showHelpModal && !m.showImportModal
+		noModalOpen := !m.showHelpModal && !m.showImportModal && !m.showWSModal
 
 		if keybindings.Matches(msg, m.keys.Quit) {
 			if m.showHelpModal {
 				m.closeHelp()
+				return m, nil
+			}
+			// Esc must hide the WebSocket modal on the very first press,
+			// the same as showHelpModal just above - without this
+			// special case, esc falls through to the quit-arming logic
+			// below instead (it only ever checks m.focusedPanel/
+			// responsePane overlays, not this modal), so the modal would
+			// silently never close on esc at all.
+			if m.showWSModal {
+				m.closeWS()
 				return m, nil
 			}
 			if m.quitArmed {
@@ -146,6 +157,27 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If the import modal is open, route ALL messages to it
 		if m.showImportModal {
 			m.importPane, cmd = m.importPane.Update(msg)
+			return m, cmd
+		}
+
+		// Handle ctrl+k to toggle the WebSocket live-session modal. Unlike
+		// '?', this doesn't collide with typing, so it works from any
+		// panel.
+		if keybindings.Matches(msg, m.keys.OpenWebSocket) && noModalOpen {
+			m.showWSModal = true
+			m.wsPane.Open()
+			return m, nil
+		}
+
+		// If the WebSocket modal is open, route ALL messages to it - a
+		// live session, if connected, keeps running in the background even
+		// after esc hides this again (see wspane's own package doc), so
+		// this routing (and the CloseWSModalMsg/EventMsg/ConnectResultMsg/
+		// SendResultMsg cases below) is the only place that visibility is
+		// tracked; the session itself doesn't know or care whether it's
+		// being looked at.
+		if m.showWSModal {
+			m.wsPane, cmd = m.wsPane.Update(msg)
 			return m, cmd
 		}
 
@@ -229,6 +261,19 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case importpane.ImportResultMsg:
 		m.importPane, cmd = m.importPane.Update(msg)
+		return m, cmd
+
+	case wspane.CloseWSModalMsg:
+		m.closeWS()
+		return m, nil
+
+	case wspane.ConnectResultMsg, wspane.EventMsg, wspane.SendResultMsg:
+		// Forwarded here (not just from the "if m.showWSModal" routing
+		// above) so a live session keeps receiving messages - and its log
+		// keeps growing - while the modal is hidden, the same reason
+		// http.LoadTestStatsMsg-style polling isn't gated on which panel
+		// is focused either.
+		m.wsPane, cmd = m.wsPane.Update(msg)
 		return m, cmd
 
 	case shortcutpane.PreviewThemeMsg:
