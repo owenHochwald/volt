@@ -29,6 +29,7 @@ const (
 	modeRenameServer
 	modeEditServerURL
 	modeEditServerHeaders
+	modeEditServerVariables
 )
 
 // pendingDeleteKind distinguishes what a pending delete confirmation applies
@@ -89,6 +90,11 @@ type GroupsPane struct {
 	// utils.ParseKeyValuePairs/ParseMapToString.
 	headersInput textarea.Model
 
+	// variablesInput edits a server's {{name}} placeholder values (see
+	// modeEditServerVariables, http.SubstituteVariables) - the same
+	// "key = value" per line format/parsing as headersInput above.
+	variablesInput textarea.Model
+
 	// renamingName remembers which item a rename/URL-edit in progress
 	// applies to (captured by name, since SQLite CRUD here is keyed by
 	// name, not id).
@@ -132,17 +138,22 @@ func SetupGroupsPane(db *storage.SQLiteStorage, keys keybindings.KeyMap, optiona
 	headersInput.Placeholder = "Authorization = Bearer ...,\nX-Env = prod,"
 	headersInput.SetWidth(40)
 
+	variablesInput := textarea.New()
+	variablesInput.Placeholder = "token = abc123,\nhost = api.example.com,"
+	variablesInput.SetWidth(40)
+
 	return GroupsPane{
-		height:       25,
-		width:        70,
-		keys:         keys,
-		db:           db,
-		styles:       styles,
-		groups:       groups,
-		servers:      servers,
-		nameInput:    newTextInput("name", 40, 40),
-		urlInput:     newTextInput("http://host:port", 200, 40),
-		headersInput: headersInput,
+		height:         25,
+		width:          70,
+		keys:           keys,
+		db:             db,
+		styles:         styles,
+		groups:         groups,
+		servers:        servers,
+		nameInput:      newTextInput("name", 40, 40),
+		urlInput:       newTextInput("http://host:port", 200, 40),
+		headersInput:   headersInput,
+		variablesInput: variablesInput,
 	}
 }
 
@@ -263,4 +274,5 @@ func (m *GroupsPane) resize() {
 	m.groups.SetSize(m.listWidth, listHeight)
 	m.servers.SetSize(m.listWidth, listHeight)
 	m.headersInput.SetWidth(max(m.width-4, 20))
+	m.variablesInput.SetWidth(max(m.width-4, 20))
 }

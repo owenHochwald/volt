@@ -27,6 +27,8 @@ func (m GroupsPane) Update(msg tea.Msg) (GroupsPane, tea.Cmd) {
 		return m.handleServerFormKey(keyMsg)
 	case modeEditServerHeaders:
 		return m.handleServerHeadersFormKey(keyMsg)
+	case modeEditServerVariables:
+		return m.handleServerVariablesFormKey(keyMsg)
 	default:
 		return m.handleBrowseKey(keyMsg)
 	}
@@ -140,6 +142,17 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		m.headersInput.SetValue(utils.ParseMapToString(item.server.Headers))
 		m.headersInput.Focus()
 		m.mode = modeEditServerHeaders
+		return m, nil
+	}
+	if msg.String() == "V" && m.target == focusServers {
+		item, ok := m.selectedServer()
+		if !ok {
+			return m, nil
+		}
+		m.renamingName = item.server.Name
+		m.variablesInput.SetValue(utils.ParseMapToString(item.server.Variables))
+		m.variablesInput.Focus()
+		m.mode = modeEditServerVariables
 		return m, nil
 	}
 	if keybindings.Matches(msg, m.keys.DeleteItem) {
@@ -313,6 +326,36 @@ func (m GroupsPane) handleServerHeadersFormKey(msg tea.KeyPressMsg) (GroupsPane,
 
 	var cmd tea.Cmd
 	m.headersInput, cmd = m.headersInput.Update(msg)
+	return m, cmd
+}
+
+// handleServerVariablesFormKey mirrors handleServerHeadersFormKey exactly,
+// for a server's {{name}} placeholder values (see
+// http.SubstituteVariables) instead of its default headers.
+func (m GroupsPane) handleServerVariablesFormKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
+	if msg.String() == "esc" {
+		m.mode = modeBrowse
+		m.variablesInput.Blur()
+		return m, nil
+	}
+	if keybindings.Matches(msg, m.keys.SaveRequest) {
+		variables, parseErrors := utils.ParseKeyValuePairs(m.variablesInput.Value())
+		if len(parseErrors) > 0 {
+			m.statusMsg, m.statusErr = strings.Join(parseErrors, "; "), true
+			return m, nil
+		}
+		err := m.db.UpdateServerVariables(m.renamingName, variables)
+		m.setStatus(err, fmt.Sprintf("Updated %q's variables", m.renamingName))
+		if err == nil {
+			m.mode = modeBrowse
+			m.variablesInput.Blur()
+			m.reload()
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.variablesInput, cmd = m.variablesInput.Update(msg)
 	return m, cmd
 }
 

@@ -61,6 +61,8 @@ func (m GroupsPane) ViewContent() string {
 		body = m.renderURLForm(fmt.Sprintf("Update base URL for %q", m.renamingName))
 	case modeEditServerHeaders:
 		body = m.renderHeadersForm(fmt.Sprintf("Default headers for %q", m.renamingName))
+	case modeEditServerVariables:
+		body = m.renderVariablesForm(fmt.Sprintf("Variables for %q", m.renamingName))
 	default:
 		body = m.renderBrowse()
 	}
@@ -143,6 +145,16 @@ func (m GroupsPane) renderHeadersForm(title string) string {
 	)
 }
 
+func (m GroupsPane) renderVariablesForm(title string) string {
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.styles.Text.Logo.Render(title),
+		"",
+		m.styles.Text.Label.Render("Variables (key = value, one per line) - use as {{key}}:"),
+		m.variablesInput.View(),
+	)
+}
+
 // FooterHint exposes footerHint for the embedding shortcutpane (see
 // shortcutpane/view.go), whose own footer text needs to track whichever
 // mode-specific hint applies (browse vs. a create/rename/edit form)
@@ -157,9 +169,9 @@ func (m GroupsPane) footerHint() string {
 		return "tab: switch field · enter: save · esc: cancel"
 	case modeCreateGroup, modeRenameGroup, modeRenameServer, modeEditServerURL:
 		return "enter: save · esc: cancel"
-	case modeEditServerHeaders:
+	case modeEditServerHeaders, modeEditServerVariables:
 		return "ctrl+s: save · esc: cancel"
 	default:
-		return "tab: switch list · n: new · r: rename · u: server url · H: server headers · d: delete · q/esc: close"
+		return "tab: switch list · n: new · r: rename · u: server url · H: headers · V: variables · d: delete · q/esc: close"
 	}
 }
