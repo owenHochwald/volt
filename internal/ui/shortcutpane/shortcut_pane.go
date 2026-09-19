@@ -48,6 +48,21 @@ type ShortcutPane struct {
 	savedTheme    int
 	previewing    bool
 
+	// settingsCursor is the Settings surface's single cursor across every
+	// row NavUp/NavDown can land on: the theme list first (kept in sync
+	// with themeIndex while it's there), then the two preference toggles
+	// (see prefRowAutoCookies/prefRowAutoAuthHeaders in settings.go).
+	settingsCursor int
+
+	// autoRememberCookies/autoRememberAuthHeaders mirror app.Model's own
+	// same-named fields for display only - kept in sync via SetPreferences
+	// (called once at startup and again every time the Command Center
+	// opens) and flipped locally the instant enter toggles one (see
+	// activateSettingsRow), before app/update.go's handling of the
+	// resulting Toggle*Msg confirms and persists it.
+	autoRememberCookies     bool
+	autoRememberAuthHeaders bool
+
 	// groupsPane hosts the Groups & Servers manager as this pane's Groups
 	// surface - migrated in from what used to be app.Model's own
 	// standalone ctrl+g modal, so Groups/Servers/Help/Settings all live

@@ -80,7 +80,7 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 
 		if keybindings.Matches(msg, m.keys.NavUp) {
 			if m.surface == SurfaceSettings {
-				return m, m.moveTheme(-1)
+				return m, m.moveSettingsCursor(-1)
 			}
 			m.activeTab = (m.activeTab - 1 + m.getMaxTabs()) % m.getMaxTabs()
 			m.helpViewport.GotoTop()
@@ -88,7 +88,7 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 		}
 		if keybindings.Matches(msg, m.keys.NavDown) {
 			if m.surface == SurfaceSettings {
-				return m, m.moveTheme(1)
+				return m, m.moveSettingsCursor(1)
 			}
 			m.activeTab = (m.activeTab + 1) % m.getMaxTabs()
 			m.helpViewport.GotoTop()
@@ -96,7 +96,7 @@ func (m ShortcutPane) Update(msg tea.Msg) (ShortcutPane, tea.Cmd) {
 		}
 
 		if m.surface == SurfaceSettings && keybindings.Matches(msg, m.keys.ActivateControl) {
-			return m, m.saveTheme()
+			return m, m.activateSettingsRow()
 		}
 
 		// Close modal
