@@ -137,6 +137,74 @@ func TestNormalMode_ComponentsFallsBackToFreeformBody(t *testing.T) {
 	assertSameFocusOrder(t, components, want)
 }
 
+// TestReinitRequestPane_BlursStaleFocusFromParamShapeRebuild is a regression
+// test for a real bug: loading a different request while Name was focused
+// left Name visibly showing a live (non-blurred) cursor even after focus
+// had moved on to Method/a path param. The cause: reinitRequestPane blurs
+// whatever's focused *once*, up front, but syncPathParams/syncQueryParams/
+// syncBodyParams/applyParamValues below that each call rebuildFocusManager
+// whenever the new request's param shape differs from the old one (the
+// normal case when switching to a genuinely different request) -
+// rebuildFocusManager "preserves" focus by *index*, which reads back
+// whatever index Name happened to be at (that index isn't itself cleared
+// by a Blur() call) and re-focuses it, stomping the earlier blur. Reported
+// as: "видим курсор и выделение похожее на курсор в поле name" - a
+// leftover cursor-like highlight sitting in Name while typing actually
+// landed in a completely different field (confirmed live: arrow keys
+// changed the Method selector, not Name, while Name still looked focused).
+func TestReinitRequestPane_BlursStaleFocusFromParamShapeRebuild(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	// SetupRequestPane starts focus on Method (see defaultFocusIndex) -
+	// move it back to Name, exactly as a user would with shift+tab.
+	pane.FocusManager.Prev()
+	if !pane.NameInput.Focused() {
+		t.Fatalf("expected Name to be focused before reinit")
+	}
+
+	// A request with a path param the previous (blank) one didn't have -
+	// this is what makes syncPathParams' internal rebuildFocusManager
+	// actually fire (a no-op, param-shape-unchanged reinit wouldn't
+	// reproduce the bug).
+	req := &http.Request{Method: http.GET, URL: "https://api.example.com/widgets/{id}", Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	if pane.NameInput.Focused() {
+		t.Error("expected Name to be blurred after loading a request with a different param shape, but it's still focused")
+	}
+	if _, ok := pane.FocusManager.Current().(*ui.MethodSelector); !ok {
+		t.Errorf("expected MethodSelector (defaultFocusIndex) to be the focused field, got %T", pane.FocusManager.Current())
+	}
+}
+
+// TestReinitRequestPane_ResetsCursorToEndOfNewValue is a regression test for
+// the other half of the same report: even once a field is correctly
+// blurred (see TestReinitRequestPane_BlursStaleFocusFromParamShapeRebuild),
+// SetValue only moves the cursor if the old position would otherwise land
+// past the *new* value's end - a shorter previous value's cursor position
+// easily stays a valid, but wrong, mid-string index into a longer new one.
+// A blurred cursor still renders at that leftover position (textinput's
+// View() always draws it, just in a plainer style than the focused
+// reverse-video one) - one character subtly off-color from the rest of
+// the field. Reported as: "в url... сам url имеет один символ другого
+// цвета".
+func TestReinitRequestPane_ResetsCursorToEndOfNewValue(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	pane.URLInput.SetValue("https://short.example")
+	pane.URLInput.SetCursor(5) // mid-string, as if the user had typed and left it there
+
+	pane.reinitRequestPane(&http.Request{
+		Method:  http.GET,
+		URL:     "https://api.example.com/widgets/long-path-here",
+		Headers: map[string]string{},
+	})
+
+	if got, want := pane.URLInput.Position(), len("https://api.example.com/widgets/long-path-here"); got != want {
+		t.Errorf("expected the cursor to land at the end of the new URL (%d), got %d", want, got)
+	}
+}
+
 func assertSameFocusOrder(t *testing.T, got, want []ui.Focusable) {
 	t.Helper()
 	if len(got) != len(want) {

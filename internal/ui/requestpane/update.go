@@ -171,6 +171,18 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	m.MethodSelector.SetCurrentIndex(request.Method)
 	m.URLInput.SetValue(request.URL)
 	m.NameInput.SetValue(request.Name)
+	// SetValue only moves the cursor if it would otherwise land past the
+	// new value's end - a shorter old value's cursor position (e.g. from
+	// editing a previous request) can easily still be a valid, but now
+	// wrong, mid-string index into this new one. Left there, a *blurred*
+	// cursor still renders at that position (see textinput.View() - it
+	// always draws the virtual cursor's character, just via a plainer
+	// style when blurred instead of the reverse-video focused one), one
+	// character subtly off-color from the rest of the field for no
+	// visible reason. Reported as: "в url... сам url имеет один символ
+	// другого цвета".
+	m.URLInput.CursorEnd()
+	m.NameInput.CursorEnd()
 	m.Headers.SetValue(utils.ParseMapToString(request.Headers))
 	m.Body.SetValue(bodyInnerContent(request.Body))
 
@@ -203,6 +215,23 @@ func (m *RequestPane) reinitRequestPane(request *http.Request) {
 	// m.ServerSelector with a fresh instance, so FocusManager must be
 	// rebuilt against it too, or cycling it (h/l) would silently do
 	// nothing.
+	//
+	// Blur whatever's current right before this swap: syncPathParams/
+	// syncQueryParams/syncBodyParams/applyParamValues above each call
+	// rebuildFocusManager whenever a request's param shape actually
+	// changed (the normal case here, loading a different request), and
+	// that helper "preserves" focus by *index* - reasonable for its other
+	// caller (an array item added/removed while editing the request
+	// that's already loaded), but meaningless here: the index it reads is
+	// whatever the field this pane had focused *before* reinit began
+	// (e.g. Name, from the blur at the top of this function, which
+	// changes focus state but not FocusManager's currentIndex). Left
+	// unblurred, that stale index gets re-focused - visibly a second,
+	// stray blinking cursor sitting in a field like Name while real
+	// keyboard focus has already moved to Method/URL/a path param below.
+	if m.FocusManager != nil {
+		m.FocusManager.Current().Blur()
+	}
 	m.FocusManager = m.currentMode.GetFocusManagerWithIndex(m, m.defaultFocusIndex())
 	// FieldsViewport is a persistent field, not rebuilt per request - without
 	// this, loading a short request after scrolling deep into a long one
