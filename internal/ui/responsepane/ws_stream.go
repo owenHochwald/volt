@@ -42,6 +42,13 @@ func (m ResponsePane) hasWSTab() bool {
 	return len(m.wsLines) > 0
 }
 
+// hasUnseenWSData reports whether messages have arrived since the last
+// time the WebSocket tab was actually looked at (see wsSeenCount's own
+// doc) - drives the "•" marker renderTabs adds to its label.
+func (m ResponsePane) hasUnseenWSData() bool {
+	return len(m.wsLines) > m.wsSeenCount
+}
+
 // renderWSStream renders the WebSocket tab's content - plain, timestamped
 // lines, oldest first, growing as more arrive (see AppendWSData). No
 // syntax highlighting or raw/pretty toggle: it's a live log, not a

@@ -186,6 +186,16 @@ type ResponsePane struct {
 	// of the session; a later send doesn't clear or restart it.
 	wsArmed bool
 	wsLines []string
+	// wsSeenCount is how many of wsLines the user has actually looked at
+	// - kept in sync with len(wsLines) every time the WebSocket tab
+	// becomes (or already is) the active one (see
+	// updateViewportForActiveTab's TabWebSocket branch), so it only ever
+	// lags behind while looking at a different tab. The gap between the
+	// two is what hasUnseenWSData turns into the tab label's "•" (see
+	// tabs.go's renderTabs) - a live "something arrived while you
+	// weren't looking" signal, the same reason an unread badge exists
+	// anywhere else.
+	wsSeenCount int
 
 	keys   keybindings.KeyMap
 	styles design.Styles

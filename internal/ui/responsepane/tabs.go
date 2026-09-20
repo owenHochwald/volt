@@ -28,7 +28,14 @@ type TabIndex int
 func (m ResponsePane) renderTabs() string {
 	labels := []string{"Body", "Headers", "Timing", "Request"}
 	if m.hasWSTab() {
-		labels = append(labels, "WebSocket")
+		label := "WebSocket"
+		if m.hasUnseenWSData() {
+			// A plain marker, not a count - the exact number matters far
+			// less than "something arrived while you were looking
+			// elsewhere" (see hasUnseenWSData/AppendWSData).
+			label += " •"
+		}
+		labels = append(labels, label)
 	}
 	tabs := labelsForKeys(m.keys.DirectTab.Keys(), labels)
 	return m.renderTabBar(tabs)

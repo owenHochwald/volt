@@ -375,6 +375,12 @@ func (m *ResponsePane) updateViewportForActiveTab() {
 	// it must render even if no request has ever been sent, as long as a
 	// WebSocket send has armed it.
 	if TabIndex(m.activeTab) == TabWebSocket {
+		// The single choke point every path that lands on (or stays on)
+		// this tab runs through - direct "5", h/l wrap-around, and a
+		// live AppendWSData arriving while already here - so marking
+		// everything seen here covers all three without repeating it at
+		// each call site.
+		m.wsSeenCount = len(m.wsLines)
 		m.setViewportContent(m.renderWSStream())
 		return
 	}

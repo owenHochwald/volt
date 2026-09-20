@@ -141,6 +141,65 @@ func TestResponsePane_WSTab_SwitchingAwayWithNoResponse_ClearsStaleContent(t *te
 	}
 }
 
+// TestResponsePane_WSTab_UnseenMarker_ShowsWhileOnAnotherTab verifies the
+// tab label picks up a "•" marker when data arrives while a different
+// tab is active, and that switching to the WebSocket tab clears it.
+func TestResponsePane_WSTab_UnseenMarker_ShowsWhileOnAnotherTab(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.ArmWSStream()
+	pane.AppendWSData("first", time.Now())
+	// Not yet on the WebSocket tab (still on the default Body) - this
+	// message must count as unseen.
+	if !pane.hasUnseenWSData() {
+		t.Fatal("expected data received while on another tab to be unseen")
+	}
+	if !strings.Contains(pane.renderTabs(), "WebSocket •") {
+		t.Errorf("expected the tab label to carry the unseen marker, got:\n%s", pane.renderTabs())
+	}
+
+	pane.activeTab = int(TabWebSocket)
+	pane.updateViewportForActiveTab()
+
+	if pane.hasUnseenWSData() {
+		t.Fatal("expected switching to the WebSocket tab to clear the unseen marker")
+	}
+	if strings.Contains(pane.renderTabs(), "•") {
+		t.Errorf("expected no unseen marker once viewed, got:\n%s", pane.renderTabs())
+	}
+}
+
+// TestResponsePane_WSTab_UnseenMarker_StaysClearWhileLiveViewing verifies
+// data arriving *while already on* the WebSocket tab never triggers the
+// unseen marker - it's only for messages you weren't looking at.
+func TestResponsePane_WSTab_UnseenMarker_StaysClearWhileLiveViewing(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.ArmWSStream()
+	pane.AppendWSData("first", time.Now())
+	pane.activeTab = int(TabWebSocket)
+	pane.updateViewportForActiveTab()
+
+	pane.AppendWSData("second", time.Now())
+
+	if pane.hasUnseenWSData() {
+		t.Error("expected no unseen marker for data received while already viewing the tab")
+	}
+}
+
+// TestResponsePane_WSTab_DirectTab5_ClearsUnseenMarker verifies jumping
+// to the tab via "5" (not just h/l wrap-around) also marks it seen.
+func TestResponsePane_WSTab_DirectTab5_ClearsUnseenMarker(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.ArmWSStream()
+	pane.AppendWSData("hello", time.Now())
+
+	model, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: []rune("5")[0], Text: "5"}))
+	result := model
+
+	if result.hasUnseenWSData() {
+		t.Error("expected pressing '5' to clear the unseen marker")
+	}
+}
+
 // TestResponsePane_WSTab_LiveAppendsWhileBeingViewed verifies new data
 // shows up immediately if the WebSocket tab is the one currently active,
 // not just the next time a tab switch happens to re-render it.
