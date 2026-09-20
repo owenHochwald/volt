@@ -57,6 +57,7 @@ Read the complete [v0.2.0 release notes](RELEASE_NOTES.md).
 - Want live progress, latency, throughput, and failure signals during load tests
 - Want coding agents to evaluate the APIs they build
 - Want reproducible performance evidence in CI
+- Debug local daemons that only listen on a Unix socket, not a port
 
 
 > **Note**: This is an active learning project. Performance optimizations are ongoing, and contributions/feedback are welcome :)
@@ -78,6 +79,7 @@ fallback behavior.
 | **Syntax highlighting** | ✅ | ✅ | ✅ | ❌ | ✅ |
 | **Save collections** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Zero install** | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **Unix socket debugging** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Memory footprint** | ~500MB | ~300MB | ~50MB | <5MB | **~15MB** |
 | **Startup time** | ~3s | ~2s | <1s | instant | **instant** |
 
@@ -152,7 +154,7 @@ volt
 See the [keybindings guide](docs/keybindings.md) for every contextual shortcut
 and macOS Option-key setup, and the [features guide](docs/features.md) for
 Groups/Servers/variables, OpenAPI import, request params, curl export,
-history/diff, the cookie/auth jar, and WebSocket.
+history/diff, the cookie/auth jar, Unix sockets, and WebSocket.
 
 ## Interactive Load Testing
 

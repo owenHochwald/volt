@@ -129,6 +129,35 @@ command - method, sorted headers, and body, all fully resolved (variables
 substituted, path/query params filled in) exactly as it would actually be
 sent.
 
+## Unix sockets
+
+Any URL field - the request pane's URL, a Server's base URL, and the
+WebSocket pane's URL - accepts a `unix://<socket-path>:<request-path>` URL
+instead of an ordinary `http(s)://`/`ws(s)://` one, for debugging a local
+daemon that listens on a Unix domain socket rather than a TCP port:
+
+```
+unix:///var/run/docker.sock:/containers/json
+```
+
+dials the socket at `/var/run/docker.sock` and requests `/containers/json`
+over it - the same idea as curl's `--unix-socket`, folded into one string
+instead of a separate flag/field. The request path defaults to `/` when
+omitted entirely (`unix:///var/run/docker.sock` alone, for a bare root
+health check).
+
+A Server's base URL can use the same scheme, so every request in a group
+resolves against one socket the same way a group already shares one TCP
+base URL:
+
+```bash
+volt server add docker unix:///var/run/docker.sock
+volt group set-server infra docker
+```
+
+The WebSocket pane (`Ctrl+K`) accepts the same syntax, for a daemon that
+speaks WebSocket over a socket instead of a port.
+
 ## Inspecting a response
 
 The response panel has four tabs - Body, Headers, Timing, and (for the
