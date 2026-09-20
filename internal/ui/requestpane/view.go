@@ -297,13 +297,14 @@ func (m RequestPane) renderFooter() string {
 	// "navigate" only ever meant tab/shift+tab - arrow keys have never
 	// moved focus between fields (up/down would collide with moving the
 	// cursor inside a multi-line Body/Headers textarea) - this used to
-	// claim "tab/↑/↓" (and, below, "←/→ or h/l" for the method and
-	// "ctrl+x: reset" for the actually-ctrl+r reset), which a user
-	// reported as literally not working since it never did.
+	// claim "tab/↑/↓" (and "ctrl+x: reset" for the actually-ctrl+r
+	// reset), which a user reported as literally not working since it
+	// never did. "h/l or ←/→: change method" is accurate, though - both
+	// really are wired (see keybindings.ActionNextMethod/PreviousMethod).
 	if m.LoadTestMode {
 		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
 	} else {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • h/l: change method • ctrl+p: send • ctrl+r: reset • ctrl+x: clear params • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • h/l or ←/→: change method • ctrl+p: send • ctrl+r: reset • ctrl+x: clear params • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
 	}
 
 	// A blocked send (a body param outside its schema's min/maxLength or
@@ -419,8 +420,20 @@ func renderParamSection(styles design.Styles, title string, params []Param, show
 		var focusable ui.Focusable
 		if p.Enum != nil {
 			// A fixed-choice picker (including a boolean's true/false
-			// switch) can't produce an invalid value, so it never needs
-			// the red-highlight/comment treatment below.
+			// switch) can't produce a type/format error the way a typed
+			// text field can - ValidateParam always reports it valid -
+			// but it can still be a *required* field left on "(not set)"
+			// (see EnumSelector's own unset state), which fieldError's
+			// own showRequired check already catches. Skipping fieldError
+			// here entirely (as this used to) silently dropped that one
+			// remaining case: the send was still correctly blocked (see
+			// RequiredFieldErrors in handleSubmit), just with no inline
+			// "! required" to explain why nothing happened. There's no
+			// markInputError equivalent here (no .Input to underline) -
+			// the comment text alone is the fix.
+			if msg, ok := fieldError(p, showRequired); !ok {
+				comment = errorTextStyle.Render("  ! " + msg)
+			}
 			field = p.Enum.View()
 			focusable = p.Enum
 		} else {
@@ -479,6 +492,12 @@ func renderArrayParamSection(styles design.Styles, arrays []ArrayParam, showRequ
 				var field, comment string
 				var focusable ui.Focusable
 				if f.Enum != nil {
+					// See renderParamSection's own Enum branch for why
+					// fieldError still needs calling here (the required-
+					// but-unset case, not a type/format error).
+					if msg, ok := fieldError(f, showRequired); !ok {
+						comment = errorTextStyle.Render("  ! " + msg)
+					}
 					field = f.Enum.View()
 					focusable = f.Enum
 				} else {
@@ -503,6 +522,12 @@ func renderArrayParamSection(styles design.Styles, arrays []ArrayParam, showRequ
 				var field, comment string
 				var focusable ui.Focusable
 				if f.Enum != nil {
+					// See renderParamSection's own Enum branch for why
+					// fieldError still needs calling here (the required-
+					// but-unset case, not a type/format error).
+					if msg, ok := fieldError(f, showRequired); !ok {
+						comment = errorTextStyle.Render("  ! " + msg)
+					}
 					field = f.Enum.View()
 					focusable = f.Enum
 				} else {

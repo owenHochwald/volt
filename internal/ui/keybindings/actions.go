@@ -210,8 +210,8 @@ func DefaultRegistry() Registry {
 		{ActionNextField, []Context{ContextRequest, ContextWebSocket}, []string{"tab"}, "tab", "next field", 60},
 		{ActionPreviousField, []Context{ContextRequest, ContextWebSocket}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
 		{ActionActivateControl, []Context{ContextRequest, ContextWebSocket}, []string{"enter"}, "enter", "activate focused control", 55},
-		{ActionNextMethod, []Context{ContextRequest}, []string{"l"}, "l", "next method", 50},
-		{ActionPreviousMethod, []Context{ContextRequest}, []string{"h"}, "h", "previous method", 50},
+		{ActionNextMethod, []Context{ContextRequest}, []string{"l"}, "l/→", "next method", 50},
+		{ActionPreviousMethod, []Context{ContextRequest}, []string{"h"}, "h/←", "previous method", 50},
 
 		{ActionCopyResponse, []Context{ContextResponse}, []string{"y"}, "y", "copy response", 70},
 		{ActionCancelLoadTest, []Context{ContextResponse}, []string{"ctrl+x"}, "ctrl+x", "cancel load test", 70},

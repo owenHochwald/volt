@@ -231,6 +231,44 @@ func TestRequestPane_BlockedSend_ShowsErrorInlineNotInFooter(t *testing.T) {
 	}
 }
 
+// TestRequestPane_BlockedSend_ShowsInlineErrorForRequiredEnumField is a
+// regression test: renderParamSection's Enum branch (an enum or boolean
+// picker) used to skip fieldError entirely on the reasoning that a fixed-
+// choice picker can't produce a type/format error - true, but it missed
+// the one error fieldError still catches for an Enum: a required field
+// left on "(not set)". The blocked send itself already worked (see
+// RequiredFieldErrors, unconditional on field kind) - only the inline
+// "why did nothing happen" explanation was silently missing for this one
+// field type, reported as if the whole required-field feature were gone.
+func TestRequestPane_BlockedSend_ShowsInlineErrorForRequiredEnumField(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	pane.SetWidth(100)
+	pane.SetHeight(40)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"status": {Type: "string", Enum: []string{"active", "inactive"}, Required: true},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.PanelFocused = true
+	// status left on its default "(not set)" - no schema default, never
+	// cycled to a real value.
+
+	if pane.BodyParams[0].Enum.Value() != "" {
+		t.Fatalf("setup: expected the enum to start unset, got %q", pane.BodyParams[0].Enum.Value())
+	}
+
+	result, _ := pane.currentMode.HandleInput(&pane, tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
+
+	if result.RequestInProgress {
+		t.Error("expected the missing required enum field to block sending")
+	}
+	rendered := result.View()
+	if !strings.Contains(rendered, "! required") {
+		t.Errorf("expected the required enum field's error to render inline, got:\n%s", rendered)
+	}
+}
+
 // TestRequestPane_HandleSubmit_FocusesFirstErrorField verifies a blocked
 // send (see the two tests above) also jumps focus straight to whichever
 // field actually caused the block - the *first* one, by field order, not

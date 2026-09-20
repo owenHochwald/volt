@@ -36,26 +36,26 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Requ
 	// (left/right), not typed.
 	switch c := m.FocusManager.Current().(type) {
 	case *ui.MethodSelector:
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
 	case *EnumSelector:
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
 	case *ArrayCountControl:
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 			m.rebuildFocusManager()
 			m.scrollToFocused()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 			m.rebuildFocusManager()
 			m.scrollToFocused()

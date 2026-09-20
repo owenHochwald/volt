@@ -185,13 +185,7 @@ func (c *ArrayCountControl) View() string {
 	if c.focused {
 		style = focusedButtonStyle
 	}
-	// "h/l", not arrow keys - Next/Prev above are wired to
-	// m.keys.ChangeMethodNext/ChangeMethodPrev (mode_normal.go's
-	// *ArrayCountControl case), the same h/l used to cycle the HTTP
-	// method and an EnumSelector, which only ever match "l"/"h" (see
-	// keybindings.ActionNextMethod/ActionPreviousMethod) - never the
-	// literal arrow keys this label used to claim.
-	return style.Render(fmt.Sprintf("‹ %d item(s) › (h/l add/remove)", len(c.array.Items)))
+	return style.Render(fmt.Sprintf("‹ %d item(s) › (h/l or ←/→ add/remove)", len(c.array.Items)))
 }
 
 // arrayParamFocusables exposes each ArrayParam's count control and every

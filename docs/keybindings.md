@@ -70,8 +70,8 @@ use the terminal-independent `Ctrl+E` and `Ctrl+W` bindings.
 |---|---|
 | `Tab` | Focus the next field |
 | `Shift+Tab` | Focus the previous field |
-| `h` | Select the previous HTTP method |
-| `l` | Select the next HTTP method |
+| `h` / `←` | Select the previous HTTP method |
+| `l` / `→` | Select the next HTTP method |
 | `Alt+Enter` (`Option+Enter` on macOS) / `Ctrl+P` | Send the request |
 | `Enter` | Send when the `→ Send` control is focused; otherwise edits the field or accepts a URL suggestion |
 | `Ctrl+S` | Save the request |

@@ -107,12 +107,15 @@ An **imported** request additionally gets:
   provided them).
 - **Body Params** - one input per body field: a plain text input, an enum
   picker for a declared enum (booleans use the same picker), cycled with the
-  same `h`/`l` used to change the HTTP method.
+  same `h`/`l` or `←`/`→` used to change the HTTP method. A field the spec
+  gave no default for starts on `(not set)` and stays reachable by cycling
+  back to it - left out of the request body entirely unless you pick a real
+  value, and flagged as a validation error on send if it's required.
 - **Array Params** - a body field of `type: array` gets a
-  `‹ N item(s) ›` count control (`h`/`l` add/removes the last item, capped
-  at 20, starting with one). An array of objects renders each item as its
-  own named field group; an array of scalars renders each item as one plain
-  field.
+  `‹ N item(s) ›` count control (`h`/`l` or `←`/`→` add/removes the last
+  item, capped at 20, starting with one). An array of objects renders each
+  item as its own named field group; an array of scalars renders each item
+  as one plain field.
 
 Fields are always in the same order: Server selector (grouped requests
 only) → Name → Method/URL → Path Params → Query Params → Body/Array Params

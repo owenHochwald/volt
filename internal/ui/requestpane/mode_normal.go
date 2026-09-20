@@ -35,17 +35,17 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 	// the method (left/right), not typed.
 	switch c := m.FocusManager.Current().(type) {
 	case *ui.MethodSelector:
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
 	case *EnumSelector:
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
 	case *ArrayCountControl:
@@ -53,12 +53,12 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 		// number of focusable fields (an item's worth), so the focus cycle
 		// needs rebuilding right after - same as PathParams/BodyParams
 		// changing shape elsewhere.
-		if keybindings.Matches(msg, m.keys.ChangeMethodNext) {
+		if isNextControlKey(msg, m.keys) {
 			c.Next()
 			m.rebuildFocusManager()
 			m.scrollToFocused()
 		}
-		if keybindings.Matches(msg, m.keys.ChangeMethodPrev) {
+		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 			m.rebuildFocusManager()
 			m.scrollToFocused()
@@ -75,6 +75,27 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 		return nm.handleSubmit(m, msg)
 	}
 	return m, nil
+}
+
+// isNextControlKey/isPrevControlKey recognize both m.keys.ChangeMethodNext/
+// ChangeMethodPrev (h/l) and the literal arrow keys, for cycling a
+// MethodSelector/EnumSelector/ArrayCountControl. Arrow keys are checked
+// here directly rather than added to ChangeMethodNext/ChangeMethodPrev's
+// own registry entry - keybindings.DefaultRegistry deliberately reserves
+// up/down/left/right for text editing everywhere (see
+// TestDefaultRegistryReservesEditingKeys), since a registered action's
+// keys can, in general, be matched from contexts a plain textinput/
+// textarea is also live in. It's safe here specifically because this
+// whole block only ever runs when the *focused* component is one of
+// these three non-text control types (see the type switch above) - a
+// real *textinput.Model/*textarea.Model, handled in the cases below,
+// always gets first refusal on any key via its own case instead.
+func isNextControlKey(msg tea.KeyPressMsg, keys keybindings.KeyMap) bool {
+	return keybindings.Matches(msg, keys.ChangeMethodNext) || msg.String() == "right"
+}
+
+func isPrevControlKey(msg tea.KeyPressMsg, keys keybindings.KeyMap) bool {
+	return keybindings.Matches(msg, keys.ChangeMethodPrev) || msg.String() == "left"
 }
 
 // handleSubmit handles the submit button in normal mode
