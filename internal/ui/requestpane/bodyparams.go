@@ -11,14 +11,15 @@ import (
 
 // bodySpec is one field extracted from a request's body schema template.
 type bodySpec struct {
-	Name      string
-	Type      string
-	Default   string
-	Enum      []string
-	MinLength *int
-	MaxLength *int
-	Minimum   *float64
-	Maximum   *float64
+	Name        string
+	Type        string
+	Default     string
+	Enum        []string
+	Description string
+	MinLength   *int
+	MaxLength   *int
+	Minimum     *float64
+	Maximum     *float64
 	// Items/ItemsRefName/ItemType mirror http.BodyFieldSchema's fields of
 	// the same name. When Type is "array" and Items is non-empty (a
 	// "complex" array - its schema's "items" was a $ref to an object),
@@ -68,6 +69,7 @@ func extractBodySpecs(body string) []bodySpec {
 			Type:         f.Type,
 			Default:      f.Default,
 			Enum:         f.Enum,
+			Description:  f.Description,
 			MinLength:    f.MinLength,
 			MaxLength:    f.MaxLength,
 			Minimum:      f.Minimum,
@@ -206,13 +208,14 @@ func rawJSONStringValue(val string) json.RawMessage {
 // item.
 func paramFromFieldSchema(name string, s http.BodyFieldSchema) Param {
 	p := Param{
-		Name:      name,
-		Type:      s.Type,
-		MinLength: s.MinLength,
-		MaxLength: s.MaxLength,
-		Minimum:   s.Minimum,
-		Maximum:   s.Maximum,
-		Required:  s.Required,
+		Name:        name,
+		Type:        s.Type,
+		MinLength:   s.MinLength,
+		MaxLength:   s.MaxLength,
+		Minimum:     s.Minimum,
+		Maximum:     s.Maximum,
+		Required:    s.Required,
+		Description: s.Description,
 	}
 	if len(s.Enum) > 0 {
 		// Enum values are always one of the fixed options, so
@@ -236,7 +239,13 @@ func paramFromFieldSchema(name string, s http.BodyFieldSchema) Param {
 		p.Enum = NewEnumSelector([]string{"true", "false"}, initial)
 	} else {
 		p.Input = newParamInput()
-		if s.Type != "" {
+		switch {
+		case s.Description != "":
+			// The description is more useful than the bare type name as
+			// a hint (e.g. "the user's display name" vs. "string") - see
+			// http.BodyFieldSchema.Description.
+			p.Input.Placeholder = s.Description
+		case s.Type != "":
 			p.Input.Placeholder = s.Type
 		}
 		if s.MaxLength != nil {
@@ -293,7 +302,8 @@ func (m *RequestPane) syncBodyParams() {
 		}
 		bodyParams = append(bodyParams, paramFromFieldSchema(s.Name, http.BodyFieldSchema{
 			Type: s.Type, Default: s.Default, Enum: s.Enum,
-			MinLength: s.MinLength, MaxLength: s.MaxLength,
+			Description: s.Description,
+			MinLength:   s.MinLength, MaxLength: s.MaxLength,
 			Minimum: s.Minimum, Maximum: s.Maximum,
 			Required: s.Required,
 		}))

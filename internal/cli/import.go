@@ -170,7 +170,7 @@ func RunImport(specPath, baseURLOverride, groupName string, force bool, db *stor
 				summary.Skipped++
 				continue
 			}
-			if err := db.UpdateRequestSchema(id, req.Name, req.Headers, req.Body, req.PathParamSchema, req.QueryParamSchema); err != nil {
+			if err := db.UpdateRequestSchema(id, req.Name, req.Headers, req.Body, req.PathParamSchema, req.QueryParamSchema, req.Description); err != nil {
 				summary.Warnings = append(summary.Warnings, fmt.Sprintf("failed to update %s: %v", key, err))
 				continue
 			}

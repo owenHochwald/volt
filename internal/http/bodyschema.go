@@ -23,6 +23,13 @@ type BodyFieldSchema struct {
 	Default string   `json:"default,omitempty"`
 	Enum    []string `json:"enum,omitempty"`
 
+	// Description is the field's (or, for a path/query parameter, the
+	// parameter's own) OpenAPI "description" - shown in place of Type as
+	// a plain text field's placeholder, or alongside an enum/boolean
+	// picker (which has no placeholder-when-empty concept of its own -
+	// see requestpane's renderParamSection), when present.
+	Description string `json:"description,omitempty"`
+
 	// MaxLength is enforced live as the field's CharLimit (typing simply
 	// can't go over it). MinLength can't be enforced that way without
 	// rejecting perfectly normal in-progress typing, so it's checked at

@@ -118,6 +118,31 @@ func TestRequestPane_SyncBodyParams_CarriesTypeThrough(t *testing.T) {
 	}
 }
 
+// TestRequestPane_SyncBodyParams_DescriptionReplacesTypeAsPlaceholder
+// verifies a field with a schema description uses it as the input's
+// placeholder instead of the bare type name - falling back to the type
+// only when the schema has no description at all (see
+// paramFromFieldSchema).
+func TestRequestPane_SyncBodyParams_DescriptionReplacesTypeAsPlaceholder(t *testing.T) {
+	pane, _ := setupTestPane(t)
+
+	body := schemaBody(t, map[string]http.BodyFieldSchema{
+		"age":  {Type: "integer", Description: "The user's age in years."},
+		"name": {Type: "string"},
+	})
+	req := &http.Request{Method: http.POST, URL: "https://api.example.com/widgets", Body: body, Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+
+	byName := map[string]Param{pane.BodyParams[0].Name: pane.BodyParams[0], pane.BodyParams[1].Name: pane.BodyParams[1]}
+
+	if got := byName["age"].Input.Placeholder; got != "The user's age in years." {
+		t.Errorf("expected age's placeholder to be its description, got %q", got)
+	}
+	if got := byName["name"].Input.Placeholder; got != "string" {
+		t.Errorf("expected name (no description) to fall back to its type as placeholder, got %q", got)
+	}
+}
+
 // TestRequestPane_SyncBodyParams_PrefillsDefault verifies a field with a
 // schema "default" starts pre-filled with that value, ready to send as-is.
 func TestRequestPane_SyncBodyParams_PrefillsDefault(t *testing.T) {

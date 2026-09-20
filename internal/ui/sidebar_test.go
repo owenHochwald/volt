@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
@@ -28,6 +29,35 @@ func setupSidebarWithRequest(t *testing.T) (*SidebarPane, *storage.SQLiteStorage
 	sidebar.SetSize(40, 20)
 	sidebar.SetRequests([]list.Item{RequestItem{title: req.Name, desc: req.URL, Request: req}})
 	return sidebar, db, req
+}
+
+// TestSidebar_View_ShowsSelectedRequestDescription verifies the currently
+// selected request's OpenAPI description (see http.Request.Description)
+// renders somewhere in the sidebar's view - a hand-typed request (or one
+// imported from a spec with no description) shows none at all, rather
+// than a stray blank line.
+func TestSidebar_View_ShowsSelectedRequestDescription(t *testing.T) {
+	sidebar, _, req := setupSidebarWithRequest(t)
+	req.Description = "Fetches the example resource."
+	sidebar.SetRequests([]list.Item{RequestItem{title: req.Name, desc: req.URL, Request: req}})
+
+	if got := sidebar.renderSelectedDescriptionLine(); !strings.Contains(got, "Fetches the example resource.") {
+		t.Errorf("expected the selected request's description to render, got %q", got)
+	}
+	if !strings.Contains(sidebar.View(), "Fetches the example resource.") {
+		t.Errorf("expected View() to include the description, got:\n%s", sidebar.View())
+	}
+}
+
+// TestSidebar_View_NoDescriptionLineWhenRequestHasNone is the counterpart
+// to the above - nothing to show means nothing rendered, not an empty
+// line silently eating into listHeight's budget.
+func TestSidebar_View_NoDescriptionLineWhenRequestHasNone(t *testing.T) {
+	sidebar, _, _ := setupSidebarWithRequest(t)
+
+	if got := sidebar.renderSelectedDescriptionLine(); got != "" {
+		t.Errorf("expected no description line, got %q", got)
+	}
 }
 
 func sendKey(t *testing.T, sidebar *SidebarPane, key string) tea.Cmd {

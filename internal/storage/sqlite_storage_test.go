@@ -90,8 +90,8 @@ func TestSQLiteStorage_SaveLoadDelete(t *testing.T) {
 }
 
 // TestSQLiteStorage_UpdateRequestSchema verifies UpdateRequestSchema (used
-// by `volt import -force`) refreshes name/headers/body/path param schema
-// in place - same row id, no new row created - and leaves
+// by `volt import -force`) refreshes name/headers/body/description/path
+// param schema in place - same row id, no new row created - and leaves
 // method/url/group_id/server_id alone, since those are either the match
 // identity or a user-controlled association unrelated to a spec's content.
 func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
@@ -99,19 +99,20 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 
 	groupID := int64(7)
 	req := &http.Request{
-		Name:    "old name",
-		Method:  "GET",
-		URL:     "http://localhost:8080/widgets/{id}",
-		Headers: map[string]string{"X-Old": "1"},
-		Body:    "old body",
-		GroupID: &groupID,
+		Name:        "old name",
+		Method:      "GET",
+		URL:         "http://localhost:8080/widgets/{id}",
+		Headers:     map[string]string{"X-Old": "1"},
+		Body:        "old body",
+		Description: "old description",
+		GroupID:     &groupID,
 	}
 	assert.NoError(t, db.Save(req))
 	originalID := req.ID
 
 	newPathSchema := map[string]http.BodyFieldSchema{"id": {Type: "integer", Required: true}}
 	newQuerySchema := map[string]http.BodyFieldSchema{"page": {Type: "integer"}}
-	err := db.UpdateRequestSchema(originalID, "new name", map[string]string{"X-New": "2"}, "new body", newPathSchema, newQuerySchema)
+	err := db.UpdateRequestSchema(originalID, "new name", map[string]string{"X-New": "2"}, "new body", newPathSchema, newQuerySchema, "new description")
 	assert.NoError(t, err)
 
 	requests, err := db.Load()
@@ -122,6 +123,7 @@ func TestSQLiteStorage_UpdateRequestSchema(t *testing.T) {
 	assert.Equal(t, originalID, updated.ID)
 	assert.Equal(t, "new name", updated.Name)
 	assert.Equal(t, "new body", updated.Body)
+	assert.Equal(t, "new description", updated.Description)
 	assert.Equal(t, map[string]string{"X-New": "2"}, updated.Headers)
 	assert.Equal(t, newPathSchema, updated.PathParamSchema)
 	assert.Equal(t, newQuerySchema, updated.QueryParamSchema)
@@ -308,7 +310,7 @@ func TestSQLiteStorage_UpdateRequestSchema_DoesNotTouchParamValues(t *testing.T)
 	}
 	assert.NoError(t, db.Save(req))
 
-	assert.NoError(t, db.UpdateRequestSchema(req.ID, "new name", map[string]string{}, "new body", nil, nil))
+	assert.NoError(t, db.UpdateRequestSchema(req.ID, "new name", map[string]string{}, "new body", nil, nil, ""))
 
 	loaded, err := db.Load()
 	assert.NoError(t, err)

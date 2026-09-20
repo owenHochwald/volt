@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/ui"
 )
 
 // TestRequestPane_ScrollFieldsDown_RevealsFieldsBeyondTheBox is a
@@ -110,5 +111,47 @@ func TestRequestPane_ScrollToFocused_RevealsNewlyAddedArrayItem(t *testing.T) {
 	rendered := final.View()
 	if !strings.Contains(rendered, "Item 2:") {
 		t.Errorf("expected scrolling to have brought item 2 into view, got:\n%s", rendered)
+	}
+}
+
+// TestRequestPane_FieldsContent_DescriptionShiftsMethodURLOffsetByOneLine is
+// a regression test for the fieldsContent() refactor that replaced
+// hardcoded fieldOffset line numbers with a dynamically computed
+// primaryLineNum := len(elements) - 1 (see the description-under-Name line
+// added alongside http.Request.Description). MethodSelector/URLInput's own
+// recorded line - unlike PathParams/BodyParams/etc, which derive their
+// offsets from lineCount() and so aren't at risk here - comes directly from
+// primaryLineNum, so it must land on the exact right line whether or not a
+// description is present, or scroll-to-focused would leave Method/URL
+// scrolled just outside the visible box after tabbing to them.
+func TestRequestPane_FieldsContent_DescriptionShiftsMethodURLOffsetByOneLine(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	req := &http.Request{Method: http.GET, URL: "https://api.example.com/widgets", Headers: map[string]string{}}
+	pane.reinitRequestPane(req)
+	pane.SetWidth(150)
+	_, offsetsNoDesc := pane.fieldsContent()
+
+	req.Description = "Lists every widget in the catalog."
+	pane.reinitRequestPane(req)
+	_, offsetsWithDesc := pane.fieldsContent()
+
+	lineFor := func(offsets []fieldOffset, target ui.Focusable) int {
+		for _, o := range offsets {
+			if o.focusable == target {
+				return o.line
+			}
+		}
+		t.Fatalf("target field not found in offsets")
+		return -1
+	}
+
+	// Asserted as absolute line numbers, not just "withDesc == noDesc + 1":
+	// a uniform off-by-N bug in primaryLineNum's formula would shift both
+	// sides by the same amount and still satisfy a same-delta check.
+	if got := lineFor(offsetsNoDesc, pane.MethodSelector); got != 2 {
+		t.Errorf("expected MethodSelector at line 2 with no description (nameLine, blank, primaryLine), got %d", got)
+	}
+	if got := lineFor(offsetsWithDesc, pane.MethodSelector); got != 3 {
+		t.Errorf("expected MethodSelector at line 3 with a description (nameLine, descLine, blank, primaryLine), got %d", got)
 	}
 }

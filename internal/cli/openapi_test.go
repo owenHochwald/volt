@@ -429,6 +429,59 @@ func TestParseOpenAPIURLs_RequestBodySchemaDefaultAndEnum(t *testing.T) {
 	}
 }
 
+// TestParseOpenAPIURLs_OperationAndFieldDescriptions verifies both an
+// operation's own "description" (-> http.Request.Description) and a body
+// property's "description" (-> BodyFieldSchema.Description) are carried
+// through - shown read-only under Name and as a body param's placeholder/
+// picker annotation respectively (see requestpane).
+func TestParseOpenAPIURLs_OperationAndFieldDescriptions(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/widgets": {
+				"post": {
+					"operationId": "createWidget",
+					"description": "Creates a new widget in the catalog.",
+					"requestBody": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"name": {"type": "string", "description": "The widget's display name."},
+										"status": {"type": "string", "enum": ["active", "inactive"], "description": "Whether the widget is active."}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	if got := requests[0].Description; got != "Creates a new widget in the catalog." {
+		t.Errorf("expected the operation's description on the request, got %q", got)
+	}
+
+	schema := requestBodySchema(t, requests[0])
+	if got := schema["name"].Description; got != "The widget's display name." {
+		t.Errorf("expected name's field description, got %q", got)
+	}
+	if got := schema["status"].Description; got != "Whether the widget is active." {
+		t.Errorf("expected status's (enum) field description, got %q", got)
+	}
+}
+
 func TestParseOpenAPIURLs_RequestBodySchemaLimits(t *testing.T) {
 	spec := `{
 		"openapi": "3.0.0",
@@ -786,6 +839,43 @@ func TestParseOpenAPIURLs_PathParamSchema(t *testing.T) {
 	}
 	if _, ok := getRegion.QueryParamSchema["region"]; ok {
 		t.Error("expected the 'in: path' parameter to be excluded from QueryParamSchema")
+	}
+}
+
+// TestParseOpenAPIURLs_PathAndQueryParamDescriptions verifies a
+// parameter's own "description" (a sibling of "schema" on the parameter
+// object, not inside it) is read for both path and query parameters, and
+// overrides whatever (if anything) the schema itself declared.
+func TestParseOpenAPIURLs_PathAndQueryParamDescriptions(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"paths": {
+			"/hosts/{host_id}": {
+				"get": {
+					"operationId": "getHost",
+					"parameters": [
+						{"name": "host_id", "in": "path", "required": true, "description": "The host's numeric ID.", "schema": {"type": "integer"}},
+						{"name": "verbose", "in": "query", "description": "Include extra detail in the response.", "schema": {"type": "boolean"}}
+					]
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	if got := requests[0].PathParamSchema["host_id"].Description; got != "The host's numeric ID." {
+		t.Errorf("expected host_id's parameter-level description, got %q", got)
+	}
+	if got := requests[0].QueryParamSchema["verbose"].Description; got != "Include extra detail in the response." {
+		t.Errorf("expected verbose's parameter-level description, got %q", got)
 	}
 }
 

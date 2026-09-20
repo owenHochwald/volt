@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/paginator"
@@ -159,13 +160,40 @@ func (s *SidebarPane) renderHelpText() string {
 }
 
 // listHeight returns the height available for the request list itself,
-// reserving exactly as many rows as renderGroupLine/renderHelpText
-// actually render to at the sidebar's current width (see contentWidth) -
-// not a fixed guess - so the three together always add up to s.height
-// exactly, regardless of how narrow the sidebar gets.
+// reserving exactly as many rows as renderGroupLine/renderHelpText/
+// renderSelectedDescriptionLine actually render to at the sidebar's
+// current width (see contentWidth) - not a fixed guess - so all of them
+// together always add up to s.height exactly, regardless of how narrow
+// the sidebar gets or whether the selected request even has a
+// description to show.
 func (s *SidebarPane) listHeight() int {
 	reserved := lipgloss.Height(s.renderGroupLine()) + lipgloss.Height(s.renderHelpText())
+	if desc := s.renderSelectedDescriptionLine(); desc != "" {
+		reserved += lipgloss.Height(desc)
+	}
 	return max(s.height-reserved, 0)
+}
+
+// renderSelectedDescriptionLine renders the currently selected request's
+// OpenAPI operation description (see http.Request.Description), or ""
+// if it has none - a hand-typed request, or one imported from a spec
+// that didn't declare one, takes up no extra space at all. Wrapped
+// (not just truncated to one line) since a real description can run to a
+// full sentence or two, but capped at maxDescriptionLines so one long
+// enough to matter can't quietly swallow most of the sidebar's height.
+func (s *SidebarPane) renderSelectedDescriptionLine() string {
+	item, ok := s.SelectedItem()
+	if !ok || item.Request == nil || item.Request.Description == "" {
+		return ""
+	}
+	const maxDescriptionLines = 2
+	wrapped := lipgloss.NewStyle().Width(max(s.width-2, 10)).Render(item.Request.Description)
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) > maxDescriptionLines {
+		lines = lines[:maxDescriptionLines]
+		lines[maxDescriptionLines-1] = strings.TrimRight(lines[maxDescriptionLines-1], " ") + "…"
+	}
+	return s.styles.Text.Faint.Render(strings.Join(lines, "\n"))
 }
 
 // currentGroupFilter returns the selected group's name, or "" when
@@ -521,12 +549,12 @@ func (s *SidebarPane) View() string {
 	// separate "focus" to move back to - but that's not obvious from the
 	// brackets alone, so the hint is spelled out in renderHelpText too, not
 	// just in the group line itself (which can be easy to miss).
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		s.renderGroupLine(),
-		s.requestsList.View(),
-		s.renderHelpText(),
-	)
+	lines := []string{s.renderGroupLine(), s.requestsList.View()}
+	if desc := s.renderSelectedDescriptionLine(); desc != "" {
+		lines = append(lines, desc)
+	}
+	lines = append(lines, s.renderHelpText())
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 func (s *SidebarPane) SelectedItem() (RequestItem, bool) {

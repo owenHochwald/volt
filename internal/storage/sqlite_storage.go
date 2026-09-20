@@ -191,20 +191,20 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 			return err
 		}
 		if err == nil && existingName == request.Name {
-			q := `UPDATE requests SET name = ?, method = ?, url = ?, headers = ?, body = ?, group_id = ?, server_id = ?, path_param_schema = ?, query_param_schema = ?, param_values = ? WHERE id = ?`
-			_, err = s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString, request.ID)
+			q := `UPDATE requests SET name = ?, method = ?, url = ?, headers = ?, body = ?, group_id = ?, server_id = ?, path_param_schema = ?, query_param_schema = ?, param_values = ?, description = ? WHERE id = ?`
+			_, err = s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString, request.Description, request.ID)
 			return err
 		}
 		// Row no longer exists, or the name changed - fall through to
 		// insert a new row below.
 	}
 
-	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	q := `INSERT INTO requests (name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	// database/sql's default converter turns a nil *int64 into SQL NULL and
 	// dereferences a non-nil one, so request.GroupID/ServerID can be passed
 	// as-is.
-	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString)
+	res, err := s.db.Exec(q, request.Name, request.Method, request.URL, headerString, request.Body, request.GroupID, request.ServerID, pathParamSchemaString, queryParamSchemaString, paramValuesString, request.Description)
 	if err != nil {
 		return err
 	}
@@ -217,14 +217,15 @@ func (s *SQLiteStorage) Save(request *http.Request) error {
 }
 
 // UpdateRequestSchema overwrites an existing request's name, headers,
-// body, and path/query param schemas - used by `volt import -force` to
-// refresh a previously imported request from a changed OpenAPI spec
-// without touching its group/server association or its identity (method/
-// url, which is what matched it to the existing row in the first place -
-// see cli.dedupKey). Deliberately leaves group_id/server_id/method/url
-// alone: those are either the match key itself or a user-controlled
-// association unrelated to the spec's content.
-func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string, pathParamSchema, queryParamSchema map[string]http.BodyFieldSchema) error {
+// body, description, and path/query param schemas - used by `volt import
+// -force` to refresh a previously imported request from a changed
+// OpenAPI spec without touching its group/server association or its
+// identity (method/url, which is what matched it to the existing row in
+// the first place - see cli.dedupKey). Deliberately leaves
+// group_id/server_id/method/url alone: those are either the match key
+// itself or a user-controlled association unrelated to the spec's
+// content.
+func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[string]string, body string, pathParamSchema, queryParamSchema map[string]http.BodyFieldSchema, description string) error {
 	headerString, err := serializeHeaders(headers)
 	if err != nil {
 		return err
@@ -237,13 +238,13 @@ func (s *SQLiteStorage) UpdateRequestSchema(id int64, name string, headers map[s
 	if err != nil {
 		return err
 	}
-	q := `UPDATE requests SET name = ?, headers = ?, body = ?, path_param_schema = ?, query_param_schema = ? WHERE id = ?`
-	_, err = s.db.Exec(q, name, headerString, body, pathParamSchemaString, queryParamSchemaString, id)
+	q := `UPDATE requests SET name = ?, headers = ?, body = ?, path_param_schema = ?, query_param_schema = ?, description = ? WHERE id = ?`
+	_, err = s.db.Exec(q, name, headerString, body, pathParamSchemaString, queryParamSchemaString, description, id)
 	return err
 }
 
 func (s *SQLiteStorage) Load() ([]http.Request, error) {
-	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values FROM requests`
+	q := `SELECT id, name, method, url, headers, body, group_id, server_id, path_param_schema, query_param_schema, param_values, description FROM requests`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -265,9 +266,10 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			pathParamSchema  string
 			queryParamSchema string
 			paramValues      string
+			description      string
 		)
 
-		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema, &queryParamSchema, &paramValues); err != nil {
+		if err := rows.Scan(&id, &name, &method, &url, &headers, &body, &groupID, &serverID, &pathParamSchema, &queryParamSchema, &paramValues, &description); err != nil {
 			return nil, err
 
 		}
@@ -297,6 +299,7 @@ func (s *SQLiteStorage) Load() ([]http.Request, error) {
 			PathParamSchema:  pathParamSchemaMap,
 			QueryParamSchema: queryParamSchemaMap,
 			ParamValues:      paramValuesStruct,
+			Description:      description,
 		}
 		if groupID.Valid {
 			gid := groupID.Int64

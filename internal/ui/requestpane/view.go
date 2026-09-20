@@ -2,6 +2,7 @@ package requestpane
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/lipgloss/v2"
@@ -120,21 +121,35 @@ func (m RequestPane) fieldsContent() (string, []fieldOffset) {
 	if m.ShowServerSelector() {
 		serverLabel := fieldGroupLabelStyle.Render("Server ")
 		serverLine := lipgloss.JoinHorizontal(lipgloss.Left, serverLabel, m.ServerSelector.View())
-		elements = []string{serverLine, "", nameLine, "", primaryLine}
+		elements = []string{serverLine, "", nameLine}
 		offsets = []fieldOffset{
 			{m.ServerSelector, 0},
 			{m.NameInput, 2},
-			{m.MethodSelector, 4},
-			{m.URLInput, 4},
 		}
 	} else {
-		elements = []string{nameLine, "", primaryLine}
+		elements = []string{nameLine}
 		offsets = []fieldOffset{
 			{m.NameInput, 0},
-			{m.MethodSelector, 2},
-			{m.URLInput, 2},
 		}
 	}
+	// A description (from `volt import`'s OpenAPI operation - see
+	// http.Request.Description) is read-only, so it gets a line of its
+	// own rather than a fieldOffset: nothing to focus or tab to. A
+	// hand-typed request has none, so this is skipped entirely rather
+	// than showing an empty line under Name every time.
+	if desc := strings.TrimSpace(m.Request.Description); desc != "" {
+		elements = append(elements, m.styles.Text.Faint.Render(desc))
+	}
+	elements = append(elements, "", primaryLine)
+	// Each element so far is exactly one rendered line (JoinHorizontal
+	// results and blanks, never a multi-line block), so its own index is
+	// already the line number primaryLine ends up on - same assumption
+	// the hardcoded offsets above this used to make explicitly.
+	primaryLineNum := len(elements) - 1
+	offsets = append(offsets,
+		fieldOffset{m.MethodSelector, primaryLineNum},
+		fieldOffset{m.URLInput, primaryLineNum},
+	)
 	lineCount := func() int { return lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, elements...)) }
 
 	if pathParamsBlock != "" {
@@ -433,6 +448,14 @@ func renderParamSection(styles design.Styles, title string, params []Param, show
 			// the comment text alone is the fix.
 			if msg, ok := fieldError(p, showRequired); !ok {
 				comment = errorTextStyle.Render("  ! " + msg)
+			} else if p.Description != "" {
+				// No placeholder-when-empty concept exists for a picker
+				// the way a plain text field has (see the non-Enum
+				// branch's Input.Placeholder) - the description goes
+				// here, to the right of the field itself, instead. An
+				// error (above) always wins when both are present: it's
+				// actionable, the description is just reference text.
+				comment = styles.Text.Faint.Render("  " + p.Description)
 			}
 			field = p.Enum.View()
 			focusable = p.Enum
@@ -494,9 +517,12 @@ func renderArrayParamSection(styles design.Styles, arrays []ArrayParam, showRequ
 				if f.Enum != nil {
 					// See renderParamSection's own Enum branch for why
 					// fieldError still needs calling here (the required-
-					// but-unset case, not a type/format error).
+					// but-unset case, not a type/format error), and for
+					// the description-to-the-right fallback.
 					if msg, ok := fieldError(f, showRequired); !ok {
 						comment = errorTextStyle.Render("  ! " + msg)
+					} else if f.Description != "" {
+						comment = styles.Text.Faint.Render("  " + f.Description)
 					}
 					field = f.Enum.View()
 					focusable = f.Enum
@@ -524,9 +550,12 @@ func renderArrayParamSection(styles design.Styles, arrays []ArrayParam, showRequ
 				if f.Enum != nil {
 					// See renderParamSection's own Enum branch for why
 					// fieldError still needs calling here (the required-
-					// but-unset case, not a type/format error).
+					// but-unset case, not a type/format error), and for
+					// the description-to-the-right fallback.
 					if msg, ok := fieldError(f, showRequired); !ok {
 						comment = errorTextStyle.Render("  ! " + msg)
+					} else if f.Description != "" {
+						comment = styles.Text.Faint.Render("  " + f.Description)
 					}
 					field = f.Enum.View()
 					focusable = f.Enum

@@ -43,6 +43,13 @@ type Param struct {
 	// way ValidateParam's checks are, since being empty is a normal,
 	// unremarkable state while a form is still being filled in.
 	Required bool
+	// Description is the field's (or parameter's) OpenAPI "description",
+	// only ever set for BodyParams/PathParams/QueryParams built from a
+	// schema. For a plain Input it's used as the field's placeholder
+	// instead of Type (see paramFromFieldSchema); for an Enum, which has
+	// no empty-placeholder concept of its own, it's rendered to the
+	// right of the field instead (see renderParamSection).
+	Description string
 }
 
 // Value returns the field's current value regardless of whether it's

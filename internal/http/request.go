@@ -40,6 +40,12 @@ type Request struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body,omitempty"`
+	// Description is the OpenAPI operation's own "description" - set by
+	// `volt import` when the spec declares one, shown read-only in the
+	// sidebar (for the currently selected request) and the request pane
+	// (under Name - see requestpane's fieldsContent). A hand-created
+	// request has no spec to derive one from, so it stays empty.
+	Description string `json:"description,omitempty"`
 	// GroupID, when set, ties this request to a request group. If URL is a
 	// path (e.g. "/pets") rather than an absolute URL, it is meant to be
 	// resolved against that group's configured Server at send time - see

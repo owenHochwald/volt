@@ -96,6 +96,7 @@ func ParseOpenAPIURLs(data []byte, isYAML bool, baseURLOverride string, allowRel
 			}
 			req := http.NewRequestWithParams(method, url)
 			req.Name = truncateName(operationName(op, method, path))
+			req.Description, _ = op["description"].(string)
 			if fields := jsonRequestBodyFields(doc, op); len(fields) > 0 {
 				req.Body = requestBodyTemplate(fields)
 			}
@@ -186,6 +187,9 @@ type bodyField struct {
 	// Enum is the schema's "enum" values, stringified, or nil if the
 	// schema doesn't constrain this field to a fixed set of values.
 	Enum []string
+	// Description is the property's own "description", or "" if the
+	// schema declares none.
+	Description string
 	// MinLength/MaxLength/Minimum/Maximum mirror the schema's own
 	// constraints of the same name, nil where the schema declares none.
 	MinLength *int
@@ -246,6 +250,7 @@ func jsonRequestBodyFields(doc, op map[string]interface{}) []bodyField {
 			field.Type = schema.Type
 			field.Default = schema.Default
 			field.Enum = schema.Enum
+			field.Description = schema.Description
 			field.MinLength = schema.MinLength
 			field.MaxLength = schema.MaxLength
 			field.Minimum = schema.Minimum
@@ -290,6 +295,16 @@ func pathParamFields(doc, item, op map[string]interface{}) map[string]http.BodyF
 			}
 			paramSchema, _ := param["schema"].(map[string]interface{})
 			field := extractFieldSchema(doc, paramSchema, 0)
+			// A parameter's own "description" lives on the parameter
+			// object itself, a sibling of "schema" - not inside the
+			// schema extractFieldSchema just read (that's where a body
+			// property's description lives instead). Override rather
+			// than only filling in when empty: the parameter-level text
+			// is the one an OpenAPI author actually meant for this
+			// specific field.
+			if desc, ok := param["description"].(string); ok && desc != "" {
+				field.Description = desc
+			}
 			// A path parameter's own "required" - distinct from a body
 			// property's parent-object "required" list (see requiredSet) -
 			// is spec-mandated true for any "in: path" parameter; read an
@@ -334,6 +349,12 @@ func queryParamFields(doc, item, op map[string]interface{}) map[string]http.Body
 			}
 			paramSchema, _ := param["schema"].(map[string]interface{})
 			field := extractFieldSchema(doc, paramSchema, 0)
+			// See pathParamFields' identical override for why this reads
+			// the parameter object's own "description" rather than
+			// relying on whatever extractFieldSchema found in "schema".
+			if desc, ok := param["description"].(string); ok && desc != "" {
+				field.Description = desc
+			}
 			if req, ok := param["required"].(bool); ok {
 				field.Required = req
 			}
@@ -382,6 +403,7 @@ const maxArrayItemDepth = 3
 func extractFieldSchema(doc, prop map[string]interface{}, depth int) http.BodyFieldSchema {
 	var field http.BodyFieldSchema
 	field.Type, _ = prop["type"].(string)
+	field.Description, _ = prop["description"].(string)
 	if def, ok := prop["default"]; ok {
 		field.Default = stringifyJSONValue(def)
 	}
@@ -540,6 +562,7 @@ func requestBodyTemplate(fields []bodyField) string {
 			Type:         f.Type,
 			Default:      f.Default,
 			Enum:         f.Enum,
+			Description:  f.Description,
 			MinLength:    f.MinLength,
 			MaxLength:    f.MaxLength,
 			Minimum:      f.Minimum,
