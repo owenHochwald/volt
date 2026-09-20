@@ -441,6 +441,27 @@ func TestSQLiteStorage_LastGroupFilter_RoundTrips(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
+func TestSQLiteStorage_LastWSURL_RoundTrips(t *testing.T) {
+	db := setupTestDB(t)
+
+	got, err := db.LoadLastWSURL()
+	assert.NoError(t, err)
+	if got != "" {
+		t.Errorf("expected \"\" with nothing saved yet, got %q", got)
+	}
+
+	assert.NoError(t, db.SaveLastWSURL("wss://example.com/socket"))
+	got, err = db.LoadLastWSURL()
+	assert.NoError(t, err)
+	assert.Equal(t, "wss://example.com/socket", got)
+
+	// A later successful connection to a different address overwrites it.
+	assert.NoError(t, db.SaveLastWSURL("ws://localhost:8080/echo"))
+	got, err = db.LoadLastWSURL()
+	assert.NoError(t, err)
+	assert.Equal(t, "ws://localhost:8080/echo", got)
+}
+
 func TestSQLiteStorage_SaveAndLoad(t *testing.T) {
 	db := setupTestDB(t)
 

@@ -175,6 +175,18 @@ type ResponsePane struct {
 	diffContent string
 	diffLabel   string
 
+	// wsStream is the response pane's own WebSocket tab (5th tab, see
+	// tabs.go's TabWebSocket) - receive-only, fed by app/update.go
+	// forwarding wspane's own EventMsg/SendResultMsg (see ws_stream.go's
+	// ArmWSStream/AppendWSData). Only shows data received after the
+	// first successful send from the WebSocket pane, not whatever the
+	// socket pushed before that or that session's whole history - and
+	// only exists in the tab bar at all once there's at least one line
+	// to show (see hasWSTab). Once shown, it keeps growing for the rest
+	// of the session; a later send doesn't clear or restart it.
+	wsArmed bool
+	wsLines []string
+
 	keys   keybindings.KeyMap
 	styles design.Styles
 }

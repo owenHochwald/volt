@@ -110,17 +110,6 @@ func (m Model) wideView(layout terminalLayout, header string) string {
 			)
 		}
 		rightSide = lipgloss.JoinVertical(lipgloss.Left, request, response)
-		if m.wsDocked {
-			ws := m.renderPanel(
-				m.styles.Panel.Base,
-				m.focusedPanel == utils.WSPanel,
-				false,
-				layout.mainWidth,
-				layout.wsHeight,
-				m.wsPane.DockedView(),
-			)
-			rightSide = lipgloss.JoinVertical(lipgloss.Left, request, response, ws)
-		}
 	}
 
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightSide)
@@ -161,8 +150,6 @@ func (m Model) focusedView(layout terminalLayout, header string) string {
 			content = m.responsePane.HistoryViewerListView()
 		}
 		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, content)
-	case utils.WSPanel:
-		panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, m.wsPane.DockedView())
 	default:
 		panel = m.renderPanel(m.styles.Panel.Sidebar, true, false, layout.width, layout.contentHeight, m.sidebarPane.View())
 	}
@@ -188,8 +175,6 @@ func (m Model) headerView(layout terminalLayout) string {
 		activePanel = "REQUEST"
 	case utils.ResponsePanel:
 		activePanel = "RESPONSE"
-	case utils.WSPanel:
-		activePanel = "WEBSOCKET"
 	}
 	mode := "NORMAL"
 	if m.requestPane.LoadTestMode || m.loadTestUpdates != nil {
@@ -206,9 +191,6 @@ func (m Model) headerView(layout terminalLayout) string {
 
 func (m Model) panelTabs(width int) string {
 	names := []string{" SIDEBAR ", " REQUEST ", " RESPONSE "}
-	if m.wsDocked {
-		names = append(names, " WEBSOCKET ")
-	}
 	rendered := make([]string, 0, len(names))
 	for i, name := range names {
 		if utils.Panel(i) == m.focusedPanel {

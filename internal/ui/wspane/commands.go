@@ -6,8 +6,11 @@ import (
 )
 
 // ConnectResultMsg carries the outcome of a background dial (see
-// connectCmd) - Session is nil on failure.
+// connectCmd) - Session is nil on failure. URL is echoed back so a
+// successful connection's address can be persisted (see app/update.go),
+// without the caller needing to reach back into WSPane's own state.
 type ConnectResultMsg struct {
+	URL     string
 	Session *ws.Session
 	Err     error
 }
@@ -15,7 +18,7 @@ type ConnectResultMsg struct {
 func connectCmd(url string) tea.Cmd {
 	return func() tea.Msg {
 		session, err := ws.Connect(url)
-		return ConnectResultMsg{Session: session, Err: err}
+		return ConnectResultMsg{URL: url, Session: session, Err: err}
 	}
 }
 

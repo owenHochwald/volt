@@ -92,6 +92,17 @@ func SaveLastGroupFilterCmd(db *storage.SQLiteStorage, name string) tea.Cmd {
 	}
 }
 
+// SaveLastWSURLCmd persists url (see storage.SaveLastWSURL) as the
+// WebSocket URL to restore on the app's next start - fire-and-forget,
+// same rationale as SaveLastGroupFilterCmd. Callers only invoke this
+// after a connection actually succeeds, never on a failed attempt.
+func SaveLastWSURLCmd(db *storage.SQLiteStorage, url string) tea.Cmd {
+	return func() tea.Msg {
+		_ = db.SaveLastWSURL(url)
+		return nil
+	}
+}
+
 // SaveBodyStyleCmd persists name (see design.SaveBodyStyle) as the
 // response pane's Body tab syntax highlighting style to restore on the
 // app's next start - fire-and-forget, same rationale as

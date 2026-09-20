@@ -7,30 +7,16 @@ import (
 	"github.com/owenHochwald/Volt/internal/utils"
 )
 
-// panelCount returns how many panels ctrl+w/ctrl+e (see movePanel) cycle
-// through - 4 (including utils.WSPanel) only while the WebSocket pane is
-// docked, since it isn't a focusable panel at all otherwise (see
-// utils.WSPanel's own doc).
-func (m Model) panelCount() int {
-	if m.wsDocked {
-		return 4
-	}
-	return 3
-}
+const panelCount = 3
 
 func (m *Model) setFocusedPanel(panel utils.Panel) {
-	maxPanel := utils.ResponsePanel
-	if m.wsDocked {
-		maxPanel = utils.WSPanel
-	}
-	if panel < utils.SidebarPanel || panel > maxPanel {
+	if panel < utils.SidebarPanel || panel > utils.ResponsePanel {
 		return
 	}
 
 	m.sidebarPane.SetFocused(panel == utils.SidebarPanel)
 	m.requestPane.SetFocused(panel == utils.RequestPanel)
 	m.responsePane.SetFocused(panel == utils.ResponsePanel)
-	m.wsPane.SetFocused(panel == utils.WSPanel)
 	m.focusedPanel = panel
 	// Leaving the response panel any way (not just explicitly toggling
 	// zoom off - esc, a panel switch, loading a request from the sidebar,
@@ -50,8 +36,7 @@ func (m *Model) setFocusedPanel(panel utils.Panel) {
 }
 
 func (m *Model) movePanel(delta int) {
-	count := m.panelCount()
-	next := (int(m.focusedPanel) + delta + count) % count
+	next := (int(m.focusedPanel) + delta + panelCount) % panelCount
 	m.setFocusedPanel(utils.Panel(next))
 }
 
@@ -61,8 +46,6 @@ func (m Model) focusedContext() keybindings.Context {
 		return keybindings.ContextRequest
 	case utils.ResponsePanel:
 		return keybindings.ContextResponse
-	case utils.WSPanel:
-		return keybindings.ContextWebSocket
 	default:
 		return keybindings.ContextSidebar
 	}
@@ -98,25 +81,6 @@ func (m *Model) openGroups() {
 	m.shortcutPane.BeginSession()
 	m.shortcutPane.SetSurface(shortcutpane.SurfaceGroups)
 	m.shortcutPane.SetFocused(true)
-}
-
-// toggleWSDock switches the WebSocket pane between a floating modal and a
-// real fourth panel (see utils.WSPanel, wsDocked). Docking supersedes the
-// floating overlay - showing the same session in both places at once
-// would be redundant - so docking on always closes it and jumps focus
-// straight to the newly-docked panel; undocking, if it was the focused
-// panel, falls back to the response panel rather than leaving focus
-// pointing at a panel that's no longer part of the cycle.
-func (m *Model) toggleWSDock() {
-	m.wsDocked = !m.wsDocked
-	m.wsPane.SetDocked(m.wsDocked)
-	if m.wsDocked {
-		m.showWSModal = false
-		m.setFocusedPanel(utils.WSPanel)
-	} else if m.focusedPanel == utils.WSPanel {
-		m.setFocusedPanel(utils.ResponsePanel)
-	}
-	m.resizeContentPanels()
 }
 
 // closeWS hides the WebSocket modal - unlike closeHelp, it deliberately

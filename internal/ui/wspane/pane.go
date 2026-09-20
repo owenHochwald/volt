@@ -11,6 +11,7 @@ package wspane
 import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/ws"
 )
@@ -44,7 +45,8 @@ type WSPane struct {
 	width, height int
 	Focused       bool
 
-	keys keybindings.KeyMap
+	keys   keybindings.KeyMap
+	styles design.Styles
 
 	urlInput     textinput.Model
 	composeInput textinput.Model
@@ -52,20 +54,18 @@ type WSPane struct {
 
 	status status
 
-	// docked reports whether this pane is currently rendered as a real
-	// panel (app.Model.wsDocked) rather than a floating overlay - only
-	// affects the footer hint text (see footerHint), since esc's "hide"
-	// behavior only applies while floating (see app/update.go's Quit
-	// handling, which special-cases showWSModal, not wsDocked).
-	docked bool
-
 	session *ws.Session
 	log     []ws.LogEntry
 }
 
 // SetupWSPane constructs an unopened WSPane; call Open() before
 // displaying it.
-func SetupWSPane(keys keybindings.KeyMap) WSPane {
+func SetupWSPane(keys keybindings.KeyMap, optionalStyles ...design.Styles) WSPane {
+	styles := design.NewStyles(design.DefaultTheme())
+	if len(optionalStyles) > 0 {
+		styles = optionalStyles[0]
+	}
+
 	urlInput := textinput.New()
 	urlInput.Placeholder = "ws://localhost:8080/socket"
 	urlInput.CharLimit = 500
@@ -80,9 +80,17 @@ func SetupWSPane(keys keybindings.KeyMap) WSPane {
 		width:        70,
 		height:       20,
 		keys:         keys,
+		styles:       styles,
 		urlInput:     urlInput,
 		composeInput: composeInput,
 	}
+}
+
+// SetStyles updates the theme-derived styles used to render this pane -
+// called once at startup and again whenever the active theme changes (see
+// app.Model.applyTheme), the same way requestpane/responsepane already do.
+func (m *WSPane) SetStyles(styles design.Styles) {
+	m.styles = styles
 }
 
 func (m WSPane) Init() tea.Cmd {
@@ -100,14 +108,10 @@ func (m *WSPane) Open() {
 }
 
 // SetFocused activates or deactivates whichever control m.focus currently
-// points to (the docked panel's equivalent of Open's urlInput.Focus() -
-// called on every focus change, whether cycling in via ctrl+w/ctrl+e
-// while docked or opening the floating modal) - without this, a
-// freshly-docked pane's URL/compose textinput.Model would never have had
-// Focus() called on it at all and would silently ignore keystrokes,
-// since bubbles' textinput only accepts input while focused. Unlike
-// Open(), this never resets m.focus itself, so cycling away from and
-// back to a docked panel preserves whichever field was last selected.
+// points to - Open() calls this rather than duplicating it, so opening
+// the modal always leaves the right textinput.Model actually Focus()-ed
+// (bubbles' textinput otherwise silently ignores keystrokes while
+// unfocused). Unlike Open(), this never resets m.focus itself.
 func (m *WSPane) SetFocused(focused bool) {
 	m.Focused = focused
 	if focused {
@@ -115,15 +119,6 @@ func (m *WSPane) SetFocused(focused bool) {
 	} else {
 		m.blurAll()
 	}
-}
-
-// IsEditing reports whether a text field (URL or compose), rather than
-// the connect/disconnect button, currently has the cursor - checked by
-// app/update.go the same way requestpane.IsEditing is, so a global
-// single-key binding like "?" (context help) doesn't hijack a literal
-// "?" typed into a compose message or URL query string.
-func (m WSPane) IsEditing() bool {
-	return m.focus == focusURL || m.focus == focusCompose
 }
 
 func (m *WSPane) SetWidth(width int) {
@@ -137,8 +132,9 @@ func (m *WSPane) SetHeight(height int) {
 	m.height = height
 }
 
-// SetDocked records whether this pane is currently shown docked (a real
-// panel) or floating (a modal) - see the docked field's own doc.
-func (m *WSPane) SetDocked(docked bool) {
-	m.docked = docked
+// SetURL pre-fills the URL field - called once at startup with whatever
+// address last connected successfully (see storage.LoadLastWSURL), since
+// a session typically keeps reconnecting to the same one.
+func (m *WSPane) SetURL(url string) {
+	m.urlInput.SetValue(url)
 }

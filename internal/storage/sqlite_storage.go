@@ -416,6 +416,39 @@ func (s *SQLiteStorage) LoadLastGroupFilter() (string, error) {
 	return value, nil
 }
 
+// lastWSURLKey is the app_state row SaveLastWSURL/LoadLastWSURL read and
+// write - the URL of the last WebSocket connection that actually
+// succeeded (see wspane's ConnectResultMsg handling), restored as the
+// WebSocket pane's URL field on the next app start since a session
+// typically keeps reconnecting to the same address.
+const lastWSURLKey = "last_ws_url"
+
+// SaveLastWSURL persists url as the WebSocket URL to restore on the next
+// app start - overwriting whatever was saved before, since only the most
+// recently successful address matters. Called only after a connection
+// actually succeeds, never on a failed attempt or a mid-edit URL.
+func (s *SQLiteStorage) SaveLastWSURL(url string) error {
+	q := `INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+	_, err := s.db.Exec(q, lastWSURLKey, url)
+	return err
+}
+
+// LoadLastWSURL returns the URL saved by SaveLastWSURL, or ("", nil) if
+// nothing's been saved yet (a fresh database, or one from before this
+// existed, or no WebSocket connection has ever succeeded) - not an error,
+// since that's the ordinary starting state.
+func (s *SQLiteStorage) LoadLastWSURL() (string, error) {
+	q := `SELECT value FROM app_state WHERE key = ?`
+	var value string
+	if err := s.db.QueryRow(q, lastWSURLKey).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return value, nil
+}
+
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
 	q := `SELECT DISTINCT url FROM requests`
 	rows, err := s.db.Query(q)

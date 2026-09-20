@@ -8,6 +8,10 @@ const (
 	TabHeaders
 	TabTiming
 	TabRequest
+	// TabWebSocket only exists once ResponsePane.hasWSTab() is true (see
+	// ws_stream.go) - a live receive-only stream of whatever's arrived on
+	// the WebSocket pane's connection since the last message it sent.
+	TabWebSocket
 )
 
 // Tab indices for load test mode
@@ -22,7 +26,11 @@ type TabIndex int
 
 // renderTabs renders the tab bar for normal response mode
 func (m ResponsePane) renderTabs() string {
-	tabs := labelsForKeys(m.keys.DirectTab.Keys(), []string{"Body", "Headers", "Timing", "Request"})
+	labels := []string{"Body", "Headers", "Timing", "Request"}
+	if m.hasWSTab() {
+		labels = append(labels, "WebSocket")
+	}
+	tabs := labelsForKeys(m.keys.DirectTab.Keys(), labels)
 	return m.renderTabBar(tabs)
 }
 
@@ -64,6 +72,9 @@ func (m ResponsePane) renderTabBar(tabs []string) string {
 func (m ResponsePane) getMaxTabs() int {
 	if m.isLoadTest {
 		return 3 // Overview, Latency, Errors
+	}
+	if m.hasWSTab() {
+		return 5 // Body, Headers, Timing, Request, WebSocket
 	}
 	return 4 // Body, Headers, Timing, Request
 }

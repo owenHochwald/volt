@@ -72,7 +72,6 @@ const (
 	ActionOpenGroups     ActionID = "open_groups"
 	ActionOpenImport     ActionID = "open_import"
 	ActionOpenWebSocket  ActionID = "open_websocket"
-	ActionToggleWSDock   ActionID = "toggle_ws_dock"
 	ActionCloseWebSocket ActionID = "close_websocket"
 
 	ActionResetRequest     ActionID = "reset_request"
@@ -218,7 +217,7 @@ func DefaultRegistry() Registry {
 		{ActionCancelLoadTest, []Context{ContextResponse}, []string{"ctrl+x"}, "ctrl+x", "cancel load test", 70},
 		{ActionPreviousTab, []Context{ContextResponse}, []string{"h"}, "h", "previous tab", 65},
 		{ActionNextTab, []Context{ContextResponse}, []string{"l"}, "l", "next tab", 65},
-		{ActionDirectTab, []Context{ContextResponse}, []string{"1", "2", "3", "4"}, "1-4", "jump to tab", 60},
+		{ActionDirectTab, []Context{ContextResponse}, []string{"1", "2", "3", "4", "5"}, "1-5", "jump to tab", 60},
 		{ActionScrollUp, []Context{ContextResponse}, []string{"k"}, "k", "scroll up", 55},
 		{ActionScrollDown, []Context{ContextResponse}, []string{"j"}, "j", "scroll down", 55},
 		{ActionPageUp, []Context{ContextResponse}, []string{"ctrl+u"}, "ctrl+u", "half page up", 50},
@@ -232,7 +231,6 @@ func DefaultRegistry() Registry {
 		{ActionOpenGroups, []Context{ContextGlobal}, []string{"ctrl+g"}, "ctrl+g", "groups & servers", 40},
 		{ActionOpenImport, []Context{ContextGlobal}, []string{"ctrl+n"}, "ctrl+n", "import OpenAPI spec", 35},
 		{ActionOpenWebSocket, []Context{ContextGlobal}, []string{"ctrl+k"}, "ctrl+k", "websocket", 34},
-		{ActionToggleWSDock, []Context{ContextGlobal}, []string{"ctrl+t"}, "ctrl+t", "dock/undock websocket", 33},
 
 		{ActionResetRequest, []Context{ContextRequest}, []string{"ctrl+r"}, "ctrl+r", "reset request", 45},
 		{ActionClearParams, []Context{ContextRequest}, []string{"ctrl+x"}, "ctrl+x", "clear params", 44},

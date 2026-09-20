@@ -46,14 +46,6 @@ type Model struct {
 	// once you've moved on from it.
 	zoomedResponse bool
 
-	// wsDocked shows the WebSocket pane as a real fourth panel (see
-	// utils.WSPanel) - stacked 25/50/25 with the request/response panes
-	// in the wide layout, a fourth WEBSOCKET tab in the focused layout -
-	// instead of the floating modal ctrl+k otherwise opens (see
-	// toggleWSDock, "ctrl+t"). Session-only, like zoomedResponse, not
-	// persisted across restarts.
-	wsDocked bool
-
 	width, height int
 	startupFrame  int
 
@@ -94,7 +86,15 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	responsePane := responsepane.SetupResponsePane(keys, styles)
 	shortcutPane := shortcutpane.SetupShortcutPane(keys, db, styles)
 	importPane := importpane.SetupImportPane(db, keys)
-	wsPane := wspane.SetupWSPane(keys)
+	wsPane := wspane.SetupWSPane(keys, styles)
+	// Restore the last WebSocket URL that actually connected successfully
+	// (see storage.SaveLastWSURL) - a session typically keeps reconnecting
+	// to the same address, so this saves retyping it every time.
+	if db != nil {
+		if lastWSURL, err := db.LoadLastWSURL(); err == nil && lastWSURL != "" {
+			wsPane.SetURL(lastWSURL)
+		}
+	}
 	requestPane := requestpane.SetupRequestPane(db, keys, styles)
 
 	// jar is shared between requestPane (which injects what's remembered

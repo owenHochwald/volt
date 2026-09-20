@@ -17,7 +17,6 @@ type KeyMap struct {
 	OpenGroups    key.Binding
 	OpenImport    key.Binding
 	OpenWebSocket key.Binding
-	ToggleWSDock  key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
@@ -141,7 +140,6 @@ func DefaultKeyMap() KeyMap {
 		OpenGroups:             registry.MustBinding(ActionOpenGroups),
 		OpenImport:             registry.MustBinding(ActionOpenImport),
 		OpenWebSocket:          registry.MustBinding(ActionOpenWebSocket),
-		ToggleWSDock:           registry.MustBinding(ActionToggleWSDock),
 		LoadRequest:            registry.MustBinding(ActionLoadRequest),
 		DeleteRequest:          registry.MustBinding(ActionDeleteRequest),
 		NavCount:               registry.MustBinding(ActionNavigationCount),

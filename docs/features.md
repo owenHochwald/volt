@@ -181,17 +181,20 @@ The jar is in-memory only and never written to disk.
 timestamped message log (`→` sent, `←` received, `•` connection events), and
 a field to compose and send messages while connected. Typing a URL and
 pressing `Enter` connects; pressing it again on the same URL/button
-disconnects. `Esc` hides the pane - a connected session keeps running and
-logging in the background, so reopening it with `Ctrl+K` picks up right
-where it was left, not a fresh reconnect.
+disconnects. The URL of the last connection that actually succeeded is
+remembered and pre-filled the next time you open the pane (even across
+restarts), since a session usually keeps reconnecting to the same address.
+`Esc` hides the pane - a connected session keeps running and logging in the
+background, so reopening it with `Ctrl+K` picks up right where it was left,
+not a fresh reconnect.
 
-`Ctrl+T` docks the same pane as a real fourth panel instead of a floating
-overlay - a 25% / 50% / 25% stack with the request and response panes on a
-wide terminal, or a fourth `WEBSOCKET` tab alongside Sidebar/Request/
-Response on a narrow one. Docked, it participates in `Ctrl+W`/`Ctrl+E` panel
-cycling like any other panel. Docking closes the floating pane (showing the
-same session both ways would be redundant); `Ctrl+K` while docked just
-focuses it instead of opening a second copy.
+The response panel also gets a 5th **WebSocket** tab, but only once there's
+something to show there: it stays hidden until you've sent at least one
+message from the WebSocket pane's compose field *and* something has come
+back since. From then on it keeps growing with every message received,
+live, whether or not the WebSocket pane itself is open - a way to watch the
+socket's traffic without switching away from whatever request you're
+working on.
 
 ## Settings
 

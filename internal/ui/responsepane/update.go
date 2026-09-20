@@ -200,6 +200,11 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 					m.activeTab = int(TabRequest)
 					m.updateViewportForActiveTab()
 				}
+			case "5":
+				if m.hasWSTab() {
+					m.activeTab = int(TabWebSocket)
+					m.updateViewportForActiveTab()
+				}
 			}
 		}
 
@@ -365,12 +370,30 @@ func (m *ResponsePane) updateViewportForActiveTab() {
 		return
 	}
 
+	// Checked before the m.Response nil-guard below: the WebSocket tab
+	// has nothing to do with the last HTTP response (see ws_stream.go) -
+	// it must render even if no request has ever been sent, as long as a
+	// WebSocket send has armed it.
+	if TabIndex(m.activeTab) == TabWebSocket {
+		m.setViewportContent(m.renderWSStream())
+		return
+	}
+
 	if m.isLoadTest {
 		m.updateLoadTestTabContent()
 		return
 	}
 
 	if m.Response == nil {
+		// Reachable now that View()'s own top-level "no response yet"
+		// placeholder only wins when hasWSTab() is also false (see
+		// View()) - previously m.Response being nil always short-
+		// circuited there first, so switching away from a real tab back
+		// to, say, Body with nothing ever sent could never actually be
+		// seen. Clearing here (not just returning) keeps that switch
+		// from leaving stale content - e.g. an earlier WebSocket
+		// message - sitting in the viewport under the wrong tab.
+		m.setViewportContent("")
 		return
 	}
 

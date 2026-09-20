@@ -26,6 +26,7 @@ func (m *Model) applyTheme(theme design.Theme, source string) {
 	m.responsePane.SetStyles(styles)
 	m.headerPane.SetStyles(styles)
 	m.shortcutPane.SetStyles(styles)
+	m.wsPane.SetStyles(styles)
 }
 
 func (m Model) settingsThemeOptions() []shortcutpane.ThemeOption {

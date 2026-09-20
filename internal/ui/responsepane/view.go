@@ -18,7 +18,11 @@ func (m ResponsePane) View() string {
 		return m.renderLoadTestView()
 	}
 
-	if m.Response == nil {
+	// The WebSocket tab (see ws_stream.go) has nothing to do with the last
+	// HTTP response - it must still render, tab bar and all, even if no
+	// request has ever been sent, as long as a WebSocket send has armed
+	// it and data has arrived.
+	if m.Response == nil && !m.hasWSTab() {
 		return "Make a request to see the response here!"
 	}
 
@@ -106,6 +110,11 @@ func (m ResponsePane) renderNormalView() (head, trailer string) {
 	switch {
 	case m.diffing:
 		statusBar = m.styles.Badge.Info.Render("DIFF") + " " + m.styles.Text.Muted.Render(m.diffLabel)
+	case m.Response == nil:
+		// Only reachable via the WebSocket tab (see View's own nil-guard,
+		// which lets a nil Response through exactly when hasWSTab() is
+		// true) - there's no HTTP response to summarize here at all.
+		statusBar = m.styles.Text.Muted.Render("No response yet")
 	case m.Response.Error != "":
 		statusBar = m.styles.Badge.Error.Render("ERROR")
 	default:

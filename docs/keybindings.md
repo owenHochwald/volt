@@ -28,22 +28,17 @@ keys.
 | `Ctrl+W` / `Alt+L` | Focus the next panel |
 | `Ctrl+G` | Open Groups & Servers |
 | `Ctrl+N` | Open the interactive OpenAPI import dialog |
-| `Ctrl+K` | Open the WebSocket pane (or focus it, if already docked) |
-| `Ctrl+T` | Dock/undock the WebSocket pane |
+| `Ctrl+K` | Open the WebSocket pane |
 
-The first `Esc` closes whatever modal is open (Help, Import, the floating
-WebSocket pane) or returns focus to the sidebar and displays a quit prompt. A
-different key or the 750-millisecond timeout cancels the quit sequence. A
-*docked* WebSocket panel has no modal to close, so `Esc` there behaves like it
-does in any other panel: back to the sidebar, arming the quit prompt.
+The first `Esc` closes whatever modal is open (Help, Import, the WebSocket
+pane) or returns focus to the sidebar and displays a quit prompt. A different
+key or the 750-millisecond timeout cancels the quit sequence.
 
 `q` never quits Volt. It is inserted normally while editing text, does nothing
 in non-editing panels, and closes the Help/Groups overlay when one is open.
 
 `Ctrl+E` and `Ctrl+W` work with classic terminal input and are available in
-every panel, including while a request field is focused. Once the WebSocket
-pane is docked (`Ctrl+T`), they cycle through it too - Sidebar → Request →
-Response → WebSocket → Sidebar.
+every panel, including while a request field is focused.
 
 ### Alt on macOS
 
@@ -104,7 +99,7 @@ While a text field is focused, printable shortcut characters such as `?`, `q`,
 |---|---|
 | `h` | Select the previous response tab |
 | `l` | Select the next response tab |
-| `1`–`4` | Jump directly to a response tab (Body/Headers/Timing/Request) |
+| `1`–`5` | Jump directly to a response tab (Body/Headers/Timing/Request/WebSocket) |
 | `j` | Scroll down |
 | `k` | Scroll up |
 | `Ctrl+D` | Scroll down half a page |
@@ -127,20 +122,20 @@ While a text field is focused, printable shortcut characters such as `?`, `q`,
 | `Ctrl+X` | Cancel an active load test |
 | `?` | Show response shortcuts |
 
+The 5th (WebSocket) tab only exists once there's something to show it - see
+[WebSocket](features.md#websocket) in the Features guide.
+
 See [History and diffing responses](features.md#history-and-diffing-responses)
 and [Cookies and auth headers](features.md#cookies-and-auth-headers-the-jar)
 for what `H`/`x` and `c`/`v` actually do.
 
-## WebSocket pane
-
-Opened floating with `Ctrl+K`, or as a fourth docked panel with `Ctrl+T` - see
-[WebSocket](features.md#websocket) in the Features guide for the difference.
+## WebSocket pane (`Ctrl+K`)
 
 | Keys | Action |
 |---|---|
 | `Tab` / `Shift+Tab` | Cycle URL → Connect/Disconnect → message field |
 | `Enter` | Connect/disconnect (URL or button focused) or send (message field focused, while connected) |
-| `Esc` | Hide the floating pane (a live session keeps running in the background); docked, behaves like any other panel |
+| `Esc` | Hide the pane - a live session keeps running in the background |
 
 ## Groups & Servers (`Ctrl+G`)
 
