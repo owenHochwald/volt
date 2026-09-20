@@ -1,13 +1,33 @@
 package http
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/owenHochwald/Volt/internal/apperror"
 )
+
+// unixSocketServer starts an HTTP server listening on a fresh Unix domain
+// socket in t.TempDir() instead of a TCP port - the Unix-socket
+// counterpart to httptest.NewServer, which only ever listens on TCP.
+// Returns the socket's path; the server is closed automatically via
+// t.Cleanup.
+func unixSocketServer(t *testing.T, handler http.HandlerFunc) string {
+	t.Helper()
+	socketPath := filepath.Join(t.TempDir(), "test.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("failed to listen on unix socket: %v", err)
+	}
+	server := &http.Server{Handler: handler}
+	go server.Serve(listener)
+	t.Cleanup(func() { server.Close() })
+	return socketPath
+}
 
 // TestClient_Send_DoesNotCancelContextBeforeBodyIsRead is a regression
 // test for a real bug: the request's timeout context used to be cancelled
@@ -45,6 +65,61 @@ func TestClient_Send_DoesNotCancelContextBeforeBodyIsRead(t *testing.T) {
 	want := "first-chunk-second-chunk"
 	if result.Body != want {
 		t.Errorf("expected body %q, got %q", want, result.Body)
+	}
+}
+
+// TestClient_Send_UnixSocket verifies a "unix://" URL (see
+// utils.ParseUnixSocketURL) is dialed over the named Unix domain socket
+// instead of being sent to a real TCP host - the debugging scenario this
+// exists for (a local daemon listening on a socket, not a port).
+func TestClient_Send_UnixSocket(t *testing.T) {
+	var gotPath string
+	socketPath := unixSocketServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Write([]byte("ok from unix socket"))
+	})
+
+	client := InitClient(time.Second, false)
+	req := &Request{Method: http.MethodGet, URL: "unix://" + socketPath + ":/health"}
+
+	res := make(chan *Response)
+	go client.Send(req, res)
+	result := <-res
+
+	if result.Error != "" {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if result.Body != "ok from unix socket" {
+		t.Errorf("expected body %q, got %q", "ok from unix socket", result.Body)
+	}
+	if gotPath != "/health" {
+		t.Errorf("expected the server to see request path %q, got %q", "/health", gotPath)
+	}
+}
+
+// TestClient_Send_UnixSocket_BareSocketPathDefaultsToRoot verifies a
+// "unix://<path>" URL with no request path at all (see
+// utils.ParseUnixSocketURL) hits "/" on the socket, for a bare health
+// check against a daemon's root.
+func TestClient_Send_UnixSocket_BareSocketPathDefaultsToRoot(t *testing.T) {
+	var gotPath string
+	socketPath := unixSocketServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Write([]byte("root"))
+	})
+
+	client := InitClient(time.Second, false)
+	req := &Request{Method: http.MethodGet, URL: "unix://" + socketPath}
+
+	res := make(chan *Response)
+	go client.Send(req, res)
+	result := <-res
+
+	if result.Error != "" {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if gotPath != "/" {
+		t.Errorf("expected the server to see request path %q, got %q", "/", gotPath)
 	}
 }
 

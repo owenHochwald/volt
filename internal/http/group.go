@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 // Server is a named base URL that one or more request groups (or a request
@@ -36,7 +38,7 @@ func (s *Server) Validate() error {
 	if len(s.Name) > 40 {
 		return fmt.Errorf("server name too long: %s", s.Name)
 	}
-	if !strings.HasPrefix(s.BaseURL, "http") {
+	if !strings.HasPrefix(s.BaseURL, "http") && !utils.IsUnixSocketURL(s.BaseURL) {
 		return fmt.Errorf("invalid server base url: %s", s.BaseURL)
 	}
 	return nil

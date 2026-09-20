@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/owenHochwald/Volt/internal/apperror"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 const (
@@ -142,8 +143,15 @@ func (r *Request) Validate() error {
 
 	// A URL may also be a bare path (e.g. "/pets"), meant to be resolved
 	// against a group's/server's base URL at send time - see EffectiveURL -
-	// exempt from the scheme/host check below.
-	if !strings.HasPrefix(r.URL, "/") {
+	// exempt from the scheme/host check below. A "unix://" URL (see
+	// utils.ParseUnixSocketURL) is exempt too - it isn't a real http(s)
+	// URL at all, just a socket path and a request path packed into one
+	// string, checked on its own terms instead.
+	if socketPath, _, ok := utils.ParseUnixSocketURL(r.URL); ok {
+		if socketPath == "" {
+			return apperror.InvalidURL(r.URL)
+		}
+	} else if !strings.HasPrefix(r.URL, "/") {
 		parsedURL, err := url.Parse(r.URL)
 		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
 			return apperror.InvalidURL(r.URL)
@@ -167,18 +175,28 @@ func (r *Request) Validate() error {
 // opposed to a group-relative path that still needs a server to resolve
 // against (see EffectiveURL).
 func (r *Request) IsAbsoluteURL() bool {
-	return strings.HasPrefix(r.URL, "http")
+	return strings.HasPrefix(r.URL, "http") || utils.IsUnixSocketURL(r.URL)
 }
 
 // EffectiveURL returns r.URL unchanged if it's already absolute. Otherwise,
 // if server is non-nil, it joins r.URL onto server.BaseURL. With no server
 // available, the relative URL is returned as-is (not directly sendable).
+//
+// A server whose BaseURL is itself a "unix://" socket URL (see
+// utils.ParseUnixSocketURL) joins differently: r.URL becomes the new
+// request path against that same socket, rather than being appended onto
+// BaseURL as a literal string suffix - so a group of requests can share
+// one Unix socket the same way a group of ordinary requests already
+// shares one TCP base URL.
 func (r *Request) EffectiveURL(server *Server) string {
 	if r.IsAbsoluteURL() {
 		return r.URL
 	}
 	if server == nil || server.BaseURL == "" {
 		return r.URL
+	}
+	if socketPath, _, ok := utils.ParseUnixSocketURL(server.BaseURL); ok {
+		return utils.UnixSocketScheme + socketPath + ":" + r.URL
 	}
 	return strings.TrimRight(server.BaseURL, "/") + r.URL
 }
@@ -190,7 +208,15 @@ func (r *Request) EffectiveURL(server *Server) string {
 // Used to key the in-memory per-host cookie/auth-header jar (see
 // internal/authjar) - independent of whether a request has a ServerID at
 // all, since an ad-hoc absolute-URL request with none still has a host.
+//
+// A "unix://" URL (see utils.ParseUnixSocketURL) has no host in the usual
+// sense - its socket path fills the same role instead, so two requests
+// against the same socket still share one jar entry the same way two
+// requests against the same TCP host would.
 func HostOf(rawURL string) string {
+	if socketPath, _, ok := utils.ParseUnixSocketURL(rawURL); ok {
+		return utils.UnixSocketScheme + socketPath
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" {
 		return ""

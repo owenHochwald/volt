@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/logging"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 const (
@@ -34,7 +36,21 @@ type Client struct {
 // canceled", even though the request itself succeeded.
 func (c *Client) makeCustomRequest(ctx context.Context, req *Request) (*http.Response, error) {
 	payload := strings.NewReader(req.Body)
-	customReq, err := http.NewRequest(req.Method, req.URL, payload)
+
+	// A "unix://" URL (see utils.ParseUnixSocketURL) isn't a real http(s)
+	// URL http.NewRequest could dial directly - it's rewritten to a
+	// well-formed placeholder one ("http://unix" + the request path) that
+	// only exists to produce a valid *http.Request; unixSocketHTTPClient's
+	// own DialContext below ignores whatever address that placeholder Host
+	// implies and dials the real socket path instead.
+	targetURL := req.URL
+	httpClient := c.Client
+	if socketPath, requestPath, ok := utils.ParseUnixSocketURL(req.URL); ok {
+		targetURL = "http://unix" + requestPath
+		httpClient = unixSocketHTTPClient(socketPath)
+	}
+
+	customReq, err := http.NewRequest(req.Method, targetURL, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +60,26 @@ func (c *Client) makeCustomRequest(ctx context.Context, req *Request) (*http.Res
 	}
 	customReq = customReq.WithContext(ctx)
 
-	return c.Client.Do(customReq)
+	return httpClient.Do(customReq)
+}
+
+// unixSocketHTTPClient builds a one-off *http.Client that dials socketPath
+// over a Unix domain socket instead of using whatever network/address an
+// *http.Request's URL would otherwise imply. Built fresh per request
+// rather than added to c.Client's own shared Transport: that Transport's
+// connection pool is keyed by network address, which a placeholder
+// "http://unix/..." URL would collide across completely unrelated
+// sockets - and a debugging session against a local daemon has little use
+// for pooling anyway, unlike the ordinary TCP case c.Client exists for.
+func unixSocketHTTPClient(socketPath string) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", socketPath)
+			},
+		},
+	}
 }
 
 func (c *Client) Send(req *Request, result chan<- *Response) {

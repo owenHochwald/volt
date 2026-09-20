@@ -7,9 +7,12 @@ package ws
 import (
 	"context"
 	"errors"
+	"net"
+	stdhttp "net/http"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/owenHochwald/Volt/internal/utils"
 )
 
 // dialTimeout bounds how long Connect waits for the initial handshake -
@@ -61,16 +64,28 @@ type Session struct {
 	cancel context.CancelFunc
 }
 
-// Connect dials rawURL (ws:// or wss://) and starts a background read
-// loop forwarding every received message - and the eventual close - to
-// Events(). The dial itself blocks under dialTimeout; callers invoke this
-// from a tea.Cmd (see wspane's connectCmd), the same way http.Client.Send
-// is only ever called from inside a Cmd, never directly from Update.
+// Connect dials rawURL and starts a background read loop forwarding every
+// received message - and the eventual close - to Events(). The dial
+// itself blocks under dialTimeout; callers invoke this from a tea.Cmd (see
+// wspane's connectCmd), the same way http.Client.Send is only ever called
+// from inside a Cmd, never directly from Update.
+//
+// rawURL is normally ws:// or wss://, but a "unix://" URL (see
+// utils.ParseUnixSocketURL) is recognized too - the handshake is dialed
+// over that Unix domain socket instead of a TCP host, for debugging a
+// local daemon that speaks WebSocket over a socket rather than a port.
 func Connect(rawURL string) (*Session, error) {
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer dialCancel()
 
-	conn, _, err := websocket.Dial(dialCtx, rawURL, nil)
+	dialURL := rawURL
+	var opts *websocket.DialOptions
+	if socketPath, requestPath, ok := utils.ParseUnixSocketURL(rawURL); ok {
+		dialURL = "ws://unix" + requestPath
+		opts = &websocket.DialOptions{HTTPClient: unixSocketHTTPClient(socketPath)}
+	}
+
+	conn, _, err := websocket.Dial(dialCtx, dialURL, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +94,23 @@ func Connect(rawURL string) (*Session, error) {
 	s := &Session{conn: conn, events: make(chan Event, 32), cancel: cancel}
 	go s.readLoop(ctx)
 	return s, nil
+}
+
+// unixSocketHTTPClient builds a one-off *http.Client that dials socketPath
+// over a Unix domain socket instead of using whatever network/address the
+// handshake's placeholder "ws://unix/..." URL would otherwise imply -
+// coder/websocket performs the handshake itself as a plain HTTP request
+// via DialOptions.HTTPClient, so the same technique internal/http's
+// client.go uses for a unix-socket request applies here unchanged.
+func unixSocketHTTPClient(socketPath string) *stdhttp.Client {
+	return &stdhttp.Client{
+		Transport: &stdhttp.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", socketPath)
+			},
+		},
+	}
 }
 
 // Events returns the channel Connect's read loop reports on - closed

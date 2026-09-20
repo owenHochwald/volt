@@ -61,6 +61,11 @@ func NewURLInput(db *storage.SQLiteStorage) textinput.Model {
 		"http://localhost:3000/upload",
 		"http://localhost:3000/settings",
 		"https://httpbin.org/anything",
+		// A "unix://" URL (see utils.ParseUnixSocketURL) dials a Unix
+		// domain socket - e.g. the local Docker daemon - instead of a TCP
+		// host, for debugging a local daemon that only listens on a
+		// socket. Suggested here since there's no separate field for it.
+		"unix:///var/run/docker.sock:/containers/json",
 	)
 
 	ti := NewConfiguredTextInput(TextInputConfig{

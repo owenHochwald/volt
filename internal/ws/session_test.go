@@ -1,8 +1,10 @@
 package ws
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +38,66 @@ func echoServer(t *testing.T) *httptest.Server {
 
 func wsURL(server *httptest.Server) string {
 	return "ws" + strings.TrimPrefix(server.URL, "http")
+}
+
+// unixEchoServer starts the same echo handler as echoServer, but listening
+// on a fresh Unix domain socket in t.TempDir() rather than a TCP port -
+// returns the "unix://<socket-path>" URL Connect expects (see
+// utils.ParseUnixSocketURL).
+func unixEchoServer(t *testing.T) string {
+	t.Helper()
+	socketPath := filepath.Join(t.TempDir(), "test.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("failed to listen on unix socket: %v", err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		for {
+			_, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if err := conn.Write(r.Context(), websocket.MessageText, data); err != nil {
+				return
+			}
+		}
+	})}
+	go server.Serve(listener)
+	t.Cleanup(func() { server.Close() })
+	return "unix://" + socketPath
+}
+
+// TestConnect_UnixSocket_SendAndReceive_Echo verifies Connect recognizes a
+// "unix://" URL and dials the named Unix domain socket instead of a TCP
+// host - the debugging scenario this exists for (a local daemon speaking
+// WebSocket over a socket, not a port).
+func TestConnect_UnixSocket_SendAndReceive_Echo(t *testing.T) {
+	session, err := Connect(unixEchoServer(t))
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer session.Close()
+
+	if err := session.Send("hello over unix socket"); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	select {
+	case event := <-session.Events():
+		if event.Closed {
+			t.Fatalf("expected a message event, got a close: %+v", event)
+		}
+		if event.Entry.Text != "hello over unix socket" {
+			t.Errorf("expected echoed text %q, got %q", "hello over unix socket", event.Entry.Text)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the echoed message")
+	}
 }
 
 func TestConnect_SendAndReceive_Echo(t *testing.T) {

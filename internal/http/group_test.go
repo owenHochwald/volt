@@ -2,6 +2,24 @@ package http
 
 import "testing"
 
+// TestServer_Validate_AcceptsUnixSocketBaseURL verifies a Server whose
+// BaseURL is a "unix://" socket URL (see utils.ParseUnixSocketURL) passes
+// validation the same as an ordinary http(s) one - a group of requests
+// can share a Unix socket the same way they already share a TCP server.
+func TestServer_Validate_AcceptsUnixSocketBaseURL(t *testing.T) {
+	s := &Server{Name: "local-daemon", BaseURL: "unix:///var/run/docker.sock"}
+	if err := s.Validate(); err != nil {
+		t.Errorf("expected a unix socket base url to validate, got: %v", err)
+	}
+}
+
+func TestServer_Validate_RejectsGarbageBaseURL(t *testing.T) {
+	s := &Server{Name: "bad", BaseURL: "not-a-url"}
+	if err := s.Validate(); err == nil {
+		t.Error("expected an error for a base url with neither an http(s) nor a unix scheme")
+	}
+}
+
 func TestSubstituteVariables_ReplacesKnownPlaceholders(t *testing.T) {
 	vars := map[string]string{"token": "abc123", "host": "api.example.com"}
 	got := SubstituteVariables("https://{{host}}/v1?auth={{token}}", vars)

@@ -37,6 +37,11 @@ func TestRequest_Validate(t *testing.T) {
 		// group's/server's base URL at send time (see EffectiveURL), not
 		// sent as-is, so it's exempt from the scheme-prefix check.
 		{"group-relative path", fields{Method: GET, URL: "/pets"}, false},
+		// A "unix://" URL (see utils.ParseUnixSocketURL) is checked on its
+		// own terms - a socket path, not an http(s) scheme/host.
+		{"valid unix socket url", fields{Method: GET, URL: "unix:///var/run/docker.sock:/containers/json"}, false},
+		{"valid unix socket url with no request path", fields{Method: GET, URL: "unix:///var/run/docker.sock"}, false},
+		{"unix socket url with empty socket path", fields{Method: GET, URL: "unix://:/health"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -66,6 +71,7 @@ func TestHostOf(t *testing.T) {
 		{"mixed case host is lowercased", "https://API.Example.COM/v1", "api.example.com"},
 		{"relative group path has no host", "/v1/pets", ""},
 		{"empty URL has no host", "", ""},
+		{"unix socket url uses the socket path as its host", "unix:///var/run/docker.sock:/containers/json", "unix:///var/run/docker.sock"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,6 +79,43 @@ func TestHostOf(t *testing.T) {
 				t.Errorf("HostOf(%q) = %q, want %q", tt.url, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRequest_IsAbsoluteURL_UnixSocket(t *testing.T) {
+	r := &Request{URL: "unix:///var/run/docker.sock:/containers/json"}
+	if !r.IsAbsoluteURL() {
+		t.Error("expected a unix:// URL to be reported as absolute")
+	}
+}
+
+// TestRequest_EffectiveURL_UnixSocketServer verifies a group-relative
+// request (a bare "/path") resolves against a server whose BaseURL is
+// itself a "unix://" socket URL by becoming a new request path against
+// that same socket - not by naively string-concatenating onto BaseURL,
+// which would produce a malformed "unix://...sock:/base-path/path" that's
+// no longer a socket path followed by exactly one request path.
+func TestRequest_EffectiveURL_UnixSocketServer(t *testing.T) {
+	r := &Request{URL: "/containers/json"}
+	server := &Server{BaseURL: "unix:///var/run/docker.sock"}
+
+	want := "unix:///var/run/docker.sock:/containers/json"
+	if got := r.EffectiveURL(server); got != want {
+		t.Errorf("EffectiveURL() = %q, want %q", got, want)
+	}
+}
+
+// TestRequest_EffectiveURL_UnixSocketRequestIgnoresServer verifies a
+// request whose own URL is already a "unix://" one is sent as-is,
+// ignoring any server - the same "already absolute" precedence an
+// ordinary http(s) request URL already gets.
+func TestRequest_EffectiveURL_UnixSocketRequestIgnoresServer(t *testing.T) {
+	r := &Request{URL: "unix:///tmp/app.sock:/status"}
+	server := &Server{BaseURL: "https://api.example.com"}
+
+	want := "unix:///tmp/app.sock:/status"
+	if got := r.EffectiveURL(server); got != want {
+		t.Errorf("EffectiveURL() = %q, want %q", got, want)
 	}
 }
 
