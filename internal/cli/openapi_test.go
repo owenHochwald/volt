@@ -541,6 +541,83 @@ func TestParseOpenAPIURLs_RequestBodySchemaLimits(t *testing.T) {
 	}
 }
 
+// TestParseOpenAPIURLs_RequestBodyPropertyViaRef is a regression test for a
+// real bug: a body property whose own schema is entirely a $ref (e.g.
+// "priority": {"$ref": "#/components/schemas/HostPriority"}, as opposed to
+// the whole request body schema being a $ref - see
+// TestParseOpenAPIURLs_RequestBodySchemaViaRef) silently lost its type,
+// default, and minimum/maximum - extractFieldSchema read straight off the
+// property's own raw map ({"$ref": "..."} alone, with no "type"/
+// "minimum" keys of its own) without ever resolving the $ref first, even
+// though the schema it pointed at declared all of that.
+func TestParseOpenAPIURLs_RequestBodyPropertyViaRef(t *testing.T) {
+	spec := `{
+		"openapi": "3.0.0",
+		"servers": [{"url": "https://api.example.com"}],
+		"components": {
+			"schemas": {
+				"HostPriority": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000,
+					"default": 100,
+					"description": "host restore priority"
+				}
+			}
+		},
+		"paths": {
+			"/host/{host_id}/protect": {
+				"post": {
+					"operationId": "protectHost",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["priority"],
+									"properties": {
+										"priority": {"$ref": "#/components/schemas/HostPriority"}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	requests, _, err := ParseOpenAPIURLs([]byte(spec), false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+
+	schema := requestBodySchema(t, requests[0])
+	priority, ok := schema["priority"]
+	if !ok {
+		t.Fatalf("expected a %q field, got %+v", "priority", schema)
+	}
+	if priority.Type != "integer" {
+		t.Errorf("expected priority.Type = %q, got %q", "integer", priority.Type)
+	}
+	if priority.Minimum == nil || *priority.Minimum != 1 {
+		t.Errorf("expected priority.Minimum = 1, got %v", priority.Minimum)
+	}
+	if priority.Maximum == nil || *priority.Maximum != 1000 {
+		t.Errorf("expected priority.Maximum = 1000, got %v", priority.Maximum)
+	}
+	if priority.Default != "100" {
+		t.Errorf("expected priority.Default = %q, got %q", "100", priority.Default)
+	}
+	if priority.Description != "host restore priority" {
+		t.Errorf("expected priority.Description = %q, got %q", "host restore priority", priority.Description)
+	}
+}
+
 // TestParseOpenAPIURLs_ArrayOfRefObject verifies a "type: array" property
 // whose "items" is a $ref to an object schema resolves that object's own
 // properties into Items, with ItemsRefName naming the referenced schema -

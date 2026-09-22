@@ -401,6 +401,15 @@ const maxArrayItemDepth = 3
 // array (items with no object structure) is left with Items/ItemsRefName
 // unset, editable as a whole via other means.
 func extractFieldSchema(doc, prop map[string]interface{}, depth int) http.BodyFieldSchema {
+	// A property can be entirely a $ref (e.g. "priority: {$ref:
+	// '#/components/schemas/HostPriority'}") rather than declaring type/
+	// constraints inline - resolved first so every field below reads from
+	// the schema those constraints actually live on, the same way the
+	// request body's own top-level schema is already resolved before its
+	// "properties" map is read (see jsonRequestBodyFields). Without this,
+	// a $ref'd property silently lost its type, enum, and min/max/length
+	// constraints - Volt had no schema to read them from.
+	prop = resolveSchemaRef(doc, prop)
 	var field http.BodyFieldSchema
 	field.Type, _ = prop["type"].(string)
 	field.Description, _ = prop["description"].(string)
