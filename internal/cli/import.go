@@ -3,9 +3,12 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/owenHochwald/Volt/internal/storage"
 )
@@ -63,7 +66,7 @@ func RunImportCLI(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: volt import [-group <name>] [-base-url <url>] [-force] <openapi-file>")
+		return fmt.Errorf("usage: volt import [-group <name>] [-base-url <url>] [-force] <openapi-file-or-url>")
 	}
 	specPath := fs.Arg(0)
 
@@ -107,11 +110,10 @@ func RunImportCLI(args []string) error {
 // table (as defaultServerName) rather than used once and discarded, so it
 // shows up in `volt server list` and can be assigned to a group later.
 func RunImport(specPath, baseURLOverride, groupName string, force bool, db *storage.SQLiteStorage) (*ImportSummary, error) {
-	data, err := os.ReadFile(specPath)
+	data, isYAML, err := readSpec(specPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", specPath, err)
+		return nil, err
 	}
-	isYAML := looksLikeYAML(specPath, data)
 
 	var groupID *int64
 	if groupName != "" {
@@ -198,7 +200,66 @@ func dedupKey(groupID *int64, method, url string) string {
 	return fmt.Sprintf("%d|%s|%s", gid, method, url)
 }
 
+// specFetchTimeout bounds how long readSpec waits for a spec to download
+// over the network - generous enough for a large spec on a slow
+// connection, but finite so an unreachable or stalled server doesn't hang
+// `volt import` (or the TUI import modal's own Cmd) forever.
+const specFetchTimeout = 30 * time.Second
+
+// maxSpecSize caps how much of a fetched response readSpec will read - an
+// OpenAPI spec is normally at most a few hundred KB of YAML/JSON; this
+// just stops a misbehaving or malicious server from streaming an
+// unbounded body into memory.
+const maxSpecSize = 25 * 1024 * 1024 // 25 MiB
+
+// readSpec loads specPath's raw bytes and reports whether it looks like
+// YAML (as opposed to JSON) - from a local file, or, when specPath is an
+// http(s):// URL, fetched over the network instead (a spec published at a
+// service's own /openapi.yaml endpoint doesn't have to be downloaded by
+// hand first).
+func readSpec(specPath string) (data []byte, isYAML bool, err error) {
+	if strings.HasPrefix(specPath, "http://") || strings.HasPrefix(specPath, "https://") {
+		return fetchSpec(specPath)
+	}
+	data, err = os.ReadFile(specPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read %s: %w", specPath, err)
+	}
+	return data, looksLikeYAML(specPath, data), nil
+}
+
+// fetchSpec downloads specURL's body over HTTP(S) - the readSpec branch
+// for a specPath that's itself a URL rather than a local file path.
+func fetchSpec(specURL string) (data []byte, isYAML bool, err error) {
+	client := &http.Client{Timeout: specFetchTimeout}
+	resp, err := client.Get(specURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to fetch %s: %w", specURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("failed to fetch %s: server returned %s", specURL, resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSpecSize))
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read response body from %s: %w", specURL, err)
+	}
+	return body, looksLikeYAML(specURL, body), nil
+}
+
+// looksLikeYAML guesses a spec's format from path's extension - stripped
+// of any query string/fragment first, so a URL like
+// ".../openapi.yaml?ref=main" is still recognized as ".yaml" rather than
+// falling through to the content-based fallback below - falling back to
+// sniffing data itself (valid JSON always starts with "{" or "["; an
+// OpenAPI YAML document normally doesn't) when the extension is missing or
+// unrecognized, e.g. a URL with no file extension at all.
 func looksLikeYAML(path string, data []byte) bool {
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".yaml", ".yml":
 		return true

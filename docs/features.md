@@ -75,8 +75,12 @@ or changing which allowed server is the default, is currently CLI-only
 volt import spec.yaml
 volt import spec.yaml -group billing -base-url https://staging.example.com
 volt import spec.yaml -group billing -force   # overwrite previously-imported requests
+volt import https://api.example.com/openapi.yaml   # fetched over the network instead of a local file
 ```
 
+- The spec argument can be a local file path or an `http(s)://` URL - a
+  service's own published spec endpoint imports directly, with no need to
+  download it by hand first.
 - `-group` imports into that group (created if it doesn't exist yet) and
   stores each request as a bare path, resolved against the group's server.
 - `-base-url` sets that group's server URL. Grouped with no `-base-url` and
@@ -91,8 +95,8 @@ volt import spec.yaml -group billing -force   # overwrite previously-imported re
   [Filling in a request](#filling-in-a-request) below) and prints a summary:
   imported/updated/skipped counts, plus any warnings.
 
-Press `Ctrl+N` for the same import as an interactive modal: spec path,
-group, base URL, and a force toggle (`Space`), submitted with `Enter`.
+Press `Ctrl+N` for the same import as an interactive modal: spec path or
+URL, group, base URL, and a force toggle (`Space`), submitted with `Enter`.
 
 ## Filling in a request
 

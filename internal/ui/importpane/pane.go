@@ -59,7 +59,7 @@ func SetupImportPane(db *storage.SQLiteStorage, keys keybindings.KeyMap) ImportP
 		width:        70,
 		keys:         keys,
 		db:           db,
-		pathInput:    newTextInput("path/to/openapi.yaml", 500, 60),
+		pathInput:    newTextInput("path/to/openapi.yaml or https://.../openapi.yaml", 500, 60),
 		groupInput:   newTextInput("(optional) group name", 40, 60),
 		baseURLInput: newTextInput("(optional) http://localhost:3000", 200, 60),
 	}

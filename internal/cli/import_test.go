@@ -1,6 +1,8 @@
 package cli
 
 import (
+	stdhttp "net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,6 +76,53 @@ func TestRunImport_MissingFile(t *testing.T) {
 	db := setupTestDB(t)
 	if _, err := RunImport("/does/not/exist.yaml", "", "", false, db); err == nil {
 		t.Fatal("expected an error for a missing spec file")
+	}
+}
+
+// TestRunImport_FetchesSpecFromURL verifies specPath can be an http(s)://
+// URL - the spec is downloaded over the network instead of read from a
+// local file, so a service's own published /openapi.yaml endpoint can be
+// imported directly without saving it to disk first.
+func TestRunImport_FetchesSpecFromURL(t *testing.T) {
+	server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.Write([]byte(samplePetstoreYAML))
+	}))
+	defer server.Close()
+
+	db := setupTestDB(t)
+	summary, err := RunImport(server.URL+"/openapi.yaml", "", "", false, db)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Imported != 5 {
+		t.Errorf("expected 5 imported, got %d", summary.Imported)
+	}
+}
+
+// TestRunImport_URLErrorStatusIsReported verifies a non-200 response from
+// a spec URL surfaces as an error rather than trying to parse whatever
+// error page/body came back as an OpenAPI spec.
+func TestRunImport_URLErrorStatusIsReported(t *testing.T) {
+	server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		stdhttp.Error(w, "not found", stdhttp.StatusNotFound)
+	}))
+	defer server.Close()
+
+	db := setupTestDB(t)
+	if _, err := RunImport(server.URL+"/openapi.yaml", "", "", false, db); err == nil {
+		t.Fatal("expected an error for a 404 response")
+	}
+}
+
+// TestLooksLikeYAML_IgnoresQueryString verifies a URL's "?query=..."
+// suffix doesn't defeat the file-extension check (filepath.Ext would
+// otherwise return ".yaml?ref=main" instead of ".yaml").
+func TestLooksLikeYAML_IgnoresQueryString(t *testing.T) {
+	if !looksLikeYAML("https://example.com/openapi.yaml?ref=main", []byte("openapi: 3.0.0")) {
+		t.Error("expected a \".yaml\" URL with a query string to be recognized as YAML")
+	}
+	if looksLikeYAML("https://example.com/openapi.json?ref=main", []byte(`{"openapi":"3.0.0"}`)) {
+		t.Error("expected a \".json\" URL with a query string to be recognized as JSON")
 	}
 }
 

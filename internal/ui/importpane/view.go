@@ -71,7 +71,7 @@ func (m ImportPane) renderForm() string {
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		labelStyle.Render("Spec file path:"),
+		labelStyle.Render("Spec file path or URL:"),
 		m.pathInput.View(),
 		"",
 		labelStyle.Render("Group (optional - created if missing):"),
