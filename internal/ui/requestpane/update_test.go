@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
@@ -286,6 +287,103 @@ func TestArrowKeysDoNotChangeFocusedField(t *testing.T) {
 	}
 	if got, want := updated.URLInput.Position(), len("https://example.com")-1; got != want {
 		t.Fatalf("left arrow cursor position = %d, want %d", got, want)
+	}
+}
+
+// TestArrowKeys_MoveBetweenFields verifies up/down move focus to the
+// previous/next field, the same as shift+tab/tab, for every field type
+// that has no other use for up/down of its own - a plain text input
+// without suggestions (Name), MethodSelector, and the submit button.
+func TestArrowKeys_MoveBetweenFields(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	// FocusManager starts on MethodSelector (see defaultFocusIndex).
+	if _, ok := pane.FocusManager.Current().(*ui.MethodSelector); !ok {
+		t.Fatalf("expected MethodSelector to start focused, got %T", pane.FocusManager.Current())
+	}
+
+	// FocusManager is a pointer shared with pane even across Update's value
+	// receiver, so the starting index has to be captured before Update
+	// moves it - reading it off afterwards would already reflect the move.
+	startIndex := pane.FocusManager.CurrentIndex()
+	afterDown, _ := pane.Update(keyPress(tea.KeyDown, "", 0))
+	if got, want := afterDown.FocusManager.CurrentIndex(), startIndex+1; got != want {
+		t.Fatalf("down arrow from MethodSelector: focus index = %d, want %d", got, want)
+	}
+
+	// One field forward is URLInput.
+	if _, ok := afterDown.FocusManager.Current().(*textinput.Model); !ok {
+		t.Fatalf("expected URLInput (a *textinput.Model) after one down arrow, got %T", afterDown.FocusManager.Current())
+	}
+
+	// Up arrow from Name (a plain textinput with no suggestions, unlike
+	// URLInput - see the next test) must also move fields, not just down.
+	// Name is components()'s very first entry, so Prev() from it wraps
+	// around to the last one instead of a simple -1.
+	afterDown.FocusManager.Prev() // URLInput -> MethodSelector
+	afterDown.FocusManager.Prev() // MethodSelector -> Name
+	if _, ok := afterDown.FocusManager.Current().(*textinput.Model); !ok {
+		t.Fatalf("expected Name (a *textinput.Model) to be focused, got %T", afterDown.FocusManager.Current())
+	}
+	nm := &NormalMode{}
+	wantWrapped := len(nm.components(&afterDown)) - 1
+	backUp, _ := afterDown.Update(keyPress(tea.KeyUp, "", 0))
+	if got := backUp.FocusManager.CurrentIndex(); got != wantWrapped {
+		t.Fatalf("up arrow from Name: focus index = %d, want %d (wrapped to the last field)", got, wantWrapped)
+	}
+}
+
+// TestArrowKeys_URLSuggestionsTakePriorityOverFieldMovement verifies the
+// one exception: the URL field's own up/down suggestion-cycling (see
+// textinput.Model's default KeyMap, live whenever ShowSuggestions is set -
+// only NewURLInput sets it) must keep working exactly as before, not be
+// shadowed by the new field-navigation meaning up/down otherwise have.
+func TestArrowKeys_URLSuggestionsTakePriorityOverFieldMovement(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	pane.FocusManager.Next() // MethodSelector -> URLInput
+	if !pane.URLInput.ShowSuggestions {
+		t.Fatal("expected the URL field to have suggestions enabled")
+	}
+	wantIndex := pane.FocusManager.CurrentIndex()
+
+	updated, _ := pane.Update(keyPress(tea.KeyDown, "", 0))
+
+	if got := updated.FocusManager.CurrentIndex(); got != wantIndex {
+		t.Fatalf("down arrow on the URL field changed focus to index %d, want %d (still URLInput)", got, wantIndex)
+	}
+}
+
+// TestArrowKeys_DoNotMoveFocusInTextarea verifies Body/Headers (multi-line
+// *textarea.Model) keep up/down as cursor movement between lines - the one
+// case that must never be shadowed by field navigation, or multi-line
+// editing would break.
+func TestArrowKeys_DoNotMoveFocusInTextarea(t *testing.T) {
+	pane := newTestRequestPane(t)
+	pane.SetFocused(true)
+	pane.Body.SetValue("line one\nline two\nline three")
+	pane.Body.MoveToBegin()
+
+	nm := &NormalMode{}
+	idx := -1
+	for i, f := range nm.components(&pane) {
+		if f == pane.Body {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatal("expected Body to be in the focus cycle")
+	}
+	pane.FocusManager.FocusIndex(idx)
+
+	updated, _ := pane.Update(keyPress(tea.KeyDown, "", 0))
+
+	if got := updated.FocusManager.CurrentIndex(); got != idx {
+		t.Fatalf("down arrow in Body moved focus to index %d, want %d (still Body)", got, idx)
+	}
+	if got, want := updated.Body.Line(), 1; got != want {
+		t.Fatalf("expected down arrow to move the cursor to line %d, got line %d", want, got)
 	}
 }
 

@@ -68,8 +68,8 @@ use the terminal-independent `Ctrl+E` and `Ctrl+W` bindings.
 
 | Keys | Action |
 |---|---|
-| `Tab` | Focus the next field |
-| `Shift+Tab` | Focus the previous field |
+| `Tab` / `↓` | Focus the next field |
+| `Shift+Tab` / `↑` | Focus the previous field |
 | `h` / `←` | Select the previous HTTP method |
 | `l` / `→` | Select the next HTTP method |
 | `Alt+Enter` (`Option+Enter` on macOS) / `Ctrl+P` | Send the request |
@@ -84,10 +84,13 @@ use the terminal-independent `Ctrl+E` and `Ctrl+W` bindings.
 
 Plain `Enter` remains available to edit content or accept suggestions while a
 text field is focused - `Enter` or `→` also accepts a URL autocomplete
-suggestion. Arrow keys remain available to text editors. Request bodies with
-no imported schema are edited as raw text, so JSON, XML, GraphQL, and other
-formats do not require key/value conversion; an imported schema instead
-renders each field as its own input, enum picker, or array-count control (see
+suggestion. `↑`/`↓` move between fields the same as `Tab`/`Shift+Tab`, except
+inside a multi-line Body/Headers editor, where they move the cursor between
+lines instead, and inside the URL field, where they cycle its own
+autocomplete suggestions. Request bodies with no imported schema are edited
+as raw text, so JSON, XML, GraphQL, and other formats do not require
+key/value conversion; an imported schema instead renders each field as its
+own input, enum picker, or array-count control (see
 [Params](features.md#filling-in-a-request) in the Features guide).
 
 While a text field is focused, printable shortcut characters such as `?`, `q`,

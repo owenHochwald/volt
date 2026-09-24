@@ -41,6 +41,7 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *EnumSelector:
 		if isNextControlKey(msg, m.keys) {
 			c.Next()
@@ -48,6 +49,7 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *ArrayCountControl:
 		// Unlike MethodSelector/EnumSelector, cycling this changes the
 		// number of focusable fields (an item's worth), so the focus cycle
@@ -63,18 +65,68 @@ func (nm *NormalMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Request
 			m.rebuildFocusManager()
 			m.scrollToFocused()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *textinput.Model:
+		// Up/down move to the previous/next field instead of reaching this
+		// input directly - except when it's the one field that already
+		// gives them a real meaning of their own: the URL field's
+		// suggestion cycling (textinput.Model's own default KeyMap binds
+		// up/down to PrevSuggestion/NextSuggestion, live whenever
+		// ShowSuggestions is set - see factory.go's NewURLInput, the only
+		// caller that sets it). Every other textinput (Name, path/query/
+		// body param values, load-test config) has no such meaning, so
+		// up/down previously did nothing at all there.
+		if !c.ShowSuggestions && isNextFieldKey(msg) {
+			m.FocusManager.Next()
+			m.scrollToFocused()
+			return m, nil
+		}
+		if !c.ShowSuggestions && isPrevFieldKey(msg) {
+			m.FocusManager.Prev()
+			m.scrollToFocused()
+			return m, nil
+		}
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
 		return m, cmd
 	case *textarea.Model:
+		// Deliberately no up/down override here, unlike every other case -
+		// Body/Headers are the one place up/down must keep moving the
+		// cursor between lines instead, or multi-line editing would break.
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
 		return m, cmd
 	case *ui.SubmitButton:
+		if isNextFieldKey(msg) {
+			m.FocusManager.Next()
+			m.scrollToFocused()
+			return m, nil
+		}
+		if isPrevFieldKey(msg) {
+			m.FocusManager.Prev()
+			m.scrollToFocused()
+			return m, nil
+		}
 		return nm.handleSubmit(m, msg)
 	}
 	return m, nil
+}
+
+// moveFieldOnArrowKey moves focus to the previous/next field on a plain
+// up/down arrow key press - the vertical counterpart to isNextControlKey/
+// isPrevControlKey's left/right (which cycle the control's own value
+// instead). Shared by every non-text control case above (MethodSelector/
+// EnumSelector/ArrayCountControl), none of which have any other use for
+// up/down themselves.
+func moveFieldOnArrowKey(m *RequestPane, msg tea.KeyPressMsg) {
+	if isNextFieldKey(msg) {
+		m.FocusManager.Next()
+		m.scrollToFocused()
+	}
+	if isPrevFieldKey(msg) {
+		m.FocusManager.Prev()
+		m.scrollToFocused()
+	}
 }
 
 // isNextControlKey/isPrevControlKey recognize both m.keys.ChangeMethodNext/
@@ -96,6 +148,28 @@ func isNextControlKey(msg tea.KeyPressMsg, keys keybindings.KeyMap) bool {
 
 func isPrevControlKey(msg tea.KeyPressMsg, keys keybindings.KeyMap) bool {
 	return keybindings.Matches(msg, keys.ChangeMethodPrev) || msg.String() == "left"
+}
+
+// isNextFieldKey/isPrevFieldKey recognize the up/down arrow keys as an
+// alternative to tab/shift+tab for moving between fields - the vertical
+// counterpart to isNextControlKey/isPrevControlKey's left/right. Checked
+// raw (not added to NextField/PrevField's own registry entry) for the
+// same reason as those: keybindings.DefaultRegistry reserves up/down for
+// text editing everywhere (see TestDefaultRegistryReservesEditingKeys),
+// since a registered action's keys can be matched from any context a
+// plain textinput/textarea is also live in. Safe here specifically
+// because every call site is scoped to a focused component that has no
+// competing use for up/down of its own - a real multi-line *textarea.Model
+// (which needs up/down for cursor movement) and the URL field's
+// suggestion-cycling *textinput.Model (see its ShowSuggestions check)
+// both skip this entirely, in the type switch above, rather than calling
+// it.
+func isNextFieldKey(msg tea.KeyPressMsg) bool {
+	return msg.String() == "down"
+}
+
+func isPrevFieldKey(msg tea.KeyPressMsg) bool {
+	return msg.String() == "up"
 }
 
 // handleSubmit handles the submit button in normal mode

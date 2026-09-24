@@ -309,17 +309,19 @@ func (m RequestPane) renderFooter() string {
 	// height reserved for it and fell out of alignment with the sidebar.
 	footerWidth := max(m.Width, 1)
 	var helpText string
-	// "navigate" only ever meant tab/shift+tab - arrow keys have never
-	// moved focus between fields (up/down would collide with moving the
-	// cursor inside a multi-line Body/Headers textarea) - this used to
-	// claim "tab/↑/↓" (and "ctrl+x: reset" for the actually-ctrl+r
-	// reset), which a user reported as literally not working since it
-	// never did. "h/l or ←/→: change method" is accurate, though - both
-	// really are wired (see keybindings.ActionNextMethod/PreviousMethod).
+	// "navigate" means tab/shift+tab or ↑/↓ (mode_normal.go/
+	// mode_loadtest.go's isNextFieldKey/isPrevFieldKey) - except inside a
+	// multi-line Body/Headers textarea, where ↑/↓ keep moving the cursor
+	// between lines instead, and the URL field, where they cycle its own
+	// autocomplete suggestions (both already excluded from "change
+	// method" below too, for the same reason: nowhere claims a key that
+	// only sometimes does what it says). "h/l or ←/→: change method" is
+	// accurate - both really are wired (see keybindings.
+	// ActionNextMethod/PreviousMethod).
 	if m.LoadTestMode {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: exit load test mode • tab/shift+tab or ↑/↓: navigate • pgup/pgdn: scroll • ctrl+p: start load test")
 	} else {
-		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/shift+tab: navigate • pgup/pgdn: scroll • h/l or ←/→: change method • ctrl+p: send • ctrl+r: reset • ctrl+x: clear params • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
+		helpText = footerHelpStyle.MaxWidth(footerWidth).Render("ctrl+l: load test mode • tab/shift+tab or ↑/↓: navigate • pgup/pgdn: scroll • h/l or ←/→: change method • ctrl+p: send • ctrl+r: reset • ctrl+x: clear params • enter/→: accept URL • ctrl+s: save • ctrl+y: copy as curl")
 	}
 
 	// A blocked send (a body param outside its schema's min/maxLength or

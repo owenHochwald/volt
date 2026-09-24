@@ -124,7 +124,7 @@ An **imported** request additionally gets:
 Fields are always in the same order: Server selector (grouped requests
 only) → Name → Method/URL → Path Params → Query Params → Body/Array Params
 (or the plain Body textarea, if nothing was imported) → Headers → Send.
-`Tab`/`Shift+Tab` cycle through all of them.
+`Tab`/`Shift+Tab` (or `↓`/`↑`) cycle through all of them.
 
 ## Exporting to curl
 

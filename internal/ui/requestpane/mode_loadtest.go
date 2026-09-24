@@ -42,6 +42,7 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Requ
 		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *EnumSelector:
 		if isNextControlKey(msg, m.keys) {
 			c.Next()
@@ -49,6 +50,7 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Requ
 		if isPrevControlKey(msg, m.keys) {
 			c.Prev()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *ArrayCountControl:
 		if isNextControlKey(msg, m.keys) {
 			c.Next()
@@ -60,15 +62,41 @@ func (ltm *LoadTestMode) HandleInput(m *RequestPane, msg tea.KeyPressMsg) (*Requ
 			m.rebuildFocusManager()
 			m.scrollToFocused()
 		}
+		moveFieldOnArrowKey(m, msg)
 	case *textinput.Model:
+		// See NormalMode.HandleInput's identical case for why this is
+		// gated on ShowSuggestions - only the URL field sets it, for its
+		// own up/down suggestion-cycling.
+		if !c.ShowSuggestions && isNextFieldKey(msg) {
+			m.FocusManager.Next()
+			m.scrollToFocused()
+			return m, nil
+		}
+		if !c.ShowSuggestions && isPrevFieldKey(msg) {
+			m.FocusManager.Prev()
+			m.scrollToFocused()
+			return m, nil
+		}
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
 		return m, cmd
 	case *textarea.Model:
+		// Deliberately no up/down override here - see NormalMode's
+		// identical case.
 		var cmd tea.Cmd
 		*c, cmd = c.Update(msg)
 		return m, cmd
 	case *ui.SubmitButton:
+		if isNextFieldKey(msg) {
+			m.FocusManager.Next()
+			m.scrollToFocused()
+			return m, nil
+		}
+		if isPrevFieldKey(msg) {
+			m.FocusManager.Prev()
+			m.scrollToFocused()
+			return m, nil
+		}
 		return ltm.handleSubmit(m, msg)
 	}
 	return m, nil
