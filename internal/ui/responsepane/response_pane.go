@@ -171,7 +171,7 @@ type ResponsePane struct {
 	historyList                             list.Model
 	historyViewerWidth, historyViewerHeight int
 
-	// browsingHistory/historyPosition track ctrl+↑/ctrl+↓ quick-nav
+	// browsingHistory/historyPosition track "["/"]" quick-nav
 	// (stepHistory, see history_viewer.go) and viewHistoryEntry (the full
 	// ViewHistory ("H") list's own "enter") through the same history -
 	// false/0 means what's currently displayed is the live, most recent

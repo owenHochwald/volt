@@ -130,7 +130,7 @@ While a text field is focused, printable shortcut characters such as `?`, `q`,
 | `c` | Remember this response's cookies and auth header for its host |
 | `v` | View or clear saved cookies/auth headers for this host |
 | `H` | Browse past sends this session; `x` on an entry diffs it against the current response |
-| `Ctrl+↑` / `Ctrl+↓` | Step to the newer/older send, one at a time, without opening `H`'s full list |
+| `]` / `[` | Step to the newer/older send, one at a time, without opening `H`'s full list |
 | `Ctrl+X` | Cancel an active load test |
 | `?` | Show response shortcuts |
 

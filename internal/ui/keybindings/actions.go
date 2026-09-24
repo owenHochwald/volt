@@ -261,8 +261,8 @@ func DefaultRegistry() Registry {
 		{ActionCaptureAuth, []Context{ContextResponse}, []string{"c"}, "c", "remember cookies & auth for server", 35},
 		{ActionViewAuthJar, []Context{ContextResponse}, []string{"v"}, "v", "view/reset saved cookies & auth", 34},
 		{ActionViewHistory, []Context{ContextResponse}, []string{"H"}, "H", "view past sends", 33},
-		{ActionHistoryNewer, []Context{ContextResponse}, []string{"ctrl+up"}, "ctrl+↑", "newer send", 32},
-		{ActionHistoryOlder, []Context{ContextResponse}, []string{"ctrl+down"}, "ctrl+↓", "older send", 32},
+		{ActionHistoryNewer, []Context{ContextResponse}, []string{"]"}, "]", "newer send", 32},
+		{ActionHistoryOlder, []Context{ContextResponse}, []string{"["}, "[", "older send", 32},
 
 		{ActionCloseGroups, []Context{ContextGroups}, []string{"q", "esc"}, "q/esc", "close", 80},
 		{ActionCreateItem, []Context{ContextGroups}, []string{"n"}, "n", "new", 70},

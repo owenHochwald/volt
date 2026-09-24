@@ -112,9 +112,13 @@ type KeyMap struct {
 	// responsepane's history_viewer.go.
 	ViewHistory key.Binding
 
-	// HistoryNewer/HistoryOlder (ctrl+↑/ctrl+↓) step through the same
-	// history one entry at a time, without opening ViewHistory's full
-	// list overlay - see responsepane's stepHistory.
+	// HistoryNewer/HistoryOlder ("]"/"[") step through the same history
+	// one entry at a time, without opening ViewHistory's full list
+	// overlay - see responsepane's stepHistory. Originally ctrl+↑/ctrl+↓,
+	// moved to plain "["/"]" (unused elsewhere in ContextResponse, and
+	// already the sidebar's own "step through a list" convention - see
+	// SidebarPane.cycleGroupFilter) after ctrl+arrow turned out not to
+	// register at all in some terminal/multiplexer setups.
 	HistoryNewer key.Binding
 	HistoryOlder key.Binding
 

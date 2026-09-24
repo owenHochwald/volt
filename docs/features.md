@@ -196,7 +196,7 @@ displayed - a colored `+`/`-`/unchanged line-by-line comparison of status,
 duration, headers, and body. `Esc` or switching tabs exits the diff back to
 normal browsing.
 
-`Ctrl+↑`/`Ctrl+↓` step to the newer/older send one at a time, without
+`]`/`[` step to the newer/older send one at a time, without
 opening the full `H` list - useful for quickly flipping back a few sends.
 Whenever a past entry (not the current, live response) is displayed, the
 header bar leads with a `HISTORY N/M` badge and that send's own time, so

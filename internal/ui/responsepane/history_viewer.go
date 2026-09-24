@@ -100,7 +100,7 @@ func (m *ResponsePane) refreshHistoryList() {
 // actually an old response, not a new arrival).
 //
 // Also sets browsingHistory/historyPosition (see their own doc comment) so
-// the "History N/M" badge and ctrl+↑/ctrl+↓ (stepHistory) both agree with
+// the "History N/M" badge and "["/"]" (stepHistory) both agree with
 // wherever "H" + enter just jumped to - found by ID, not the history
 // list's own cursor Index(), since that's relative to whatever's
 // currently visible under its own "/" filter, not entries' true absolute
@@ -129,9 +129,9 @@ func (m *ResponsePane) setHistoryPosition(position int) {
 	m.historyPosition = position
 }
 
-// stepHistory moves ctrl+↑ (delta -1, newer) / ctrl+↓ (delta +1, older)
-// through the same history ViewHistory ("H") browses, one entry at a
-// time, without opening its full list overlay - a no-op past either end
+// stepHistory moves "]" (delta -1, newer) / "[" (delta +1, older) through
+// the same history ViewHistory ("H") browses, one entry at a time,
+// without opening its full list overlay - a no-op past either end
 // (nothing newer than live, nothing older than the oldest recorded
 // entry), so holding the key down doesn't need its own separate guard.
 func (m *ResponsePane) stepHistory(delta int) {
