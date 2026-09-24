@@ -605,3 +605,36 @@ func TestSQLiteStorage_GetAllURLs_NoURLs(t *testing.T) {
 	assert.Equal(t, len(requests), len(urls))
 	assert.NoError(t, err)
 }
+
+// TestSQLiteStorage_GetAllURLs_CapsAtMostRecent is a regression test: this
+// result feeds straight into the URL field's autocomplete suggestions
+// (see requestpane.NewURLInput), whose per-keystroke matching cost grows
+// linearly with how many are handed to it (confirmed by direct
+// benchmark - 1000 suggestions measured ~250x slower per keystroke than
+// none) - so a database with hundreds of saved requests must not hand
+// all of them back, only the most recently touched maxSuggestedURLs.
+func TestSQLiteStorage_GetAllURLs_CapsAtMostRecent(t *testing.T) {
+	db := setupTestDB(t)
+
+	total := maxSuggestedURLs + 20
+	for i := 0; i < total; i++ {
+		req := &http.Request{
+			Method: "GET",
+			URL:    fmt.Sprintf("http://example.com/%d", i),
+		}
+		if err := db.Save(req); err != nil {
+			t.Fatalf("failed to save request %d: %v", i, err)
+		}
+	}
+
+	urls, err := db.GetAllURLs()
+	assert.NoError(t, err)
+	if len(urls) != maxSuggestedURLs {
+		t.Fatalf("expected exactly %d URLs (capped), got %d", maxSuggestedURLs, len(urls))
+	}
+
+	// The most recently saved ones (highest i) must be what's kept, not an
+	// arbitrary subset - the whole point of ordering by last_id DESC.
+	assert.SliceContains(t, urls, fmt.Sprintf("http://example.com/%d", total-1))
+	assert.NotSliceContains(t, urls, "http://example.com/0")
+}

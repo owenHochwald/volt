@@ -452,9 +452,24 @@ func (s *SQLiteStorage) LoadLastWSURL() (string, error) {
 	return value, nil
 }
 
+// maxSuggestedURLs bounds GetAllURLs - its only caller (requestpane's
+// NewURLInput) feeds the result straight into textinput.Model's own
+// SetSuggestions, whose matching (bubbles' updateSuggestions, run on
+// every single keystroke) is a linear scan of the whole list plus a
+// reflect.DeepEqual on the match set - unbounded, that cost grows with
+// every request ever saved, turning typing in the URL field measurably
+// laggy for a database with hundreds of them. The most recent few dozen
+// are what's actually useful as suggestions anyway - nobody scrolls
+// through hundreds of stale ones.
+const maxSuggestedURLs = 100
+
 func (s *SQLiteStorage) GetAllURLs() ([]string, error) {
-	q := `SELECT DISTINCT url FROM requests`
-	rows, err := s.db.Query(q)
+	// Distinct by url, keeping each one's most recent id (a plain
+	// GROUP BY url, MAX(id) collapses duplicates the same as the old
+	// SELECT DISTINCT did) so LIMIT keeps the most recently saved/updated
+	// requests' URLs, not an arbitrary DISTINCT-picked subset.
+	q := `SELECT url FROM (SELECT url, MAX(id) AS last_id FROM requests GROUP BY url) ORDER BY last_id DESC LIMIT ?`
+	rows, err := s.db.Query(q, maxSuggestedURLs)
 	if err != nil {
 		return nil, err
 	}
