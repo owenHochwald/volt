@@ -283,7 +283,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case importpane.CloseImportModalMsg:
 		m.showImportModal = false
 		m.importPane.SetFocused(false)
-		// Refresh the sidebar in case the import added new requests.
+		// Refresh the sidebar in case the import added new requests, and
+		// the URL field's autocomplete list (see RequestSavedMsg's own
+		// RefreshURLSuggestions call) for the same reason - an import
+		// routinely adds many new URLs at once.
+		m.requestPane.RefreshURLSuggestions()
 		return m, ui.LoadRequestsCmd(m.db)
 
 	case importpane.ImportResultMsg:
@@ -426,6 +430,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.requestPane.MarkSaved(msg.Request)
+		// The URL field's autocomplete list (see requestpane.NewURLInput)
+		// is otherwise only ever built once, at startup - without this, a
+		// URL just saved wouldn't show up as a suggestion until the app
+		// restarts.
+		m.requestPane.RefreshURLSuggestions()
 		m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Request saved"}
 		return m, ui.LoadRequestsCmd(m.db)
 

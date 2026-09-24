@@ -37,8 +37,16 @@ func NewConfiguredTextInput(config TextInputConfig) textinput.Model {
 	return ti
 }
 
-// NewURLInput creates a pre-configured URL input field
-func NewURLInput(db *storage.SQLiteStorage) textinput.Model {
+// urlSuggestions builds the URL field's autocomplete candidates: every
+// distinct URL recently saved to db (see storage.SQLiteStorage.GetAllURLs,
+// already capped and most-recent-first), plus a handful of common example
+// URLs for a fresh install with nothing saved yet. Shared by NewURLInput
+// (the initial list, at startup) and RefreshURLSuggestions (called
+// whenever a request is saved or imported during the session - without
+// that, a URL saved just now wouldn't show up as a suggestion until the
+// next restart, since textinput.Model's own suggestion list is otherwise
+// only ever set once).
+func urlSuggestions(db *storage.SQLiteStorage) []string {
 	urls := []string{"http://", "https://"}
 
 	dbUrls, err := db.GetAllURLs()
@@ -67,12 +75,16 @@ func NewURLInput(db *storage.SQLiteStorage) textinput.Model {
 		// socket. Suggested here since there's no separate field for it.
 		"unix:///var/run/docker.sock:/containers/json",
 	)
+	return urls
+}
 
+// NewURLInput creates a pre-configured URL input field
+func NewURLInput(db *storage.SQLiteStorage) textinput.Model {
 	ti := NewConfiguredTextInput(TextInputConfig{
 		Value:           "",
 		CharLimit:       10000,
 		Width:           60,
-		Suggestions:     urls,
+		Suggestions:     urlSuggestions(db),
 		ShowSuggestions: true,
 	})
 

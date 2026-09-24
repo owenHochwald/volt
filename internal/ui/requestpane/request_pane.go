@@ -190,6 +190,21 @@ func (m *RequestPane) SetHistory(h *history.Store) {
 	m.history = h
 }
 
+// RefreshURLSuggestions re-reads urlSuggestions from the database and
+// applies them to URLInput - called by app/update.go whenever a request
+// is actually saved or imported (see ui.RequestSavedMsg/importpane.
+// CloseImportModalMsg), since URLInput's own suggestion list (see
+// NewURLInput) is otherwise only ever set once, at startup: without this,
+// a URL saved during the current session wouldn't show up as a
+// suggestion until the next restart. A no-op if DB is nil (matching
+// NewURLInput's own tests, which construct RequestPane without one).
+func (m *RequestPane) RefreshURLSuggestions() {
+	if m.DB == nil {
+		return
+	}
+	m.URLInput.SetSuggestions(urlSuggestions(m.DB))
+}
+
 // approxFooterLines is a rough, constant estimate of the pinned footer's
 // height (blank separator + Send button + stopwatch line + help hint),
 // used only to give FieldsViewport a sane Height for Update() to compute
