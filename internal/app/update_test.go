@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
+	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -148,6 +149,97 @@ func TestFirstEscapeClosesWSModalWithoutQuitting(t *testing.T) {
 	}
 	if got.showWSModal {
 		t.Fatal("first escape did not close the WebSocket modal")
+	}
+}
+
+// TestFirstEscapeCancelsSidebarFilterTypingWithoutQuitting is a regression
+// test: esc while actively typing a "/" filter query used to arm/execute
+// the app's global quit sequence instead of ever reaching bubbles'
+// list.Model's own cancel-back-to-unfiltered handling - see
+// SidebarPane.WantsEscForItself. Reported as: pressing esc to back out of
+// a filter typed by mistake only ever got you closer to quitting Volt.
+func TestFirstEscapeCancelsSidebarFilterTypingWithoutQuitting(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.SidebarPanel)
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('/', "/", 0))
+	if !model.sidebarPane.IsFiltering() {
+		t.Fatal("expected \"/\" to start filtering")
+	}
+
+	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
+	got := updated.(Model)
+
+	if commandQuits(cmd) {
+		t.Fatal("escape quit instead of cancelling the filter")
+	}
+	if got.sidebarPane.IsFiltering() {
+		t.Fatal("expected escape to cancel out of filtering")
+	}
+}
+
+// TestFirstEscapeClearsAppliedSidebarFilterWithoutQuitting covers the
+// other filter state esc must reach: a query already typed and confirmed
+// (enter), no longer being edited - bubbles' list.Model clears it back to
+// Unfiltered on esc (its ClearFilter binding), which never got the chance
+// for the same reason as the Filtering case above. Reported as: the only
+// way to get rid of an applied filter was to replace it with another one.
+func TestFirstEscapeClearsAppliedSidebarFilterWithoutQuitting(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.SidebarPanel)
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('/', "/", 0))
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('x', "x", 0))
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress(tea.KeyEnter, "", 0))
+	if !model.sidebarPane.WantsEscForItself() {
+		t.Fatal("expected the confirmed filter to leave WantsEscForItself true")
+	}
+
+	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
+	got := updated.(Model)
+
+	if commandQuits(cmd) {
+		t.Fatal("escape quit instead of clearing the applied filter")
+	}
+	if got.sidebarPane.WantsEscForItself() {
+		t.Fatal("expected escape to clear the applied filter")
+	}
+}
+
+// TestFirstEscapeCancelsPendingDeleteWithoutQuitting covers the third
+// sidebar state esc must reach: a "d" delete confirmation prompt (see
+// SidebarPane.pendingDelete) - its own Update already treats any key but
+// y/Y/enter as a cancel, but esc never got there either, for the same
+// reason as the filter cases above. Reported as: esc didn't cancel a
+// delete confirmation.
+func TestFirstEscapeCancelsPendingDeleteWithoutQuitting(t *testing.T) {
+	model := newTestModel(t)
+	model.setFocusedPanel(utils.SidebarPanel)
+
+	req := &http.Request{Name: "test req", Method: http.GET, URL: "http://example.com"}
+	if err := model.db.Save(req); err != nil {
+		t.Fatalf("failed to save request: %v", err)
+	}
+	model.sidebarPane, _ = model.sidebarPane.Update(ui.RequestsLoadingMsg{Requests: []http.Request{*req}})
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('d', "d", 0))
+	if !model.sidebarPane.WantsEscForItself() {
+		t.Fatal("expected \"d\" to arm a pending delete confirmation")
+	}
+
+	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
+	got := updated.(Model)
+
+	if commandQuits(cmd) {
+		t.Fatal("escape quit instead of cancelling the delete confirmation")
+	}
+	if got.sidebarPane.WantsEscForItself() {
+		t.Fatal("expected escape to cancel the pending delete")
+	}
+
+	requests, err := model.db.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Errorf("expected the request to survive a cancelled delete, got %d requests", len(requests))
 	}
 }
 

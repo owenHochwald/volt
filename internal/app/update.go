@@ -102,16 +102,19 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Esc's own save-to-file/search/style-picker/jar-viewer/
 			// history-viewer/goto-line overlays (see SaveResponseRaw/
-			// SearchResponse/PickBodyStyle/ViewAuthJar/ViewHistory/GotoTop)
-			// take priority over both
-			// the panel switch and quit-arming below - otherwise esc could
-			// never actually cancel any of them, since this would always
-			// intercept it first (it still reaches responsePane.Update
-			// below, via the normal routing at the bottom of this
+			// SearchResponse/PickBodyStyle/ViewAuthJar/ViewHistory/GotoTop),
+			// and the sidebar's own "/" filter (typing or already applied)
+			// and pending delete confirmation (see SidebarPane.
+			// WantsEscForItself), take priority over both the panel switch
+			// and quit-arming below - otherwise esc could never actually
+			// cancel any of them, since this would always intercept it
+			// first (it still reaches responsePane.Update/sidebarPane.
+			// Update below, via the normal routing at the bottom of this
 			// function, which is what actually closes whichever overlay is
-			// open).
-			overlayOpen := m.focusedPanel == utils.ResponsePanel &&
-				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending() || m.responsePane.IsDiffing())
+			// open, backs out of/clears the filter, or cancels the delete).
+			overlayOpen := (m.focusedPanel == utils.ResponsePanel &&
+				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending() || m.responsePane.IsDiffing())) ||
+				(m.focusedPanel == utils.SidebarPanel && m.sidebarPane.WantsEscForItself())
 			if overlayOpen {
 				m.disarmQuit()
 			} else {

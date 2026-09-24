@@ -265,6 +265,26 @@ func (s *SidebarPane) IsFiltering() bool {
 	return s.requestsList.FilterState() == list.Filtering
 }
 
+// WantsEscForItself reports whether esc means something to the sidebar
+// right now, other than the app's global quit-arming (see app/update.go's
+// overlayOpen) - true while either:
+//
+//   - "/" filtering has a query being typed or already applied. bubbles'
+//     own list.Model already handles esc correctly in both cases
+//     (list.KeyMap's CancelWhileFiltering backs out of typing; ClearFilter
+//     clears an already-applied one), reached via the plain
+//     s.requestsList.Update(msg) at the bottom of Update.
+//   - A delete confirmation is pending (see pendingDelete) - Update's own
+//     "any key but y/Y/enter cancels" already treats esc as a cancel.
+//
+// Both of those were already correct - the bug was that esc never reached
+// either of them: caught by the app's global quit-arming first, the first
+// press armed quit and the second executed it, with no way to just back
+// out of a filter or a delete prompt instead.
+func (s *SidebarPane) WantsEscForItself() bool {
+	return s.requestsList.FilterState() != list.Unfiltered || s.pendingDelete != nil
+}
+
 // describeURL builds an item's description line, filling as much of the
 // available sidebar width as the URL needs instead of always truncating
 // to a fixed handful of characters - a wider sidebar (see Model.sidebarWidth)

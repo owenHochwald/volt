@@ -103,6 +103,54 @@ func TestSidebar_Esc_DoesNotQuitTheApp(t *testing.T) {
 	}
 }
 
+// TestSidebar_WantsEscForItself covers every state that must claim esc for
+// itself before the app's global quit-arming ever sees it (see
+// app/update.go's overlayOpen) - both "/" filter states, a pending delete
+// confirmation, and the ordinary case with none of that active.
+func TestSidebar_WantsEscForItself(t *testing.T) {
+	t.Run("false by default", func(t *testing.T) {
+		sidebar, _, _ := setupSidebarWithRequest(t)
+		if sidebar.WantsEscForItself() {
+			t.Error("expected no active filter or pending delete")
+		}
+	})
+
+	t.Run("true while typing a filter", func(t *testing.T) {
+		sidebar, _, _ := setupSidebarWithRequest(t)
+		sendKey(t, sidebar, "/")
+		if !sidebar.IsFiltering() {
+			t.Fatal("expected \"/\" to start filtering")
+		}
+		if !sidebar.WantsEscForItself() {
+			t.Error("expected WantsEscForItself while actively filtering")
+		}
+	})
+
+	t.Run("true with an applied filter", func(t *testing.T) {
+		sidebar, _, _ := setupSidebarWithRequest(t)
+		sendKey(t, sidebar, "/")
+		sendKey(t, sidebar, "x")
+		sidebar.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+		if sidebar.IsFiltering() {
+			t.Fatal("expected enter to apply, not still be typing, the filter")
+		}
+		if !sidebar.WantsEscForItself() {
+			t.Error("expected WantsEscForItself with an applied (not being edited) filter")
+		}
+	})
+
+	t.Run("true with a pending delete", func(t *testing.T) {
+		sidebar, _, _ := setupSidebarWithRequest(t)
+		sendKey(t, sidebar, "d")
+		if sidebar.pendingDelete == nil {
+			t.Fatal("expected \"d\" to arm a pending delete")
+		}
+		if !sidebar.WantsEscForItself() {
+			t.Error("expected WantsEscForItself while a delete confirmation is pending")
+		}
+	})
+}
+
 func TestSidebar_DeleteRequest_RequiresConfirmation(t *testing.T) {
 	sidebar, db, _ := setupSidebarWithRequest(t)
 
