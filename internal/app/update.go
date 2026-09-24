@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/apperror"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/logging"
 	"github.com/owenHochwald/Volt/internal/ui"
 	"github.com/owenHochwald/Volt/internal/ui/design"
 	"github.com/owenHochwald/Volt/internal/ui/groupspane"
@@ -24,6 +25,16 @@ import (
 const (
 	quitSequenceTimeout = 750 * time.Millisecond
 	quitWarningText     = "Press Esc again to quit"
+
+	// clipboardErrorHint is shown alongside both copy-to-clipboard
+	// failures (response body, curl command) - github.com/atotto/clipboard
+	// shells out to a system clipboard tool (xclip/xsel/wl-copy on Linux,
+	// pbcopy on macOS, clip.exe on WSL) rather than using a terminal's own
+	// OSC 52 clipboard escape sequence, so it fails even in a terminal
+	// (e.g. kitty) that supports OSC 52 itself if none of those tools are
+	// installed, or over SSH/in a container with no display server for an
+	// X11 tool to reach.
+	clipboardErrorHint = "Install xclip, xsel, or wl-clipboard (Linux), or run with -v and check ~/.volt/volt.log for the exact error."
 )
 
 type quitSequenceExpiredMsg struct {
@@ -426,7 +437,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case responsepane.ResponseCopiedMsg:
 		if msg.Err != nil {
-			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the response.", "Try again after checking clipboard access."))
+			// The clipboard library's own error (e.g. "exec: xclip: not
+			// found") is far more actionable than the friendly notification
+			// text below has room for - logged (a no-op unless -v/--debug
+			// was passed - see internal/logging) rather than shown directly,
+			// since it can be a raw, unpolished Go error string.
+			logging.Logf("clipboard: copy response failed: %v", msg.Err)
+			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the response.", clipboardErrorHint))
 		} else {
 			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Response copied"}
 		}
@@ -434,7 +451,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case requestpane.RequestCopiedMsg:
 		if msg.Err != nil {
-			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the curl command.", "Try again after checking clipboard access."))
+			logging.Logf("clipboard: copy curl command failed: %v", msg.Err)
+			m.notification = ui.ErrorNotification(apperror.OperationError("Volt couldn't copy the curl command.", clipboardErrorHint))
 		} else {
 			m.notification = ui.Notification{Level: ui.NotificationSuccess, Text: "Copied as curl"}
 		}

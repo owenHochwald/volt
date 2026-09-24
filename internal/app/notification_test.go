@@ -2,12 +2,16 @@ package app
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/http"
+	"github.com/owenHochwald/Volt/internal/logging"
 	"github.com/owenHochwald/Volt/internal/ui"
+	"github.com/owenHochwald/Volt/internal/ui/requestpane"
 	"github.com/owenHochwald/Volt/internal/ui/responsepane"
 	"github.com/owenHochwald/Volt/internal/utils"
 )
@@ -82,6 +86,45 @@ func TestStorageResultsSurfaceConfirmationsAndErrors(t *testing.T) {
 			}
 			if tt.hint != "" && !strings.Contains(strings.ToLower(got.notification.Hint), tt.hint) {
 				t.Fatalf("notification hint = %q, want it to contain %q", got.notification.Hint, tt.hint)
+			}
+		})
+	}
+}
+
+// TestClipboardFailureLogsTheUnderlyingError is a regression test: a
+// clipboard copy failure's real cause (e.g. "exec: xclip: not found" -
+// github.com/atotto/clipboard shells out to a system clipboard tool
+// rather than using a terminal's own OSC 52 escape sequence, so it fails
+// even in a terminal that supports that, like kitty, if none of those
+// tools are installed) used to be discarded entirely - only ever a fixed,
+// generic notification. Reported live: "Volt couldn't copy the curl
+// command." with no way to tell why. Logging it (a no-op unless -v/--debug
+// is passed) makes it discoverable in ~/.volt/volt.log instead.
+func TestClipboardFailureLogsTheUnderlyingError(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "volt.log")
+	if err := logging.Enable(logPath); err != nil {
+		t.Fatalf("failed to enable logging: %v", err)
+	}
+	defer logging.Close()
+
+	tests := []struct {
+		name string
+		msg  any
+	}{
+		{"response copy", responsepane.ResponseCopiedMsg{Err: errors.New("exec: xclip: not found")}},
+		{"curl copy", requestpane.RequestCopiedMsg{Err: errors.New("exec: xclip: not found")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := newTestModel(t)
+			model.Update(tt.msg)
+
+			logged, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatalf("failed to read log file: %v", err)
+			}
+			if !strings.Contains(string(logged), "exec: xclip: not found") {
+				t.Errorf("expected the underlying clipboard error to be logged, got log contents:\n%s", logged)
 			}
 		})
 	}
