@@ -119,6 +119,17 @@ func (m ResponsePane) renderTiming() string {
 	b.WriteString("Request Timing\n")
 	b.WriteString(strings.Repeat("─", 60) + "\n\n")
 
+	// Shown even for a failed request below (it was still attempted at
+	// this time) - zero only for a response built directly in a test that
+	// never went through SetResponse/viewHistoryEntry, in real usage
+	// always set alongside Response itself (see displayResponse).
+	if !m.SentAt.IsZero() {
+		b.WriteString(m.styles.Text.ResponseLabel.Render("Sent At"))
+		b.WriteString(": ")
+		b.WriteString(m.styles.Text.Value.Render(m.SentAt.Format("15:04:05")))
+		b.WriteString("\n\n")
+	}
+
 	// A request that failed before a response came back (e.g. a dial
 	// error - "connection refused", a DNS failure, a timeout) never
 	// completes a round trip, so Duration stays at its zero value - not a

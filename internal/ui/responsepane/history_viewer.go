@@ -99,7 +99,7 @@ func (m *ResponsePane) refreshHistoryList() {
 // (no re-recording into history, no re-capturing cookies/auth for what's
 // actually an old response, not a new arrival).
 func (m *ResponsePane) viewHistoryEntry(entry history.Entry) {
-	m.displayResponse(entry.Response, entry.SentRequest)
+	m.displayResponse(entry.Response, entry.SentRequest, entry.SentAt)
 }
 
 // handleHistoryViewerKey handles input while the past-sends viewer is

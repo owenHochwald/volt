@@ -246,7 +246,11 @@ func (m ResponsePane) renderLoadTestProgress(progress float64) string {
 	return b.String()
 }
 
-// renderHeaderBar renders the status bar for normal responses
+// renderHeaderBar renders the status bar for normal responses - shown
+// above the tab bar regardless of which tab is active, unlike the
+// Timing tab's own "Sent At" (see renderTiming), which only a Timing-tab
+// visit would surface. SentAt leads it, before the status code, so when a
+// request was sent is visible at a glance without switching tabs.
 func (m ResponsePane) renderHeaderBar() string {
 	statusStyle := m.styles.Status.ForCode(m.Response.StatusCode)
 	status := statusStyle.Render(m.Response.Status)
@@ -257,7 +261,11 @@ func (m ResponsePane) renderHeaderBar() string {
 		duration += " (direct)"
 	}
 	size := fmt.Sprintf(" %s", utils.FormatSize(len(m.Response.Body)))
-	parts := []string{" | ", status, " | ", duration, " | ", size}
+	parts := []string{" | "}
+	if !m.SentAt.IsZero() {
+		parts = append(parts, m.styles.Text.Muted.Render(m.SentAt.Format("15:04:05")), " | ")
+	}
+	parts = append(parts, status, " | ", duration, " | ", size)
 	if indicator := m.jarIndicator(); indicator != "" {
 		parts = append(parts, " | ", indicator)
 	}

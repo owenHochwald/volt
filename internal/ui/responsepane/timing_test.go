@@ -69,6 +69,88 @@ func TestRenderTiming_ReusedConnection_SkipsConnectionSetupPhases(t *testing.T) 
 	}
 }
 
+// TestRenderTiming_ShowsSentAt verifies the Timing tab shows when the
+// request was actually sent, not just how long it took.
+func TestRenderTiming_ShowsSentAt(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.Response = &http.Response{StatusCode: 200, Status: "200 OK", Duration: 10 * time.Millisecond}
+	pane.SentAt = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
+
+	got := pane.renderTiming()
+
+	if !strings.Contains(got, "Sent At") || !strings.Contains(got, "15:04:05") {
+		t.Errorf("expected the Timing tab to show when the request was sent, got:\n%s", got)
+	}
+}
+
+// TestRenderTiming_ShowsSentAtEvenOnFailure verifies "Sent At" still shows
+// for a request that failed before a response came back (e.g. a dial
+// error) - it was still attempted at that time, even though there's no
+// duration/breakdown to show alongside it.
+func TestRenderTiming_ShowsSentAtEvenOnFailure(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.Response = &http.Response{Error: "connection refused"}
+	pane.SentAt = time.Date(2026, 1, 2, 9, 30, 0, 0, time.UTC)
+
+	got := pane.renderTiming()
+
+	if !strings.Contains(got, "09:30:00") {
+		t.Errorf("expected \"Sent At\" to show even for a failed request, got:\n%s", got)
+	}
+}
+
+// TestRenderTiming_OmitsSentAtWhenUnset verifies the zero value (a
+// Response built directly in a test, bypassing SetResponse/
+// viewHistoryEntry) doesn't render as a garbage "0001-01-01" timestamp.
+func TestRenderTiming_OmitsSentAtWhenUnset(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.Response = &http.Response{StatusCode: 200, Status: "200 OK", Duration: 10 * time.Millisecond}
+
+	got := pane.renderTiming()
+
+	if strings.Contains(got, "Sent At") {
+		t.Errorf("expected no \"Sent At\" line with SentAt unset, got:\n%s", got)
+	}
+}
+
+// TestRenderHeaderBar_ShowsSentAtBeforeStatus verifies the persistent
+// status bar (shown above the tab bar regardless of which tab is active -
+// unlike the Timing tab's own copy, only visible when that tab is
+// selected) also leads with when the request was sent, ahead of the
+// status code, so it's visible at a glance without switching tabs.
+func TestRenderHeaderBar_ShowsSentAtBeforeStatus(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.Response = &http.Response{StatusCode: 200, Status: "200 OK", Duration: 10 * time.Millisecond}
+	pane.SentAt = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
+
+	got := pane.renderHeaderBar()
+
+	sentAtIdx := strings.Index(got, "15:04:05")
+	statusIdx := strings.Index(got, "200 OK")
+	if sentAtIdx < 0 {
+		t.Fatalf("expected the header bar to show when the request was sent, got %q", got)
+	}
+	if statusIdx < 0 {
+		t.Fatalf("expected the header bar to show the status, got %q", got)
+	}
+	if sentAtIdx >= statusIdx {
+		t.Errorf("expected \"Sent At\" before the status code, got %q", got)
+	}
+}
+
+// TestRenderHeaderBar_OmitsSentAtWhenUnset mirrors
+// TestRenderTiming_OmitsSentAtWhenUnset for the header bar.
+func TestRenderHeaderBar_OmitsSentAtWhenUnset(t *testing.T) {
+	pane := SetupResponsePane(keybindings.DefaultKeyMap())
+	pane.Response = &http.Response{StatusCode: 200, Status: "200 OK", Duration: 10 * time.Millisecond}
+
+	got := pane.renderHeaderBar()
+
+	if strings.Contains(got, "0001-01-01") {
+		t.Errorf("expected no garbage zero-time rendered, got %q", got)
+	}
+}
+
 func TestRenderTiming_NoTLS_OmitsTLSHandshakeRow(t *testing.T) {
 	pane := SetupResponsePane(keybindings.DefaultKeyMap())
 	pane.Response = &http.Response{

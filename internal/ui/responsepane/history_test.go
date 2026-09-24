@@ -3,6 +3,7 @@ package responsepane
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/history"
@@ -40,6 +41,25 @@ func TestResponsePane_SetResponse_RecordsIntoHistory(t *testing.T) {
 	}
 	if entries[0].SentRequest.URL != "https://api.example.com/x" {
 		t.Errorf("expected the sent request recorded, got %+v", entries[0].SentRequest)
+	}
+}
+
+// TestResponsePane_SetResponse_SetsSentAt verifies a fresh response's
+// SentAt is stamped with (approximately) when it arrived, and that it's
+// the exact same instant recorded into history for it - not two separate
+// time.Now() calls that could drift apart.
+func TestResponsePane_SetResponse_SetsSentAt(t *testing.T) {
+	pane, h := setupPaneWithHistory(t)
+
+	before := time.Now()
+	pane.SetResponse(&http.Response{StatusCode: 200}, &http.Request{Method: http.GET, URL: "https://a"})
+	after := time.Now()
+
+	if pane.SentAt.Before(before) || pane.SentAt.After(after) {
+		t.Errorf("SentAt = %v, want it between %v and %v", pane.SentAt, before, after)
+	}
+	if !pane.SentAt.Equal(h.Entries()[0].SentAt) {
+		t.Errorf("SentAt = %v, want it to match the history entry's own %v", pane.SentAt, h.Entries()[0].SentAt)
 	}
 }
 
@@ -99,6 +119,34 @@ func TestResponsePane_ViewHistory_EnterViewsSelectedEntry(t *testing.T) {
 	}
 	if len(h.Entries()) != 2 {
 		t.Errorf("expected viewing an entry not to add a new one, got %d entries", len(h.Entries()))
+	}
+}
+
+// TestResponsePane_ViewHistory_EnterPreservesOriginalSentAt is a
+// regression test: viewHistoryEntry must show the entry's own original
+// send time (see ResponsePane.SentAt), not the moment it happened to be
+// reopened from history - displayResponse takes sentAt as a parameter
+// specifically so this doesn't quietly regress back to always stamping
+// time.Now() the way SetResponse's own fresh-arrival path does.
+func TestResponsePane_ViewHistory_EnterPreservesOriginalSentAt(t *testing.T) {
+	pane, h := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "first"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "second"}, &http.Request{Method: http.GET, URL: "https://b"})
+
+	// Entries are newest-first, so "first" (the older send) is entries[1].
+	wantSentAt := h.Entries()[1].SentAt
+
+	model, _ := pane.Update(keyRunes("H"))
+	opened := model
+	opened, _ = opened.Update(keyRunes("j"))
+	model, _ = opened.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	result := model
+
+	if result.Response.Body != "first" {
+		t.Fatalf("expected the older entry (\"a\") now displayed, got body %q", result.Response.Body)
+	}
+	if !result.SentAt.Equal(wantSentAt) {
+		t.Errorf("SentAt = %v, want the entry's own original %v (not the reopen time)", result.SentAt, wantSentAt)
 	}
 }
 

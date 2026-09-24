@@ -30,6 +30,14 @@ type ResponsePane struct {
 	// still being edited in the request pane.
 	SentRequest *http.Request
 
+	// SentAt is when Response arrived - shown on the Timing tab (see
+	// renderTiming). Set alongside SentRequest by displayResponse, from
+	// the same instant SetResponse hands history.Record for this same
+	// response (or, for a past entry reopened from history - see
+	// viewHistoryEntry - that entry's own original history.Entry.SentAt,
+	// not the moment it happened to be reopened).
+	SentAt time.Time
+
 	latencySamples    []time.Duration
 	loadTestStart     time.Time
 	previousCompleted int
@@ -315,9 +323,14 @@ func (m *ResponsePane) SetStyles(styles design.Styles) {
 // after Body/Headers/Timing/Request all started needing the same handling
 // once every tab became scrollable - see renderActiveTabContent).
 func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Request) {
-	m.displayResponse(response, sentRequest)
+	// Captured once and reused for both displayResponse's SentAt and
+	// history.Record's own timestamp, so the Timing tab and the history
+	// list agree on exactly when this happened instead of two separate
+	// time.Now() calls (however close together) drifting apart.
+	sentAt := time.Now()
+	m.displayResponse(response, sentRequest, sentAt)
 	if m.history != nil {
-		m.history.Record(sentRequest, response, time.Now())
+		m.history.Record(sentRequest, response, sentAt)
 	}
 	if m.autoRememberCookies {
 		m.captureCookies()
@@ -327,16 +340,20 @@ func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Re
 	}
 }
 
-// displayResponse makes response/sentRequest what's currently shown,
-// without any of SetResponse's side effects (recording it into history,
-// capturing cookies/auth) - shared with viewHistoryEntry (see
+// displayResponse makes response/sentRequest/sentAt what's currently
+// shown, without any of SetResponse's side effects (recording it into
+// history, capturing cookies/auth) - shared with viewHistoryEntry (see
 // history_viewer.go), which shows a *past* entry without treating it as
 // a new arrival: re-recording it would duplicate it in its own history,
 // and re-capturing its cookies/auth would silently overwrite whatever's
-// actually current with a possibly much older value.
-func (m *ResponsePane) displayResponse(response *http.Response, sentRequest *http.Request) {
+// actually current with a possibly much older value. sentAt is passed in
+// (rather than always time.Now()) for exactly that reason - viewHistoryEntry
+// passes the entry's own original history.Entry.SentAt, not the moment it
+// happened to be reopened.
+func (m *ResponsePane) displayResponse(response *http.Response, sentRequest *http.Request, sentAt time.Time) {
 	m.Response = response
 	m.SentRequest = sentRequest
+	m.SentAt = sentAt
 	m.isLoadTest = false
 	m.resetLoadTestSeries(time.Time{})
 	m.updateViewportForActiveTab()
