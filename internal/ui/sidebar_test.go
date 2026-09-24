@@ -66,6 +66,15 @@ func sendKey(t *testing.T, sidebar *SidebarPane, key string) tea.Cmd {
 	return cmd
 }
 
+// sendCtrlKey sends ctrl+<letter> - configureFilterKeys' Filter/ClearFilter
+// bindings (ctrl+f/ctrl+x) aren't single printable runes, so they need
+// their own construction rather than sendKey's.
+func sendCtrlKey(t *testing.T, sidebar *SidebarPane, letter rune) tea.Cmd {
+	t.Helper()
+	_, cmd := sidebar.Update(tea.KeyPressMsg(tea.Key{Code: letter, Mod: tea.ModCtrl}))
+	return cmd
+}
+
 // loadSidebarRequests feeds requests through the same RequestsLoadingMsg
 // path Init()'s LoadRequestsCmd produces, so group filter state (groupNames/
 // groupOptions) is populated exactly as it would be in the real app instead
@@ -105,8 +114,10 @@ func TestSidebar_Esc_DoesNotQuitTheApp(t *testing.T) {
 
 // TestSidebar_WantsEscForItself covers every state that must claim esc for
 // itself before the app's global quit-arming ever sees it (see
-// app/update.go's overlayOpen) - both "/" filter states, a pending delete
-// confirmation, and the ordinary case with none of that active.
+// app/update.go's overlayOpen) - actively typing a filter, a pending
+// delete confirmation, and the ordinary case with none of that active. An
+// already-*applied* filter (not being typed) is deliberately NOT one of
+// these states - see TestSidebar_ClearFilter_MovedOffEsc.
 func TestSidebar_WantsEscForItself(t *testing.T) {
 	t.Run("false by default", func(t *testing.T) {
 		sidebar, _, _ := setupSidebarWithRequest(t)
@@ -117,25 +128,25 @@ func TestSidebar_WantsEscForItself(t *testing.T) {
 
 	t.Run("true while typing a filter", func(t *testing.T) {
 		sidebar, _, _ := setupSidebarWithRequest(t)
-		sendKey(t, sidebar, "/")
+		sendCtrlKey(t, sidebar, 'f')
 		if !sidebar.IsFiltering() {
-			t.Fatal("expected \"/\" to start filtering")
+			t.Fatal("expected ctrl+f to start filtering")
 		}
 		if !sidebar.WantsEscForItself() {
 			t.Error("expected WantsEscForItself while actively filtering")
 		}
 	})
 
-	t.Run("true with an applied filter", func(t *testing.T) {
+	t.Run("false with an applied (not being edited) filter", func(t *testing.T) {
 		sidebar, _, _ := setupSidebarWithRequest(t)
-		sendKey(t, sidebar, "/")
+		sendCtrlKey(t, sidebar, 'f')
 		sendKey(t, sidebar, "x")
 		sidebar.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
 		if sidebar.IsFiltering() {
 			t.Fatal("expected enter to apply, not still be typing, the filter")
 		}
-		if !sidebar.WantsEscForItself() {
-			t.Error("expected WantsEscForItself with an applied (not being edited) filter")
+		if sidebar.WantsEscForItself() {
+			t.Error("expected an applied filter not to claim esc - clearing it moved to ctrl+x")
 		}
 	})
 
@@ -149,6 +160,34 @@ func TestSidebar_WantsEscForItself(t *testing.T) {
 			t.Error("expected WantsEscForItself while a delete confirmation is pending")
 		}
 	})
+}
+
+// TestSidebar_ClearFilter_MovedOffEsc is a regression test for the
+// deliberate follow-up to WantsEscForItself's original fix: esc clearing
+// an *applied* filter turned out to be too easy to trigger by accident
+// (just browsing the filtered list) - reported live. ctrl+x now does that
+// instead (see configureFilterKeys); esc on an applied filter must do
+// nothing to it at all (see TestFirstEscapeDoesNotClearAnAppliedSidebarFilter
+// for the app-level half of this - it falls through to the ordinary
+// quit-arming/panel-switch behavior instead).
+func TestSidebar_ClearFilter_MovedOffEsc(t *testing.T) {
+	sidebar, _, _ := setupSidebarWithRequest(t)
+	sendCtrlKey(t, sidebar, 'f')
+	sendKey(t, sidebar, "x")
+	sidebar.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if sidebar.requestsList.FilterState() != list.FilterApplied {
+		t.Fatalf("expected the filter to be applied, got state %v", sidebar.requestsList.FilterState())
+	}
+
+	sidebar.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}))
+	if sidebar.requestsList.FilterState() != list.FilterApplied {
+		t.Fatalf("expected esc to leave the applied filter alone, got state %v", sidebar.requestsList.FilterState())
+	}
+
+	sendCtrlKey(t, sidebar, 'x')
+	if sidebar.requestsList.FilterState() != list.Unfiltered {
+		t.Fatalf("expected ctrl+x to clear the applied filter, got state %v", sidebar.requestsList.FilterState())
+	}
 }
 
 func TestSidebar_DeleteRequest_RequiresConfirmation(t *testing.T) {

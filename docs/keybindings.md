@@ -62,7 +62,15 @@ use the terminal-independent `Ctrl+E` and `Ctrl+W` bindings.
 | `g` | Select the first request |
 | `G` | Select the last request |
 | `d` | Delete the selected request |
+| `Ctrl+F` | Filter the request list by name, method, URL, or group |
+| `Ctrl+X` | Clear an applied filter |
+| `[` / `]` | Cycle the group filter (which group's requests are shown) |
 | `?` | Show sidebar shortcuts |
+
+While typing a filter query, `Esc` cancels back to the unfiltered list and
+`Enter` applies it. Once applied, `Esc` leaves it alone (deliberately not
+bound to clearing a filter - too easy to trigger by accident while just
+browsing the filtered list); use `Ctrl+X` for that instead.
 
 ## Request panel
 

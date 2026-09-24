@@ -153,17 +153,17 @@ func TestFirstEscapeClosesWSModalWithoutQuitting(t *testing.T) {
 }
 
 // TestFirstEscapeCancelsSidebarFilterTypingWithoutQuitting is a regression
-// test: esc while actively typing a "/" filter query used to arm/execute
-// the app's global quit sequence instead of ever reaching bubbles'
-// list.Model's own cancel-back-to-unfiltered handling - see
-// SidebarPane.WantsEscForItself. Reported as: pressing esc to back out of
-// a filter typed by mistake only ever got you closer to quitting Volt.
+// test: esc while actively typing a filter query used to arm/execute the
+// app's global quit sequence instead of ever reaching bubbles' list.Model's
+// own cancel-back-to-unfiltered handling - see SidebarPane.
+// WantsEscForItself. Reported as: pressing esc to back out of a filter
+// typed by mistake only ever got you closer to quitting Volt.
 func TestFirstEscapeCancelsSidebarFilterTypingWithoutQuitting(t *testing.T) {
 	model := newTestModel(t)
 	model.setFocusedPanel(utils.SidebarPanel)
-	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('/', "/", 0))
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('f', "", tea.ModCtrl))
 	if !model.sidebarPane.IsFiltering() {
-		t.Fatal("expected \"/\" to start filtering")
+		t.Fatal("expected ctrl+f to start filtering")
 	}
 
 	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
@@ -177,30 +177,38 @@ func TestFirstEscapeCancelsSidebarFilterTypingWithoutQuitting(t *testing.T) {
 	}
 }
 
-// TestFirstEscapeClearsAppliedSidebarFilterWithoutQuitting covers the
-// other filter state esc must reach: a query already typed and confirmed
-// (enter), no longer being edited - bubbles' list.Model clears it back to
-// Unfiltered on esc (its ClearFilter binding), which never got the chance
-// for the same reason as the Filtering case above. Reported as: the only
-// way to get rid of an applied filter was to replace it with another one.
-func TestFirstEscapeClearsAppliedSidebarFilterWithoutQuitting(t *testing.T) {
+// TestFirstEscapeDoesNotClearAnAppliedSidebarFilter is a regression test
+// for the deliberate follow-up to the fix above: esc clearing an
+// *applied* filter (not being typed) turned out to be too easy to
+// trigger by accident while just browsing the filtered list - reported
+// live. Clearing one now takes ctrl+x instead (see
+// ui.configureFilterKeys); esc on an applied filter falls through to the
+// app's ordinary quit-arming, the same as if no filter were active at
+// all - it neither quits on the first press nor touches the filter.
+func TestFirstEscapeDoesNotClearAnAppliedSidebarFilter(t *testing.T) {
 	model := newTestModel(t)
 	model.setFocusedPanel(utils.SidebarPanel)
-	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('/', "/", 0))
+	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('f', "", tea.ModCtrl))
 	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress('x', "x", 0))
 	model.sidebarPane, _ = model.sidebarPane.Update(appKeyPress(tea.KeyEnter, "", 0))
-	if !model.sidebarPane.WantsEscForItself() {
-		t.Fatal("expected the confirmed filter to leave WantsEscForItself true")
+	if model.sidebarPane.IsFiltering() {
+		t.Fatal("expected enter to apply, not still be typing, the filter")
 	}
 
 	updated, cmd := model.Update(appKeyPress(tea.KeyEscape, "", 0))
 	got := updated.(Model)
 
 	if commandQuits(cmd) {
-		t.Fatal("escape quit instead of clearing the applied filter")
+		t.Fatal("escape quit on its first press")
 	}
-	if got.sidebarPane.WantsEscForItself() {
-		t.Fatal("expected escape to clear the applied filter")
+	if got.sidebarPane.IsFiltering() {
+		t.Fatal("expected the filter to still be applied (unfiltered would mean esc cleared it)")
+	}
+
+	// ctrl+x is what actually clears it now.
+	cleared, _ := got.sidebarPane.Update(appKeyPress('x', "", tea.ModCtrl))
+	if cleared.IsFiltering() {
+		t.Fatal("expected ctrl+x not to leave the sidebar in filtering mode")
 	}
 }
 

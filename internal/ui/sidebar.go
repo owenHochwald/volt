@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/paginator"
 	tea "charm.land/bubbletea/v2"
@@ -156,7 +157,7 @@ func (s *SidebarPane) renderHelpText() string {
 				Render(fmt.Sprintf("Delete %q? y/enter=yes, any other key=no", s.pendingDelete.title)),
 		)
 	}
-	return HelpStyle.MaxWidth(s.width).Render("/ to search • [/]: group filter • ? for help")
+	return HelpStyle.MaxWidth(s.width).Render("ctrl+f: filter • [/]: group filter • ? for help")
 }
 
 // listHeight returns the height available for the request list itself,
@@ -269,20 +270,22 @@ func (s *SidebarPane) IsFiltering() bool {
 // right now, other than the app's global quit-arming (see app/update.go's
 // overlayOpen) - true while either:
 //
-//   - "/" filtering has a query being typed or already applied. bubbles'
-//     own list.Model already handles esc correctly in both cases
-//     (list.KeyMap's CancelWhileFiltering backs out of typing; ClearFilter
-//     clears an already-applied one), reached via the plain
-//     s.requestsList.Update(msg) at the bottom of Update.
+//   - actively typing a filter query (see IsFiltering) - bubbles' own
+//     list.Model already handles esc correctly here (list.KeyMap's
+//     CancelWhileFiltering backs out of typing, discarding the query),
+//     reached via the plain s.requestsList.Update(msg) at the bottom of
+//     Update.
 //   - A delete confirmation is pending (see pendingDelete) - Update's own
 //     "any key but y/Y/enter cancels" already treats esc as a cancel.
 //
-// Both of those were already correct - the bug was that esc never reached
-// either of them: caught by the app's global quit-arming first, the first
-// press armed quit and the second executed it, with no way to just back
-// out of a filter or a delete prompt instead.
+// Deliberately does NOT include an already-*applied* filter (not being
+// typed) - clearing that moved off esc entirely, onto ctrl+x (see
+// configureFilterKeys), specifically so esc can't wipe it by accident;
+// esc while merely browsing a filtered list now falls through to the
+// app's ordinary quit-arming/panel-switch behavior instead, same as with
+// no filter active at all.
 func (s *SidebarPane) WantsEscForItself() bool {
-	return s.requestsList.FilterState() != list.Unfiltered || s.pendingDelete != nil
+	return s.IsFiltering() || s.pendingDelete != nil
 }
 
 // describeURL builds an item's description line, filling as much of the
@@ -315,7 +318,32 @@ func (s *SidebarPane) SetRequests(items []list.Item) {
 	// list.New defaults its paginator to dots - "10/15" (as main used to
 	// show) is more useful once there are enough saved requests to paginate.
 	s.requestsList.Paginator.Type = paginator.Arabic
+	configureFilterKeys(&s.requestsList)
 	s.clearNavigationCount()
+}
+
+// configureFilterKeys remaps list.Model's own default filter keybindings -
+// starting a filter ("/") and clearing an already-applied one (esc) - away
+// from their defaults, on a freshly (re)constructed list (see SetRequests/
+// NewSidebar, both of which build a brand new list.Model from scratch, so
+// this has to be reapplied every time, not just once at startup).
+//
+// "/" moved to ctrl+f: reported as confusing alongside two other things
+// that also mention "/" for something else entirely - the response
+// panel's own real regex search (also bound to "/", a genuinely different
+// feature, not just a differently-named version of this filter), and this
+// same line's own "[/]: group filter" hint (bracket keys, unrelated to the
+// bare "/" this used to also claim right next to it).
+//
+// ClearFilter moved to ctrl+x: esc is the universal back/cancel key
+// everywhere else in Volt, easy to hit on reflex while just browsing an
+// already-filtered list - wiping the filter with no request to. Esc still
+// cancels *typing* one (list.KeyMap's CancelWhileFiltering, untouched
+// here) - only clearing one that's already applied and no longer being
+// edited moves off esc.
+func configureFilterKeys(l *list.Model) {
+	l.KeyMap.Filter = key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "filter"))
+	l.KeyMap.ClearFilter = key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "clear filter"))
 }
 
 func (s *SidebarPane) Init() tea.Cmd {
@@ -626,6 +654,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyl
 	sidebar.requestsList.SetShowHelp(false)
 	sidebar.requestsList.DisableQuitKeybindings()
 	sidebar.requestsList.Paginator.Type = paginator.Arabic
+	configureFilterKeys(&sidebar.requestsList)
 
 	return sidebar
 }
