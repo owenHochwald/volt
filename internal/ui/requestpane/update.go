@@ -31,6 +31,41 @@ func (m RequestPane) Update(msg tea.Msg) (RequestPane, tea.Cmd) {
 			return m, nil
 		}
 
+		// The sent-request viewer (see ViewRequestHistory) claims every
+		// key while open, same reason as responsepane's own claims-every-
+		// key overlays.
+		if m.viewingHistory {
+			return m.handleRequestHistoryViewerKey(msg)
+		}
+
+		// ViewRequestHistory/RequestHistoryNewer/RequestHistoryOlder
+		// ("H"/"["/"]") only fire while a non-text control is focused
+		// (IsEditing false) - all three are plain, unmodified keys that
+		// must still type normally into the URL/Name/Headers/Body/param
+		// fields otherwise (a JSON body routinely contains literal "["/
+		// "]", and a header could contain "H") - the same reasoning
+		// isNextControlKey/isPrevControlKey's h/l already follow, scoped
+		// to mode_normal.go's non-text-input switch cases instead of
+		// checked unconditionally here. Also skipped entirely in load-test
+		// mode: its own concurrency/QPS/timeout fields aren't part of what
+		// a sent request's history records, and loading one over them
+		// would leave that config sitting orphaned alongside an unrelated
+		// request.
+		if !m.IsEditing() && !m.LoadTestMode {
+			if keybindings.Matches(msg, m.keys.ViewRequestHistory) {
+				m.openHistoryViewer()
+				return m, nil
+			}
+			if keybindings.Matches(msg, m.keys.RequestHistoryNewer) {
+				m.stepRequestHistory(-1)
+				return m, nil
+			}
+			if keybindings.Matches(msg, m.keys.RequestHistoryOlder) {
+				m.stepRequestHistory(1)
+				return m, nil
+			}
+		}
+
 		// Global shortcuts
 		if keybindings.Matches(msg, m.keys.ToggleLoadTest) {
 			m.toggleLoadTestMode()

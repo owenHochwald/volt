@@ -107,9 +107,14 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 
 	// history remembers a bounded number of past sends this session - in
 	// memory only, per the user's explicit choice, cleared on every
-	// restart (see internal/history) - browsed from the response pane
-	// alone, so only it needs a reference.
-	responsePane.SetHistory(history.NewStore())
+	// restart (see internal/history) - shared between requestPane (which
+	// lets "H"/"["/"]" browse it to reload a past send for editing/
+	// resending) and responsePane (which browses the same entries
+	// read-only), so both show exactly the same sends, never two drifting
+	// copies.
+	hist := history.NewStore()
+	requestPane.SetHistory(hist)
+	responsePane.SetHistory(hist)
 
 	// autoRememberCookies/autoRememberAuthHeaders default to false (a
 	// fresh install never starts silently remembering session state) -

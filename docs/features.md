@@ -202,6 +202,19 @@ Whenever a past entry (not the current, live response) is displayed, the
 header bar leads with a `HISTORY N/M` badge and that send's own time, so
 it's never mistaken for the live response.
 
+The request panel browses the same history too, from the other side: `H`
+there lists every request actually sent this session (time, method, and
+the address exactly as sent - real path/query values and resolved
+`{{variables}}`, never the template that produced them), and `Enter`
+loads the selected one back into the editable form to tweak and resend.
+`]`/`[` step through it one entry at a time without opening the list,
+showing a `HISTORY N/M` badge next to the Send button while browsing.
+Stepping back past the newest entry restores whatever was loaded or being
+typed before browsing started, so flipping through past sends to look
+something up never discards an unrelated in-progress edit. A loaded entry
+is a fresh, unsaved snapshot - `Ctrl+S` on it saves a new request rather
+than overwriting whatever originally produced it.
+
 ## Cookies and auth headers (the jar)
 
 Volt can remember a host's cookies and `Authorization` header so later

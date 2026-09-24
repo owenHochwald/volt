@@ -88,7 +88,14 @@ browsing the filtered list); use `Ctrl+X` for that instead.
 | `Ctrl+X` | Clear path/query/body/array param values without resetting the rest |
 | `Ctrl+Y` | Copy the fully-resolved request as a runnable `curl` command |
 | `PgUp` / `PgDn` | Scroll the field list when it's taller than the panel |
+| `H` | Browse every request sent this session; `Enter` loads it into the form |
+| `]` / `[` | Step to the newer/older sent request, one at a time, without opening `H`'s full list |
 | `?` | Show request shortcuts when not editing |
+
+`H`/`]`/`[` only fire while a non-text control is focused (Method, Server
+selector, Send button) - a JSON body routinely contains literal `[`/`]`,
+and a header could contain `H`, so both keep typing normally into any
+text field.
 
 Plain `Enter` remains available to edit content or accept suggestions while a
 text field is focused - `Enter` or `→` also accepts a URL autocomplete

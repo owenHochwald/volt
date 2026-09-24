@@ -344,7 +344,12 @@ func (m RequestPane) renderFooter() string {
 	// other element - so unconditionally including both used to leave two
 	// blank lines between the button and helpText whenever neither had
 	// anything to say.
-	elements := []string{"", button}
+	elements := []string{""}
+	if m.browsingHistory {
+		position := fmt.Sprintf(" %d/%d", m.historyPosition+1, len(m.history.Entries()))
+		elements = append(elements, styles.Badge.Info.Render("HISTORY")+styles.Text.Muted.Render(position))
+	}
+	elements = append(elements, button)
 	if stopwatchCount != "" {
 		elements = append(elements, stopwatchCount)
 	}

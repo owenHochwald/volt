@@ -3,12 +3,14 @@ package requestpane
 import (
 	"time"
 
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/stopwatch"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/owenHochwald/Volt/internal/authjar"
+	"github.com/owenHochwald/Volt/internal/history"
 	"github.com/owenHochwald/Volt/internal/http"
 	"github.com/owenHochwald/Volt/internal/storage"
 	"github.com/owenHochwald/Volt/internal/ui"
@@ -111,6 +113,34 @@ type RequestPane struct {
 	keys   keybindings.KeyMap
 	styles design.Styles
 
+	// history is the shared in-memory record of past sends (see
+	// internal/history) - the same *history.Store handed to
+	// responsepane.ResponsePane.SetHistory, so browsing it here (see
+	// history_viewer.go) shows exactly what's actually been sent, without
+	// a second, separate copy to keep in sync. Nil-safe, like Jar above:
+	// left unset (most tests), every history.Store method is a no-op.
+	history *history.Store
+
+	// viewingHistory/historyList back ViewRequestHistory ("H") - the same
+	// "claims every key while open" overlay pattern responsepane's own
+	// viewingHistory uses (see handleRequestHistoryViewerKey).
+	viewingHistory                          bool
+	historyList                             list.Model
+	historyViewerWidth, historyViewerHeight int
+
+	// browsingHistory/historyPosition/preHistoryRequest track "["/"]"
+	// (stepRequestHistory) and ViewRequestHistory's own "enter" moving
+	// through history.Entries() (newest first) - historyPosition indexes
+	// into it while browsingHistory is true, meaningless otherwise.
+	// preHistoryRequest snapshots whatever was loaded/being edited right
+	// before browsing started (see Snapshot), restored the moment
+	// stepping "newer" moves past the newest entry - so flipping back
+	// through past sends to look something up never silently discards
+	// in-progress edits to an unrelated request.
+	browsingHistory   bool
+	historyPosition   int
+	preHistoryRequest *http.Request
+
 	// Load test mode fields
 	LoadTestMode        bool
 	currentMode         ModeStrategy
@@ -149,6 +179,15 @@ func (m *RequestPane) SetStyles(styles design.Styles) {
 // what's captured there is what actually gets injected here.
 func (m *RequestPane) SetJar(jar *authjar.Store) {
 	m.Jar = jar
+}
+
+// SetHistory wires the shared in-memory history of past sends (see
+// internal/history) into this pane - called once from app.SetupModel with
+// the same *history.Store handed to responsepane.ResponsePane.SetHistory.
+// Left nil (the zero value) in tests that never call this is safe - every
+// history.Store method is nil-receiver-safe.
+func (m *RequestPane) SetHistory(h *history.Store) {
+	m.history = h
 }
 
 // approxFooterLines is a rough, constant estimate of the pinned footer's

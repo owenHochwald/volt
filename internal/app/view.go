@@ -94,6 +94,13 @@ func (m Model) wideView(layout terminalLayout, header string) string {
 			// The past-sends viewer (see ViewHistory) goes here too, the
 			// same slot and same reasoning as the style picker above.
 			request = m.renderPanel(m.styles.Panel.Base, true, false, layout.mainWidth, layout.requestHeight, m.responsePane.HistoryViewerListView())
+		case m.requestPane.IsViewingHistory():
+			// The sent-request viewer (see ViewRequestHistory) goes in the
+			// request pane's own slot, replacing its normal view while
+			// open - unlike the response pane's own overlays above, this
+			// one belongs to the request pane itself, so it doesn't need
+			// to borrow another pane's box.
+			request = m.renderPanel(m.styles.Panel.Base, m.focusedPanel == utils.RequestPanel, false, layout.mainWidth, layout.requestHeight, m.requestPane.HistoryViewerListView())
 		case m.requestPane.LoadTestMode:
 			// Load test mode gets its own fixed yellow border regardless
 			// of focus or in-progress state, not the usual focus/running
@@ -121,9 +128,12 @@ func (m Model) focusedView(layout terminalLayout, header string) string {
 	var panel string
 	switch m.focusedPanel {
 	case utils.RequestPanel:
-		if m.requestPane.LoadTestMode {
+		switch {
+		case m.requestPane.IsViewingHistory():
+			panel = m.renderPanel(m.styles.Panel.Base, true, false, layout.width, layout.contentHeight, m.requestPane.HistoryViewerListView())
+		case m.requestPane.LoadTestMode:
 			panel = m.renderLoadTestPanel(layout.width, layout.contentHeight, m.requestPane.View())
-		} else {
+		default:
 			panel = m.renderPanel(
 				m.styles.Panel.Base,
 				true,

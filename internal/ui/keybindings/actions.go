@@ -116,6 +116,10 @@ const (
 
 	ActionImportSubmit      ActionID = "import_submit"
 	ActionImportToggleForce ActionID = "import_toggle_force"
+
+	ActionViewRequestHistory  ActionID = "view_request_history"
+	ActionRequestHistoryNewer ActionID = "request_history_newer"
+	ActionRequestHistoryOlder ActionID = "request_history_older"
 )
 
 // Action is the single source of truth for an interaction and its help text.
@@ -272,6 +276,16 @@ func DefaultRegistry() Registry {
 		{ActionCopyAsCurl, []Context{ContextRequest}, []string{"ctrl+y"}, "ctrl+y", "copy as curl", 43},
 		{ActionScrollFieldsUp, []Context{ContextRequest}, []string{"pgup"}, "pgup", "scroll fields up", 40},
 		{ActionScrollFieldsDown, []Context{ContextRequest}, []string{"pgdown"}, "pgdown", "scroll fields down", 40},
+		// ViewRequestHistory/RequestHistoryNewer/RequestHistoryOlder browse
+		// the same shared history.Store ContextResponse's ViewHistory/
+		// HistoryNewer/HistoryOlder do (see requestpane's history_viewer.go)
+		// - "H"/"["/"]" only ever fire while a non-text control is focused
+		// (RequestPane.IsEditing() is false - see update.go), since a JSON
+		// body routinely contains literal "["/"]" and a header could
+		// contain "H".
+		{ActionViewRequestHistory, []Context{ContextRequest}, []string{"H"}, "H", "view sent-request history", 39},
+		{ActionRequestHistoryNewer, []Context{ContextRequest}, []string{"]"}, "]", "newer sent request", 38},
+		{ActionRequestHistoryOlder, []Context{ContextRequest}, []string{"["}, "[", "older sent request", 38},
 
 		{ActionToggleRawBody, []Context{ContextResponse}, []string{"r"}, "r", "toggle raw body", 48},
 		{ActionToggleWrap, []Context{ContextResponse}, []string{"w"}, "w", "toggle wrap", 47},

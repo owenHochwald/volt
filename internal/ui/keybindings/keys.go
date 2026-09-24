@@ -53,6 +53,16 @@ type KeyMap struct {
 	ScrollFieldsUp   key.Binding
 	ScrollFieldsDown key.Binding
 
+	// ViewRequestHistory ("H") opens a list of every request sent this
+	// session (see internal/history, shared with the response pane's own
+	// ViewHistory) - "enter" loads it into the editable form.
+	// RequestHistoryNewer/RequestHistoryOlder ("]"/"[") step through the
+	// same history one entry at a time, loading each directly - see
+	// requestpane's history_viewer.go.
+	ViewRequestHistory  key.Binding
+	RequestHistoryNewer key.Binding
+	RequestHistoryOlder key.Binding
+
 	// Response pane
 	CopyResponse    key.Binding
 	CancelLoadTest  key.Binding
@@ -190,6 +200,9 @@ func DefaultKeyMap() KeyMap {
 		ChangeMethodPrev:       registry.MustBinding(ActionPreviousMethod),
 		ScrollFieldsUp:         registry.MustBinding(ActionScrollFieldsUp),
 		ScrollFieldsDown:       registry.MustBinding(ActionScrollFieldsDown),
+		ViewRequestHistory:     registry.MustBinding(ActionViewRequestHistory),
+		RequestHistoryNewer:    registry.MustBinding(ActionRequestHistoryNewer),
+		RequestHistoryOlder:    registry.MustBinding(ActionRequestHistoryOlder),
 		CopyResponse:           registry.MustBinding(ActionCopyResponse),
 		CancelLoadTest:         registry.MustBinding(ActionCancelLoadTest),
 		ToggleRawBody:          registry.MustBinding(ActionToggleRawBody),

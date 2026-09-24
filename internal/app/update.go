@@ -125,6 +125,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// open, backs out of/clears the filter, or cancels the delete).
 			overlayOpen := (m.focusedPanel == utils.ResponsePanel &&
 				(m.responsePane.IsSavingToFile() || m.responsePane.IsSearching() || m.responsePane.IsPickingStyle() || m.responsePane.IsViewingJar() || m.responsePane.IsViewingHistory() || m.responsePane.IsGotoPending() || m.responsePane.IsDiffing())) ||
+				(m.focusedPanel == utils.RequestPanel && m.requestPane.IsViewingHistory()) ||
 				(m.focusedPanel == utils.SidebarPanel && m.sidebarPane.WantsEscForItself())
 			if overlayOpen {
 				m.disarmQuit()
