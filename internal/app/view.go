@@ -160,7 +160,13 @@ func (m Model) statusView(width int) string {
 	if m.notification.Text != "" {
 		return m.notification.View(width, m.styles)
 	}
-	help := m.keys.CompactHelp(m.focusedContext(), 5)
+	// 5 cut the list after "k move up" (ActionNavigateUp) without ever
+	// reaching "j move down" (ActionNavigateDown, same priority, declared
+	// right after it) - reported as confusing since only half of a pair
+	// showed. 6 shows both, and does the same for ContextRequest's
+	// tab/shift+tab pair; a too-long result still just gets clipped by
+	// this view's own Width/MaxWidth below, the same as it always could.
+	help := m.keys.CompactHelp(m.focusedContext(), 6)
 	return m.styles.Text.Muted.
 		Width(width).
 		MaxWidth(width).
