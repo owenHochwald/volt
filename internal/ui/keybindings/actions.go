@@ -228,8 +228,12 @@ func DefaultRegistry() Registry {
 		// these keys directly (see sidebar.go's configureFilterKeys, which
 		// reads Keys() off these exact bindings so the two can't drift),
 		// not keybindings.Matches, so nothing here is consumed for
-		// matching.
-		{ActionSidebarFilter, []Context{ContextSidebar}, []string{"ctrl+f"}, "ctrl+f", "filter requests", 52},
+		// matching. "/" is a plain alias for "ctrl+f" here (not a
+		// replacement - see configureFilterKeys' own doc comment on why
+		// "ctrl+f" is the primary one) - unlike ContextResponse's own real
+		// "/" search, there's no separate feature here for it to collide
+		// with, so both trigger the exact same filter.
+		{ActionSidebarFilter, []Context{ContextSidebar}, []string{"ctrl+f", "/"}, "ctrl+f, /", "filter requests", 52},
 		{ActionSidebarClearFilter, []Context{ContextSidebar}, []string{"ctrl+x"}, "ctrl+x", "clear filter", 52},
 		{ActionGroupFilterPrev, []Context{ContextSidebar}, []string{"["}, "[", "previous group filter", 51},
 		{ActionGroupFilterNext, []Context{ContextSidebar}, []string{"]"}, "]", "next group filter", 51},

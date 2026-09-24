@@ -323,17 +323,22 @@ func (s *SidebarPane) SetRequests(items []list.Item) {
 }
 
 // configureFilterKeys remaps list.Model's own default filter keybindings -
-// starting a filter ("/") and clearing an already-applied one (esc) - away
-// from their defaults, on a freshly (re)constructed list (see SetRequests/
+// starting a filter and clearing an already-applied one (esc) - away from
+// their defaults, on a freshly (re)constructed list (see SetRequests/
 // NewSidebar, both of which build a brand new list.Model from scratch, so
 // this has to be reapplied every time, not just once at startup).
 //
-// "/" moved to ctrl+f: reported as confusing alongside two other things
-// that also mention "/" for something else entirely - the response
-// panel's own real regex search (also bound to "/", a genuinely different
-// feature, not just a differently-named version of this filter), and this
-// same line's own "[/]: group filter" hint (bracket keys, unrelated to the
-// bare "/" this used to also claim right next to it).
+// Starting a filter moved off bare "/" to ctrl+f as its *primary* key:
+// reported as confusing alongside two other things that also mention "/"
+// for something else entirely - the response panel's own real regex
+// search (also bound to "/", a genuinely different feature, not just a
+// differently-named version of this filter), and this same line's own
+// "[/]: group filter" hint (bracket keys, unrelated to this filter). "/"
+// still works too (see ActionSidebarFilter's own Keys), kept as a plain
+// alias for muscle memory rather than a silent no-op - just not
+// advertised in renderHelpText's own footer hint, to avoid resurrecting
+// that same ambiguity there; ctrl+f is what F1 leads with and what the
+// footer shows.
 //
 // ClearFilter moved to ctrl+x: esc is the universal back/cancel key
 // everywhere else in Volt, easy to hit on reflex while just browsing an

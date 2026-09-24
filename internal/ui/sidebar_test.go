@@ -190,6 +190,21 @@ func TestSidebar_ClearFilter_MovedOffEsc(t *testing.T) {
 	}
 }
 
+// TestSidebar_Filter_SlashIsAnAliasForCtrlF is a regression test for a
+// real bug report: bare "/" used to start a filter before ctrl+f became
+// the primary key, and after that move it silently did nothing at all -
+// confusing muscle memory into looking broken. "/" now still works too
+// (see ActionSidebarFilter's Keys), just not advertised in the footer
+// hint, to avoid resurrecting the exact ambiguity that moved it off "/"
+// as the *primary* key in the first place (see configureFilterKeys).
+func TestSidebar_Filter_SlashIsAnAliasForCtrlF(t *testing.T) {
+	sidebar, _, _ := setupSidebarWithRequest(t)
+	sendKey(t, sidebar, "/")
+	if !sidebar.IsFiltering() {
+		t.Fatal("expected \"/\" to also start filtering, as an alias for ctrl+f")
+	}
+}
+
 func TestSidebar_DeleteRequest_RequiresConfirmation(t *testing.T) {
 	sidebar, db, _ := setupSidebarWithRequest(t)
 
