@@ -185,3 +185,47 @@ func TestAutoRememberAuthHeaders_ToggleDoesNotAffectCookies(t *testing.T) {
 	assert.True(t, config.AutoRememberCookies)
 	assert.True(t, config.AutoRememberAuthHeaders)
 }
+
+// TestLoadForceFocusedView_DefaultsToFalse verifies a fresh install (no
+// config.yaml at all) starts with the terminal-size-driven layout, not
+// silently forced into single-panel mode.
+func TestLoadForceFocusedView_DefaultsToFalse(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	got, err := LoadForceFocusedView()
+	assert.NoError(t, err)
+	assert.False(t, got)
+}
+
+func TestForceFocusedView_RoundTrips(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	assert.NoError(t, SaveForceFocusedView(true))
+	got, err := LoadForceFocusedView()
+	assert.NoError(t, err)
+	assert.True(t, got)
+
+	assert.NoError(t, SaveForceFocusedView(false))
+	got, err = LoadForceFocusedView()
+	assert.NoError(t, err)
+	assert.False(t, got)
+}
+
+// TestForceFocusedView_ToggleDoesNotAffectOtherSettings is the same class
+// of regression test as TestAutoRememberCookies_ToggleDoesNotAffectAuthHeaders
+// - config.yaml is shared by several settings, so saving this one must
+// never clobber the others.
+func TestForceFocusedView_ToggleDoesNotAffectOtherSettings(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, saveThemeSelection(configDir, "mono"))
+	assert.NoError(t, saveBodyStyle(configDir, "nord"))
+	assert.NoError(t, saveAutoRememberCookies(configDir, true))
+
+	assert.NoError(t, saveForceFocusedView(configDir, true))
+
+	config := loadConfigFile(configDir)
+	assert.Equal(t, "mono", config.Theme)
+	assert.Equal(t, "nord", config.BodyStyle)
+	assert.True(t, config.AutoRememberCookies)
+	assert.True(t, config.ForceFocusedView)
+}

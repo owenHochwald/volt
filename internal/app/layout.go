@@ -39,7 +39,15 @@ type terminalLayout struct {
 	modalHeight int
 }
 
-func calculateLayout(width, height int) terminalLayout {
+// calculateLayout picks the layout mode for a width x height terminal -
+// layoutWide (all three panels side by side) once both dimensions clear
+// their thresholds, layoutFocused (one panel at a time) below that, and
+// layoutTooSmall below a hard minimum. forceFocused (see
+// ActionToggleFocusedView, "F2") skips straight to the layoutFocused
+// branch even when the terminal is otherwise wide enough - the same
+// single-panel layout a small terminal gets automatically, just chosen
+// deliberately instead of forced by window size.
+func calculateLayout(width, height int, forceFocused bool) terminalLayout {
 	layout := terminalLayout{
 		width:       max(width, 0),
 		height:      max(height, 0),
@@ -53,7 +61,7 @@ func calculateLayout(width, height int) terminalLayout {
 		return layout
 	}
 
-	if width >= wideTerminalWidth && height >= wideTerminalHeight {
+	if !forceFocused && width >= wideTerminalWidth && height >= wideTerminalHeight {
 		layout.mode = layoutWide
 		// headerHeight/contentHeight/requestHeight/responseHeight here are
 		// only a starting point - currentLayout (see startup.go) always

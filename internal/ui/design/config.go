@@ -15,6 +15,12 @@ type ColorValue string
 // it to (see responsepane's "c"/"v" actions) - each defaults to false
 // (omitted from a freshly-written config entirely, via omitempty) so a
 // fresh install never starts silently remembering session state.
+// ForceFocusedView persists ActionToggleFocusedView ("F2") - forcing the
+// single-panel layout (normally only used automatically on a small
+// terminal - see calculateLayout) regardless of how wide the terminal
+// actually is. Defaults to false for the same reason as the AutoRemember
+// fields: a fresh install starts with the terminal-size-driven default,
+// not silently forced into single-panel mode.
 type AppConfig struct {
 	Version                 int        `yaml:"version"`
 	Theme                   string     `yaml:"theme"`
@@ -22,6 +28,7 @@ type AppConfig struct {
 	BodyStyle               string     `yaml:"body_style,omitempty"`
 	AutoRememberCookies     bool       `yaml:"auto_remember_cookies,omitempty"`
 	AutoRememberAuthHeaders bool       `yaml:"auto_remember_auth_headers,omitempty"`
+	ForceFocusedView        bool       `yaml:"force_focused_view,omitempty"`
 }
 
 // ThemeConfig is the parsed, unresolved representation of a user theme.

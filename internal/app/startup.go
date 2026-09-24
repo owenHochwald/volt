@@ -26,7 +26,7 @@ type startupAdvanceMsg struct {
 // splitting it - checked last so a zoomed response always wins over
 // whatever the load-test split above it computed.
 func (m Model) currentLayout() terminalLayout {
-	layout := calculateLayout(m.width, m.height)
+	layout := calculateLayout(m.width, m.height, m.forceFocusedView)
 	if layout.mode == layoutTooSmall {
 		return layout
 	}

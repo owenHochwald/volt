@@ -120,6 +120,8 @@ const (
 	ActionViewRequestHistory  ActionID = "view_request_history"
 	ActionRequestHistoryNewer ActionID = "request_history_newer"
 	ActionRequestHistoryOlder ActionID = "request_history_older"
+
+	ActionToggleFocusedView ActionID = "toggle_focused_view"
 )
 
 // Action is the single source of truth for an interaction and its help text.
@@ -270,6 +272,15 @@ func DefaultRegistry() Registry {
 		{ActionOpenGroups, []Context{ContextGlobal}, []string{"ctrl+g"}, "ctrl+g", "groups & servers", 40},
 		{ActionOpenImport, []Context{ContextGlobal}, []string{"ctrl+n"}, "ctrl+n", "import OpenAPI spec", 35},
 		{ActionOpenWebSocket, []Context{ContextGlobal}, []string{"ctrl+k"}, "ctrl+k", "websocket", 34},
+		// ActionToggleFocusedView ("F2") forces the single-panel layout
+		// (normally only used automatically on a small terminal - see
+		// calculateLayout) regardless of terminal size, persisted to
+		// config.yaml (see design.SaveForceFocusedView) so it survives a
+		// restart. A function key rather than a letter/Ctrl combo - every
+		// other class of key here either collides with typing or an
+		// existing binding; F-keys are otherwise entirely unused in Volt
+		// except F1 itself.
+		{ActionToggleFocusedView, []Context{ContextGlobal}, []string{"f2"}, "f2", "toggle single-panel view", 33},
 
 		{ActionResetRequest, []Context{ContextRequest}, []string{"ctrl+r"}, "ctrl+r", "reset request", 45},
 		{ActionClearParams, []Context{ContextRequest}, []string{"ctrl+x"}, "ctrl+x", "clear params", 44},

@@ -251,6 +251,15 @@ live, whether or not the WebSocket pane itself is open - a way to watch the
 socket's traffic without switching away from whatever request you're
 working on.
 
+## Layout
+
+Volt shows all three panels (Sidebar, Request, Response) side by side on a
+spacious terminal, and one panel at a time - switched with `Tab`/`Shift+Tab`
+or the usual panel-focus keys - once the terminal drops below about 110x30.
+`F2` forces the single-panel layout on regardless of how big the terminal
+actually is (e.g. to keep only the panel you're working in on screen even
+on a wide monitor), and the choice is remembered across restarts.
+
 ## Settings
 
 Open the Command Center with `?` (or `F1`), then move to the `SETTINGS` tab

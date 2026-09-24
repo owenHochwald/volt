@@ -8,15 +8,16 @@ type KeyMap struct {
 	Registry Registry
 
 	// Global
-	ForceQuit     key.Binding
-	Quit          key.Binding
-	GlobalHelp    key.Binding
-	ContextHelp   key.Binding
-	PreviousPanel key.Binding
-	NextPanel     key.Binding
-	OpenGroups    key.Binding
-	OpenImport    key.Binding
-	OpenWebSocket key.Binding
+	ForceQuit         key.Binding
+	Quit              key.Binding
+	GlobalHelp        key.Binding
+	ContextHelp       key.Binding
+	PreviousPanel     key.Binding
+	NextPanel         key.Binding
+	OpenGroups        key.Binding
+	OpenImport        key.Binding
+	OpenWebSocket     key.Binding
+	ToggleFocusedView key.Binding
 
 	// Sidebar
 	LoadRequest   key.Binding
@@ -176,6 +177,7 @@ func DefaultKeyMap() KeyMap {
 		OpenGroups:             registry.MustBinding(ActionOpenGroups),
 		OpenImport:             registry.MustBinding(ActionOpenImport),
 		OpenWebSocket:          registry.MustBinding(ActionOpenWebSocket),
+		ToggleFocusedView:      registry.MustBinding(ActionToggleFocusedView),
 		LoadRequest:            registry.MustBinding(ActionLoadRequest),
 		DeleteRequest:          registry.MustBinding(ActionDeleteRequest),
 		NavCount:               registry.MustBinding(ActionNavigationCount),

@@ -36,6 +36,15 @@ func saveAutoRememberAuthHeadersCmd(enabled bool) tea.Cmd {
 	}
 }
 
+func saveForceFocusedViewCmd(enabled bool) tea.Cmd {
+	return func() tea.Msg {
+		return preferenceSavedMsg{
+			label: "Focused view",
+			err:   design.SaveForceFocusedView(enabled),
+		}
+	}
+}
+
 func (m *Model) handlePreferenceSaved(msg preferenceSavedMsg) {
 	if msg.err == nil {
 		return

@@ -137,6 +137,37 @@ func LoadAutoRememberAuthHeaders() (bool, error) {
 	return config.AutoRememberAuthHeaders, nil
 }
 
+// SaveForceFocusedView persists enabled - whether the single-panel layout
+// (see ActionToggleFocusedView, "F2") is forced on regardless of terminal
+// size - to the same config.yaml the theme selection and other display
+// preferences live in.
+func SaveForceFocusedView(enabled bool) error {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("find user config directory: %w", err)
+	}
+	return saveForceFocusedView(configDir, enabled)
+}
+
+func saveForceFocusedView(configDir string, enabled bool) error {
+	config := loadConfigFile(configDir)
+	applyConfigDefaults(&config)
+	config.ForceFocusedView = enabled
+	return writeConfigFile(configDir, config)
+}
+
+// LoadForceFocusedView returns the setting saved by SaveForceFocusedView,
+// or (false, nil) if it was never explicitly set - false is also the
+// correct default for a fresh install (see AppConfig's own field
+// comment).
+func LoadForceFocusedView() (bool, error) {
+	config, err := loadUserConfig()
+	if err != nil {
+		return false, err
+	}
+	return config.ForceFocusedView, nil
+}
+
 // applyConfigDefaults fills in Version/Theme/Motion when config was just
 // loadConfigFile's zero value (nothing's ever been saved yet) - "default"
 // matches DefaultTheme, the same fallback loadUserTheme itself reaches

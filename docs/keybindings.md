@@ -29,6 +29,12 @@ keys.
 | `Ctrl+G` | Open Groups & Servers |
 | `Ctrl+N` | Open the interactive OpenAPI import dialog |
 | `Ctrl+K` | Open the WebSocket pane |
+| `F2` | Toggle the single-panel layout on/off, regardless of terminal size |
+
+`F2` forces the same one-panel-at-a-time layout a small terminal already
+switches to automatically (see [Layout](features.md#layout)) - useful on a
+spacious terminal too, e.g. to keep only the panel you're working in on
+screen. The choice is remembered across restarts.
 
 The first `Esc` closes whatever modal is open (Help, Import, the WebSocket
 pane) or returns focus to the sidebar and displays a quit prompt. A different

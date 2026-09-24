@@ -27,7 +27,7 @@ func TestCalculateLayoutUsesResponsiveModes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			layout := calculateLayout(tt.width, tt.height)
+			layout := calculateLayout(tt.width, tt.height, false)
 			if layout.mode != tt.mode {
 				t.Fatalf("mode = %v, want %v", layout.mode, tt.mode)
 			}
@@ -36,6 +36,32 @@ func TestCalculateLayoutUsesResponsiveModes(t *testing.T) {
 				layout.sidebarWidth < 0 || layout.mainWidth < 0 ||
 				layout.requestHeight < 0 || layout.responseHeight < 0 {
 				t.Fatalf("layout contains a negative dimension: %+v", layout)
+			}
+		})
+	}
+}
+
+// TestCalculateLayoutForceFocused verifies forceFocused (see
+// ActionToggleFocusedView, "F2") picks the single-panel layout even on a
+// terminal that's otherwise spacious enough for layoutWide - a small
+// terminal still can't be forced into layoutWide, and one already below
+// the hard minimum stays layoutTooSmall regardless.
+func TestCalculateLayoutForceFocused(t *testing.T) {
+	tests := []struct {
+		name          string
+		width, height int
+		mode          layoutMode
+	}{
+		{name: "spacious terminal forced to single-panel", width: 160, height: 50, mode: layoutFocused},
+		{name: "already-small terminal stays focused", width: 88, height: 35, mode: layoutFocused},
+		{name: "below hard minimum stays too small", width: 79, height: 30, mode: layoutTooSmall},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			layout := calculateLayout(tt.width, tt.height, true)
+			if layout.mode != tt.mode {
+				t.Fatalf("mode = %v, want %v", layout.mode, tt.mode)
 			}
 		})
 	}

@@ -46,6 +46,13 @@ type Model struct {
 	// once you've moved on from it.
 	zoomedResponse bool
 
+	// forceFocusedView forces the single-panel layout (see
+	// ActionToggleFocusedView, "F2") regardless of terminal size -
+	// persisted across restarts (see design.SaveForceFocusedView/
+	// LoadForceFocusedView), loaded once here in SetupModel the same way
+	// autoRememberCookies/autoRememberAuthHeaders are below.
+	forceFocusedView bool
+
 	width, height int
 	startupFrame  int
 
@@ -126,6 +133,11 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 	responsePane.SetAutoRememberCookies(autoRememberCookies)
 	responsePane.SetAutoRememberAuthHeaders(autoRememberAuthHeaders)
 
+	// forceFocusedView defaults to false (a fresh install starts with the
+	// terminal-size-driven layout, not silently forced single-panel) -
+	// same tolerant fallback as the AutoRemember settings above.
+	forceFocusedView, _ := design.LoadForceFocusedView()
+
 	// Restore the last request actually sent (see requestpane's
 	// handleSubmit, which is what saves it in the first place - never a
 	// request that was merely being edited, so nothing to restore means
@@ -160,6 +172,7 @@ func SetupModel(db *storage.SQLiteStorage, optionalAppearance ...design.ThemeLoa
 		height:                  minTerminalHeight,
 		autoRememberCookies:     autoRememberCookies,
 		autoRememberAuthHeaders: autoRememberAuthHeaders,
+		forceFocusedView:        forceFocusedView,
 	}
 	if appearance.Warning != "" {
 		m.notification = ui.Notification{

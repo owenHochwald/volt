@@ -153,6 +153,19 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// "F2" forces the single-panel layout (see calculateLayout) on
+		// regardless of terminal width/height - the same layout a small
+		// terminal already gets automatically, just toggled deliberately.
+		// Persisted so it survives a restart (see saveForceFocusedViewCmd);
+		// resizeContentPanels re-applies sizing immediately, the same way
+		// ToggleZoomResponse does, rather than waiting for the next real
+		// WindowSizeMsg.
+		if keybindings.Matches(msg, m.keys.ToggleFocusedView) && noModalOpen {
+			m.forceFocusedView = !m.forceFocusedView
+			m.resizeContentPanels()
+			return m, saveForceFocusedViewCmd(m.forceFocusedView)
+		}
+
 		// Handle ctrl+g to jump straight into the Command Center's Groups
 		// surface. Unlike '?', this doesn't collide with typing, so it
 		// works from any panel.
