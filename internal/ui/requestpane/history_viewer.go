@@ -114,15 +114,32 @@ func requestFromHistoryEntry(sent *http.Request) *http.Request {
 	}
 }
 
+// clearHistoryBrowsing resets browsingHistory/historyPosition/
+// preHistoryRequest - called by reinitRequestPane by default (so loading
+// anything else, e.g. a request picked from the sidebar, a reset, or an
+// actual send - see mode_normal.go's handleSubmit - drops the "HISTORY
+// N/M" badge instead of leaving it claiming the now-current request is
+// still whatever was last browsed) and directly wherever a send actually
+// goes out, which doesn't route through reinitRequestPane at all.
+func (m *RequestPane) clearHistoryBrowsing() {
+	m.browsingHistory = false
+	m.historyPosition = 0
+	m.preHistoryRequest = nil
+}
+
 // loadHistoryEntryAtPosition loads entry's sent request into the editable
 // form (see requestFromHistoryEntry) and records position (an index into
 // history.Entries()) so stepRequestHistory continues from exactly here -
 // snapshotting whatever was loaded/being edited before, the first time
-// this runs (see preHistoryRequest's own doc comment).
+// this runs (see preHistoryRequest's own doc comment). Sets
+// browsingHistory/historyPosition *after* reinitRequestPane, not before -
+// reinitRequestPane's own clearHistoryBrowsing would otherwise immediately
+// wipe them again.
 func (m *RequestPane) loadHistoryEntryAtPosition(entry history.Entry, position int) {
 	if entry.SentRequest == nil {
 		return
 	}
+	var snapshot *http.Request
 	if !m.browsingHistory {
 		// syncRequest first: m.Request's Method/URL/Name/Headers/Body are
 		// only ever synced from the UI's own fields at specific points
@@ -130,12 +147,15 @@ func (m *RequestPane) loadHistoryEntryAtPosition(entry history.Entry, position i
 		// keystroke, so Snapshot() alone could otherwise capture stale
 		// pre-edit values instead of whatever's actually currently typed.
 		m.syncRequest()
-		snapshot := m.Snapshot()
-		m.preHistoryRequest = &snapshot
+		s := m.Snapshot()
+		snapshot = &s
+	} else {
+		snapshot = m.preHistoryRequest
 	}
+	m.reinitRequestPane(requestFromHistoryEntry(entry.SentRequest))
 	m.browsingHistory = true
 	m.historyPosition = position
-	m.reinitRequestPane(requestFromHistoryEntry(entry.SentRequest))
+	m.preHistoryRequest = snapshot
 }
 
 // stepRequestHistory moves "]" (delta -1, newer) / "[" (delta +1, older)
@@ -164,12 +184,16 @@ func (m *RequestPane) stepRequestHistory(delta int) {
 	case next < 0:
 		// Stepped "newer" past the newest entry - restore whatever was
 		// loaded/being edited before history browsing started instead of
-		// just stopping at position 0 again.
-		m.browsingHistory = false
-		m.historyPosition = 0
+		// just stopping at position 0 again. reinitRequestPane's own
+		// clearHistoryBrowsing drops browsingHistory/historyPosition/
+		// preHistoryRequest as part of loading it; preHistoryRequest is
+		// always set by now (loadHistoryEntryAtPosition sets it the moment
+		// browsingHistory turns true), but the nil case is covered too,
+		// defensively.
 		if m.preHistoryRequest != nil {
 			m.reinitRequestPane(m.preHistoryRequest)
-			m.preHistoryRequest = nil
+		} else {
+			m.clearHistoryBrowsing()
 		}
 	case next >= len(entries):
 		return // already at the oldest entry

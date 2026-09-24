@@ -217,6 +217,33 @@ func TestRequestPane_HistoryViewer_EscClosesWithoutLoading(t *testing.T) {
 	}
 }
 
+// TestRequestPane_SendingClearsHistoryBrowsing is a regression test: a
+// request loaded from history and then actually sent must stop being
+// labeled as "from history" (the "HISTORY N/M" badge - see
+// renderFooter's own browsingHistory check) - it's a fresh send in its
+// own right the moment it goes out, not still showing a past one.
+func TestRequestPane_SendingClearsHistoryBrowsing(t *testing.T) {
+	pane, _ := setupTestPane(t)
+	store := history.NewStore()
+	pane.SetHistory(store)
+	recordSend(store, http.GET, "http://127.0.0.1:1/host", "")
+	pane.PanelFocused = true
+
+	pane.stepRequestHistory(1) // "[" - load the history entry
+	if !pane.browsingHistory {
+		t.Fatal("test setup error: expected browsingHistory true after loading a history entry")
+	}
+
+	updated, _ := pane.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Mod: tea.ModAlt}))
+
+	if updated.browsingHistory {
+		t.Error("expected browsingHistory false once the request actually sends")
+	}
+	if !updated.RequestInProgress {
+		t.Fatal("test setup error: expected the send to actually go through (RequestInProgress true)")
+	}
+}
+
 // TestRequestPane_HistoryKeys_DoNotFireWhileEditing verifies "[" types
 // literally into the Body textarea (JSON arrays use it constantly)
 // instead of being swallowed as RequestHistoryOlder - the IsEditing()

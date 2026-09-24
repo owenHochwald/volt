@@ -155,6 +155,11 @@ func (m *RequestPane) toggleLoadTestMode() {
 	m.LoadTestMode = !m.LoadTestMode
 
 	if m.LoadTestMode {
+		// History browsing (H/"["/"]") is disabled entirely in load-test
+		// mode (see Update's own guard) - drop any "HISTORY N/M" badge
+		// left over from before it was entered, since renderFooter is
+		// shared between both modes.
+		m.clearHistoryBrowsing()
 		m.currentMode = &LoadTestMode{}
 	} else {
 		m.currentMode = &NormalMode{}
@@ -186,6 +191,16 @@ func (m *RequestPane) resetToBlank() {
 
 // reinitRequestPane reinits the request pane with a new request
 func (m *RequestPane) reinitRequestPane(request *http.Request) {
+	// Loading anything through here exits history-browsing state (see
+	// clearHistoryBrowsing) by default - a request picked from the
+	// sidebar, a reset, or a cleared request are all "not what H/"["/"]"
+	// were just browsing" the moment they load, so the "HISTORY N/M"
+	// badge shouldn't keep claiming otherwise. loadHistoryEntryAtPosition
+	// (the one caller that actually wants browsingHistory left set)
+	// re-applies it right after calling this, so this default doesn't
+	// fight it.
+	m.clearHistoryBrowsing()
+
 	// Blur whatever's currently focused before rebuilding FocusManager
 	// below - NameInput/URLInput/etc. are reused across requests, not
 	// recreated, so skipping this left the previously focused field

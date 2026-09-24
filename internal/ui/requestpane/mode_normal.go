@@ -208,6 +208,11 @@ func (nm *NormalMode) handleSubmit(m *RequestPane, msg tea.KeyPressMsg) (*Reques
 		}
 
 		m.RequestInProgress = true
+		// A request actually going out is a fresh send in its own right,
+		// not "still showing a past one" - see reinitRequestPane's own
+		// clearHistoryBrowsing, which this doesn't route through (sending
+		// doesn't reload the pane's fields).
+		m.clearHistoryBrowsing()
 
 		m.Stopwatch.Reset()
 		stopwatchCmd := m.Stopwatch.Start()
