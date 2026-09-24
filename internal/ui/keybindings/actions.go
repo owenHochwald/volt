@@ -104,6 +104,18 @@ const (
 	ActionCreateItem  ActionID = "create_item"
 	ActionRenameItem  ActionID = "rename_item"
 	ActionDeleteItem  ActionID = "delete_item"
+
+	ActionSidebarFilter      ActionID = "sidebar_filter"
+	ActionSidebarClearFilter ActionID = "sidebar_clear_filter"
+	ActionGroupFilterPrev    ActionID = "group_filter_prev"
+	ActionGroupFilterNext    ActionID = "group_filter_next"
+
+	ActionEditServerURL       ActionID = "edit_server_url"
+	ActionEditServerHeaders   ActionID = "edit_server_headers"
+	ActionEditServerVariables ActionID = "edit_server_variables"
+
+	ActionImportSubmit      ActionID = "import_submit"
+	ActionImportToggleForce ActionID = "import_toggle_force"
 )
 
 // Action is the single source of truth for an interaction and its help text.
@@ -205,12 +217,33 @@ func DefaultRegistry() Registry {
 		{ActionNavigateDown, []Context{ContextSidebar}, []string{"j"}, "j", "move down", 60},
 		{ActionNavigateFirst, []Context{ContextSidebar}, []string{"g"}, "g", "first request", 55},
 		{ActionNavigateLast, []Context{ContextSidebar}, []string{"G"}, "G", "last request", 55},
+		// SidebarFilter/SidebarClearFilter are documentation-only, like
+		// ContextWebSocket's own entries above: bubbles' list.Model owns
+		// these keys directly (see sidebar.go's configureFilterKeys, which
+		// reads Keys() off these exact bindings so the two can't drift),
+		// not keybindings.Matches, so nothing here is consumed for
+		// matching.
+		{ActionSidebarFilter, []Context{ContextSidebar}, []string{"ctrl+f"}, "ctrl+f", "filter requests", 52},
+		{ActionSidebarClearFilter, []Context{ContextSidebar}, []string{"ctrl+x"}, "ctrl+x", "clear filter", 52},
+		{ActionGroupFilterPrev, []Context{ContextSidebar}, []string{"["}, "[", "previous group filter", 51},
+		{ActionGroupFilterNext, []Context{ContextSidebar}, []string{"]"}, "]", "next group filter", 51},
 
 		{ActionSubmit, []Context{ContextRequest}, []string{"alt+enter", "ctrl+p"}, "alt+enter", "send request", 70},
 		{ActionSaveRequest, []Context{ContextRequest}, []string{"ctrl+s"}, "ctrl+s", "save request", 65},
 		{ActionToggleLoadTest, []Context{ContextRequest}, []string{"ctrl+l"}, "ctrl+l", "toggle load test", 65},
-		{ActionNextField, []Context{ContextRequest, ContextWebSocket}, []string{"tab"}, "tab", "next field", 60},
-		{ActionPreviousField, []Context{ContextRequest, ContextWebSocket}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
+		// ActionNextField/ActionPreviousField also cover ContextGroups (tab
+		// only - switches between the Groups/Servers lists, see
+		// groupspane/update.go) and ContextImport (both - cycles the form's
+		// fields) - tab/shift+tab are reserved keys (see
+		// TestDefaultRegistryReservesEditingKeys), so every pane that uses
+		// them for field/list cycling shares these two entries rather than
+		// declaring its own. DisplayLabel stays plain "tab"/"shift+tab"
+		// (not "tab/↓", unlike the l/→ - h/← Method pattern) because arrow
+		// keys only actually work as an alternative in ContextRequest (see
+		// mode_normal.go's isNextFieldKey/isPrevFieldKey) - showing them
+		// here would be wrong in the other three contexts.
+		{ActionNextField, []Context{ContextRequest, ContextWebSocket, ContextGroups, ContextImport}, []string{"tab"}, "tab", "next field", 60},
+		{ActionPreviousField, []Context{ContextRequest, ContextWebSocket, ContextImport}, []string{"shift+tab"}, "shift+tab", "previous field", 60},
 		{ActionActivateControl, []Context{ContextRequest, ContextWebSocket}, []string{"enter"}, "enter", "activate focused control", 55},
 		{ActionNextMethod, []Context{ContextRequest}, []string{"l"}, "l/→", "next method", 50},
 		{ActionPreviousMethod, []Context{ContextRequest}, []string{"h"}, "h/←", "previous method", 50},
@@ -268,8 +301,13 @@ func DefaultRegistry() Registry {
 		{ActionCreateItem, []Context{ContextGroups}, []string{"n"}, "n", "new", 70},
 		{ActionRenameItem, []Context{ContextGroups}, []string{"r"}, "r", "rename", 65},
 		{ActionDeleteItem, []Context{ContextGroups}, []string{"d"}, "d", "delete", 60},
+		{ActionEditServerURL, []Context{ContextGroups}, []string{"u"}, "u", "edit server URL", 55},
+		{ActionEditServerHeaders, []Context{ContextGroups}, []string{"H"}, "H", "edit server headers", 54},
+		{ActionEditServerVariables, []Context{ContextGroups}, []string{"V"}, "V", "edit server variables", 53},
 
 		{ActionCloseImport, []Context{ContextImport}, []string{"esc"}, "esc", "close", 80},
+		{ActionImportSubmit, []Context{ContextImport}, []string{"enter"}, "enter", "import", 70},
+		{ActionImportToggleForce, []Context{ContextImport}, []string{"space"}, "space", "toggle force (while focused)", 65},
 
 		{ActionCloseWebSocket, []Context{ContextWebSocket}, []string{"esc"}, "esc", "hide (floating only - docked esc behaves like any other panel)", 80},
 	})

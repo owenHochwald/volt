@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/owenHochwald/Volt/internal/ui/keybindings"
 )
 
 // CloseImportModalMsg signals the parent app to close this modal.
@@ -41,9 +42,10 @@ func (m ImportPane) handleFormKey(msg tea.KeyPressMsg) (ImportPane, tea.Cmd) {
 		return m, closeCmd
 	}
 	const fieldCount = 4 // path, group, base URL, force toggle
-	if msg.String() == "tab" || msg.String() == "shift+tab" {
+	nextField := keybindings.Matches(msg, m.keys.NextField)
+	if nextField || keybindings.Matches(msg, m.keys.PrevField) {
 		m.blurAll()
-		if msg.String() == "tab" {
+		if nextField {
 			m.focusIndex = (m.focusIndex + 1) % fieldCount
 		} else {
 			m.focusIndex = (m.focusIndex + fieldCount - 1) % fieldCount
@@ -51,10 +53,10 @@ func (m ImportPane) handleFormKey(msg tea.KeyPressMsg) (ImportPane, tea.Cmd) {
 		m.focusCurrent()
 		return m, nil
 	}
-	if msg.String() == "enter" {
+	if keybindings.Matches(msg, m.keys.ImportSubmit) {
 		return m.submit()
 	}
-	if m.focusIndex == 3 && msg.String() == "space" {
+	if m.focusIndex == 3 && keybindings.Matches(msg, m.keys.ImportToggleForce) {
 		m.force = !m.force
 		return m, nil
 	}

@@ -318,7 +318,7 @@ func (s *SidebarPane) SetRequests(items []list.Item) {
 	// list.New defaults its paginator to dots - "10/15" (as main used to
 	// show) is more useful once there are enough saved requests to paginate.
 	s.requestsList.Paginator.Type = paginator.Arabic
-	configureFilterKeys(&s.requestsList)
+	configureFilterKeys(&s.requestsList, s.keys)
 	s.clearNavigationCount()
 }
 
@@ -341,9 +341,14 @@ func (s *SidebarPane) SetRequests(items []list.Item) {
 // cancels *typing* one (list.KeyMap's CancelWhileFiltering, untouched
 // here) - only clearing one that's already applied and no longer being
 // edited moves off esc.
-func configureFilterKeys(l *list.Model) {
-	l.KeyMap.Filter = key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "filter"))
-	l.KeyMap.ClearFilter = key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "clear filter"))
+//
+// The actual key values come from keys.SidebarFilter/SidebarClearFilter
+// (see the registry's own ActionSidebarFilter/ActionSidebarClearFilter
+// comment) rather than being hardcoded here a second time, so the F1 help
+// modal and what list.Model actually does can't drift apart.
+func configureFilterKeys(l *list.Model, keys keybindings.KeyMap) {
+	l.KeyMap.Filter = key.NewBinding(key.WithKeys(keys.SidebarFilter.Keys()...), key.WithHelp("ctrl+f", "filter"))
+	l.KeyMap.ClearFilter = key.NewBinding(key.WithKeys(keys.SidebarClearFilter.Keys()...), key.WithHelp("ctrl+x", "clear filter"))
 }
 
 func (s *SidebarPane) Init() tea.Cmd {
@@ -484,11 +489,11 @@ func (s *SidebarPane) Update(msg tea.Msg) (*SidebarPane, tea.Cmd) {
 		// pgup/pgdown/b/f/u/d), so binding the group filter to them would
 		// silently steal the list's own page-by-page scrolling out from
 		// under it - exactly the regression this replaced.
-		if msg.String() == "[" {
+		if keybindings.Matches(msg, s.keys.GroupFilterPrev) {
 			s.cycleGroupFilter(-1)
 			return s, s.saveGroupFilterCmd()
 		}
-		if msg.String() == "]" {
+		if keybindings.Matches(msg, s.keys.GroupFilterNext) {
 			s.cycleGroupFilter(1)
 			return s, s.saveGroupFilterCmd()
 		}
@@ -654,7 +659,7 @@ func NewSidebar(db *storage.SQLiteStorage, keys keybindings.KeyMap, optionalStyl
 	sidebar.requestsList.SetShowHelp(false)
 	sidebar.requestsList.DisableQuitKeybindings()
 	sidebar.requestsList.Paginator.Type = paginator.Arabic
-	configureFilterKeys(&sidebar.requestsList)
+	configureFilterKeys(&sidebar.requestsList, keys)
 
 	return sidebar
 }

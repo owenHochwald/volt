@@ -27,6 +27,17 @@ type KeyMap struct {
 	NavFirst      key.Binding
 	NavLast       key.Binding
 
+	// SidebarFilter/SidebarClearFilter ("ctrl+f"/"ctrl+x") are documentation-
+	// only (see their registry comment) - sidebar.go's configureFilterKeys
+	// reads Keys() off these two bindings to set them as bubbles'
+	// list.Model's own Filter/ClearFilter keymap, the actual mechanism that
+	// consumes them. GroupFilterPrev/GroupFilterNext ("["/"]") are real -
+	// see SidebarPane.cycleGroupFilter.
+	SidebarFilter      key.Binding
+	SidebarClearFilter key.Binding
+	GroupFilterPrev    key.Binding
+	GroupFilterNext    key.Binding
+
 	// Request pane
 	SendRequest      key.Binding
 	ActivateControl  key.Binding
@@ -129,11 +140,16 @@ type KeyMap struct {
 	DirectHelpTab key.Binding
 
 	// Groups & Servers Modal / Import Modal
-	CloseGroups key.Binding
-	CloseImport key.Binding
-	CreateItem  key.Binding
-	RenameItem  key.Binding
-	DeleteItem  key.Binding
+	CloseGroups         key.Binding
+	CloseImport         key.Binding
+	CreateItem          key.Binding
+	RenameItem          key.Binding
+	DeleteItem          key.Binding
+	EditServerURL       key.Binding
+	EditServerHeaders   key.Binding
+	EditServerVariables key.Binding
+	ImportSubmit        key.Binding
+	ImportToggleForce   key.Binding
 }
 
 // DefaultKeyMap generates every binding from the action registry.
@@ -157,6 +173,10 @@ func DefaultKeyMap() KeyMap {
 		NavDown:                registry.MustBinding(ActionNavigateDown),
 		NavFirst:               registry.MustBinding(ActionNavigateFirst),
 		NavLast:                registry.MustBinding(ActionNavigateLast),
+		SidebarFilter:          registry.MustBinding(ActionSidebarFilter),
+		SidebarClearFilter:     registry.MustBinding(ActionSidebarClearFilter),
+		GroupFilterPrev:        registry.MustBinding(ActionGroupFilterPrev),
+		GroupFilterNext:        registry.MustBinding(ActionGroupFilterNext),
 		SendRequest:            registry.MustBinding(ActionSubmit),
 		ActivateControl:        registry.MustBinding(ActionActivateControl),
 		SaveRequest:            registry.MustBinding(ActionSaveRequest),
@@ -206,5 +226,10 @@ func DefaultKeyMap() KeyMap {
 		CreateItem:             registry.MustBinding(ActionCreateItem),
 		RenameItem:             registry.MustBinding(ActionRenameItem),
 		DeleteItem:             registry.MustBinding(ActionDeleteItem),
+		EditServerURL:          registry.MustBinding(ActionEditServerURL),
+		EditServerHeaders:      registry.MustBinding(ActionEditServerHeaders),
+		EditServerVariables:    registry.MustBinding(ActionEditServerVariables),
+		ImportSubmit:           registry.MustBinding(ActionImportSubmit),
+		ImportToggleForce:      registry.MustBinding(ActionImportToggleForce),
 	}
 }

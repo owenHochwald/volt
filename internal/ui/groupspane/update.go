@@ -66,8 +66,11 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 	// Groups and Servers lists: h/l are reserved by the embedding
 	// shortcutpane for switching between its Help/Settings/Groups surfaces
 	// (see shortcutpane/update.go), so this pane can't also claim them for
-	// its own internal list switch without colliding.
-	if msg.String() == "tab" {
+	// its own internal list switch without colliding. Shares
+	// ActionNextField with the request/WebSocket/import panes' own tab
+	// handling (see its registry comment) - "tab" is reserved to that one
+	// action across the whole registry.
+	if keybindings.Matches(msg, m.keys.NextField) {
 		if m.target == focusGroups {
 			m.target = focusServers
 		} else {
@@ -122,7 +125,7 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if msg.String() == "u" && m.target == focusServers {
+	if keybindings.Matches(msg, m.keys.EditServerURL) && m.target == focusServers {
 		item, ok := m.selectedServer()
 		if !ok {
 			return m, nil
@@ -133,7 +136,7 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		m.mode = modeEditServerURL
 		return m, nil
 	}
-	if msg.String() == "H" && m.target == focusServers {
+	if keybindings.Matches(msg, m.keys.EditServerHeaders) && m.target == focusServers {
 		item, ok := m.selectedServer()
 		if !ok {
 			return m, nil
@@ -144,7 +147,7 @@ func (m GroupsPane) handleBrowseKey(msg tea.KeyPressMsg) (GroupsPane, tea.Cmd) {
 		m.mode = modeEditServerHeaders
 		return m, nil
 	}
-	if msg.String() == "V" && m.target == focusServers {
+	if keybindings.Matches(msg, m.keys.EditServerVariables) && m.target == focusServers {
 		item, ok := m.selectedServer()
 		if !ok {
 			return m, nil
