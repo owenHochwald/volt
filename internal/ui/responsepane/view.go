@@ -249,8 +249,12 @@ func (m ResponsePane) renderLoadTestProgress(progress float64) string {
 // renderHeaderBar renders the status bar for normal responses - shown
 // above the tab bar regardless of which tab is active, unlike the
 // Timing tab's own "Sent At" (see renderTiming), which only a Timing-tab
-// visit would surface. SentAt leads it, before the status code, so when a
-// request was sent is visible at a glance without switching tabs.
+// visit would surface. A "HISTORY N/M" badge leads it while browsing (see
+// browsingHistory/stepHistory/viewHistoryEntry) - there's otherwise no way
+// to tell a past send apart from the live one, since displayResponse makes
+// both look identical, right down to Response/SentRequest/SentAt.
+// SentAt itself comes next, before the status code, so when a request was
+// sent is visible at a glance without switching tabs.
 func (m ResponsePane) renderHeaderBar() string {
 	statusStyle := m.styles.Status.ForCode(m.Response.StatusCode)
 	status := statusStyle.Render(m.Response.Status)
@@ -262,6 +266,10 @@ func (m ResponsePane) renderHeaderBar() string {
 	}
 	size := fmt.Sprintf(" %s", utils.FormatSize(len(m.Response.Body)))
 	parts := []string{" | "}
+	if m.browsingHistory {
+		position := fmt.Sprintf(" %d/%d", m.historyPosition+1, len(m.history.Entries()))
+		parts = append(parts, m.styles.Badge.Info.Render("HISTORY")+m.styles.Text.Muted.Render(position), " | ")
+	}
 	if !m.SentAt.IsZero() {
 		parts = append(parts, m.styles.Text.Muted.Render(m.SentAt.Format("15:04:05")), " | ")
 	}

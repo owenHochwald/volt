@@ -192,3 +192,172 @@ func TestResponsePane_ViewHistory_EscClosesViewer(t *testing.T) {
 		t.Error("expected esc to close the history viewer")
 	}
 }
+
+func ctrlUp() tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{Code: tea.KeyUp, Mod: tea.ModCtrl})
+}
+
+func ctrlDown() tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{Code: tea.KeyDown, Mod: tea.ModCtrl})
+}
+
+// TestResponsePane_StepHistory_OlderSkipsRedundantLiveEntry verifies
+// ctrl+↓ from the live response jumps straight to the first *actually*
+// older entry (history.Entries()[1]) instead of stopping at [0] first -
+// [0] is always identical to what's already on screen (see
+// setHistoryPosition's own doc comment), so stopping there would look
+// like the key did nothing.
+func TestResponsePane_StepHistory_OlderSkipsRedundantLiveEntry(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "oldest"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "middle"}, &http.Request{Method: http.GET, URL: "https://b"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "newest"}, &http.Request{Method: http.GET, URL: "https://c"})
+
+	model, _ := pane.Update(ctrlDown())
+	result := model
+
+	if !result.browsingHistory {
+		t.Fatal("expected ctrl+down to enter history-browsing mode")
+	}
+	if result.historyPosition != 1 {
+		t.Errorf("historyPosition = %d, want 1 (skipping the redundant live entry)", result.historyPosition)
+	}
+	if result.Response.Body != "middle" {
+		t.Errorf("expected the middle (first actually-older) entry, got body %q", result.Response.Body)
+	}
+}
+
+// TestResponsePane_StepHistory_NewerReturnsToLive verifies stepping back
+// up from history.Entries()[1] returns all the way to "live" (not stuck
+// showing [0], which looks identical but would still carry the "browsing"
+// badge) in a single ctrl+up press - symmetric with the skip on the way
+// down.
+func TestResponsePane_StepHistory_NewerReturnsToLive(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "oldest"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "newest"}, &http.Request{Method: http.GET, URL: "https://b"})
+
+	model, _ := pane.Update(ctrlDown()) // -> historyPosition 1 ("oldest")
+	model, _ = model.Update(ctrlUp())   // ctrl+up -> back to live
+	result := model
+
+	if result.browsingHistory {
+		t.Error("expected ctrl+up to return to live (browsingHistory false)")
+	}
+	if result.Response.Body != "newest" {
+		t.Errorf("expected the live (\"newest\") response restored, got body %q", result.Response.Body)
+	}
+}
+
+// TestResponsePane_StepHistory_NewerNoOpWhenLive verifies ctrl+up does
+// nothing when already showing the live response - there's nothing newer.
+func TestResponsePane_StepHistory_NewerNoOpWhenLive(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "only"}, &http.Request{Method: http.GET, URL: "https://a"})
+
+	model, _ := pane.Update(ctrlUp())
+	result := model
+
+	if result.browsingHistory {
+		t.Error("expected ctrl+up to stay live when already live")
+	}
+	if result.Response.Body != "only" {
+		t.Errorf("expected the response unchanged, got body %q", result.Response.Body)
+	}
+}
+
+// TestResponsePane_StepHistory_ClampsAtOldestEntry verifies stepping
+// older past the last recorded entry stays there instead of panicking or
+// wrapping around.
+func TestResponsePane_StepHistory_ClampsAtOldestEntry(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "oldest"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "newest"}, &http.Request{Method: http.GET, URL: "https://b"})
+
+	model, _ := pane.Update(ctrlDown()) // -> position 1, "oldest"
+	model, _ = model.Update(ctrlDown()) // no older entry left - must stay put
+	result := model
+
+	if result.historyPosition != 1 {
+		t.Errorf("historyPosition = %d, want 1 (clamped at the oldest entry)", result.historyPosition)
+	}
+	if result.Response.Body != "oldest" {
+		t.Errorf("expected still showing the oldest entry, got body %q", result.Response.Body)
+	}
+}
+
+// TestResponsePane_StepHistory_NoOpWithNoHistory verifies ctrl+down
+// before anything has ever been sent doesn't panic (empty
+// history.Entries()) and leaves nothing displayed.
+func TestResponsePane_StepHistory_NoOpWithNoHistory(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+
+	model, _ := pane.Update(ctrlDown())
+	result := model
+
+	if result.Response != nil {
+		t.Errorf("expected no response, got %+v", result.Response)
+	}
+}
+
+// TestResponsePane_ViewHistoryEntry_BadgeMatchesPosition verifies "H" +
+// enter on an older entry sets the same browsingHistory/historyPosition
+// stepHistory does, found by the entry's ID rather than the history
+// list's own cursor Index() - which is relative to whatever's currently
+// visible under that list's own "/" filter, not entries' true absolute
+// position - and that selecting the newest entry (position 0) is treated
+// as "live", not "history", consistent with stepHistory's own skip.
+func TestResponsePane_ViewHistoryEntry_BadgeMatchesPosition(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "oldest"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Body: "newest"}, &http.Request{Method: http.GET, URL: "https://b"})
+
+	model, _ := pane.Update(keyRunes("H"))
+	opened := model
+	opened, _ = opened.Update(keyRunes("j")) // move selection to the older entry
+	model, _ = opened.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	result := model
+
+	if !result.browsingHistory || result.historyPosition != 1 {
+		t.Errorf("expected browsingHistory=true, historyPosition=1, got browsingHistory=%v historyPosition=%d", result.browsingHistory, result.historyPosition)
+	}
+
+	// Now select the newest entry (position 0) - should collapse to live.
+	model, _ = result.Update(keyRunes("H"))
+	opened = model
+	model, _ = opened.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	result = model
+
+	if result.browsingHistory {
+		t.Error("expected selecting the newest entry to be treated as live, not history")
+	}
+}
+
+// TestRenderHeaderBar_ShowsHistoryBadgeWhileBrowsing verifies the header
+// bar marks a past entry as such, with its position among recorded
+// entries - the user-visible half of browsingHistory/historyPosition.
+func TestRenderHeaderBar_ShowsHistoryBadgeWhileBrowsing(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "oldest"}, &http.Request{Method: http.GET, URL: "https://a"})
+	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK", Body: "newest"}, &http.Request{Method: http.GET, URL: "https://b"})
+
+	model, _ := pane.Update(ctrlDown())
+	result := model
+
+	got := result.renderHeaderBar()
+	if !strings.Contains(got, "HISTORY") || !strings.Contains(got, "2/2") {
+		t.Errorf("expected the header bar to show a HISTORY 2/2 badge, got %q", got)
+	}
+}
+
+// TestRenderHeaderBar_NoHistoryBadgeWhenLive verifies the live response
+// (never browsed, or stepped back to it) shows no HISTORY badge at all.
+func TestRenderHeaderBar_NoHistoryBadgeWhenLive(t *testing.T) {
+	pane, _ := setupPaneWithHistory(t)
+	pane.SetResponse(&http.Response{StatusCode: 200, Status: "200 OK"}, &http.Request{Method: http.GET, URL: "https://a"})
+
+	got := pane.renderHeaderBar()
+	if strings.Contains(got, "HISTORY") {
+		t.Errorf("expected no HISTORY badge for the live response, got %q", got)
+	}
+}

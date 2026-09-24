@@ -112,6 +112,12 @@ type KeyMap struct {
 	// responsepane's history_viewer.go.
 	ViewHistory key.Binding
 
+	// HistoryNewer/HistoryOlder (ctrl+↑/ctrl+↓) step through the same
+	// history one entry at a time, without opening ViewHistory's full
+	// list overlay - see responsepane's stepHistory.
+	HistoryNewer key.Binding
+	HistoryOlder key.Binding
+
 	// Help modal
 	CloseHelp     key.Binding
 	NextTab       key.Binding
@@ -185,6 +191,8 @@ func DefaultKeyMap() KeyMap {
 		CaptureAuth:            registry.MustBinding(ActionCaptureAuth),
 		ViewAuthJar:            registry.MustBinding(ActionViewAuthJar),
 		ViewHistory:            registry.MustBinding(ActionViewHistory),
+		HistoryNewer:           registry.MustBinding(ActionHistoryNewer),
+		HistoryOlder:           registry.MustBinding(ActionHistoryOlder),
 		CloseHelp:              registry.MustBinding(ActionCloseHelp),
 		NextTab:                registry.MustBinding(ActionNextHelpTab),
 		PrevTab:                registry.MustBinding(ActionPreviousHelpTab),

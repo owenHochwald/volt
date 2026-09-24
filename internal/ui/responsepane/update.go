@@ -179,6 +179,23 @@ func (m *ResponsePane) Update(msg tea.Msg) (*ResponsePane, tea.Cmd) {
 			return m, nil
 		}
 
+		// ctrl+↑/ctrl+↓ step through the same history one entry at a time
+		// (see stepHistory), without opening ViewHistory's full list -
+		// meaningless in load-test mode, same reasoning as ViewHistory
+		// above.
+		if keybindings.Matches(msg, m.keys.HistoryNewer) {
+			if !m.isLoadTest {
+				m.stepHistory(-1)
+			}
+			return m, nil
+		}
+		if keybindings.Matches(msg, m.keys.HistoryOlder) {
+			if !m.isLoadTest {
+				m.stepHistory(1)
+			}
+			return m, nil
+		}
+
 		// Direct tab access
 		if keybindings.Matches(msg, m.keys.DirectTab) {
 			switch msg.String() {

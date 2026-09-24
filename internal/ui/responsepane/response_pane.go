@@ -171,6 +171,19 @@ type ResponsePane struct {
 	historyList                             list.Model
 	historyViewerWidth, historyViewerHeight int
 
+	// browsingHistory/historyPosition track ctrl+↑/ctrl+↓ quick-nav
+	// (stepHistory, see history_viewer.go) and viewHistoryEntry (the full
+	// ViewHistory ("H") list's own "enter") through the same history -
+	// false/0 means what's currently displayed is the live, most recent
+	// response (history.Entries()[0] whenever one exists - Record always
+	// prepends the just-recorded response, so "live" and "the newest
+	// history entry" are the exact same data by construction; only the
+	// "History N/M" badge (see renderHeaderBar) actually depends on this
+	// flag, not what's shown). historyPosition is meaningless while
+	// browsingHistory is false.
+	browsingHistory bool
+	historyPosition int
+
 	// Diff mode (diff.go): started by "x" from within the history viewer
 	// (see handleHistoryViewerKey), diffing a selected past entry against
 	// whatever's currently displayed. Unlike pickingStyle/viewingJar/
@@ -328,6 +341,10 @@ func (m *ResponsePane) SetResponse(response *http.Response, sentRequest *http.Re
 	// list agree on exactly when this happened instead of two separate
 	// time.Now() calls (however close together) drifting apart.
 	sentAt := time.Now()
+	// A fresh arrival is always the live response, never "browsing
+	// history" - even if the user was mid-browse (see stepHistory) when
+	// it came in.
+	m.browsingHistory = false
 	m.displayResponse(response, sentRequest, sentAt)
 	if m.history != nil {
 		m.history.Record(sentRequest, response, sentAt)

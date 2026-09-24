@@ -98,7 +98,70 @@ func (m *ResponsePane) refreshHistoryList() {
 // see displayResponse's own doc comment for why this bypasses SetResponse
 // (no re-recording into history, no re-capturing cookies/auth for what's
 // actually an old response, not a new arrival).
+//
+// Also sets browsingHistory/historyPosition (see their own doc comment) so
+// the "History N/M" badge and ctrl+↑/ctrl+↓ (stepHistory) both agree with
+// wherever "H" + enter just jumped to - found by ID, not the history
+// list's own cursor Index(), since that's relative to whatever's
+// currently visible under its own "/" filter, not entries' true absolute
+// position.
 func (m *ResponsePane) viewHistoryEntry(entry history.Entry) {
+	entries := m.history.Entries()
+	position := 0
+	for i, e := range entries {
+		if e.ID == entry.ID {
+			position = i
+			break
+		}
+	}
+	m.setHistoryPosition(position)
+	m.displayResponse(entry.Response, entry.SentRequest, entry.SentAt)
+}
+
+// setHistoryPosition sets browsingHistory/historyPosition for position, an
+// index into m.history.Entries() - position 0 (the newest entry) always
+// means "live" (browsingHistory false): it's the exact same data as
+// whatever the last real send displayed (see SetResponse/Record), so
+// there's nothing meaningfully "historical" about it - only a strictly
+// older position actually is.
+func (m *ResponsePane) setHistoryPosition(position int) {
+	m.browsingHistory = position > 0
+	m.historyPosition = position
+}
+
+// stepHistory moves ctrl+↑ (delta -1, newer) / ctrl+↓ (delta +1, older)
+// through the same history ViewHistory ("H") browses, one entry at a
+// time, without opening its full list overlay - a no-op past either end
+// (nothing newer than live, nothing older than the oldest recorded
+// entry), so holding the key down doesn't need its own separate guard.
+func (m *ResponsePane) stepHistory(delta int) {
+	entries := m.history.Entries()
+	if len(entries) == 0 {
+		return
+	}
+
+	if !m.browsingHistory {
+		// Already live (position 0) - "newer" has nowhere to go, and
+		// "older" jumps straight to position 1 (the first *actually*
+		// older entry), skipping the redundant position 0 stop that
+		// would just redisplay the exact same data still on screen.
+		if delta <= 0 || len(entries) < 2 {
+			return
+		}
+		m.setHistoryPosition(1)
+	} else {
+		next := m.historyPosition + delta
+		switch {
+		case next <= 0:
+			m.setHistoryPosition(0) // collapses to "live" - see its own doc comment
+		case next >= len(entries):
+			return // already at the oldest entry
+		default:
+			m.setHistoryPosition(next)
+		}
+	}
+
+	entry := entries[m.historyPosition]
 	m.displayResponse(entry.Response, entry.SentRequest, entry.SentAt)
 }
 
