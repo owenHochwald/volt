@@ -22,21 +22,15 @@ type Client struct {
 	Client    *http.Client
 }
 
-func (c *Client) makeCustomRequest(req *Request) (*http.Response, error) {
+func (c *Client) makeCustomRequest(ctx context.Context, req *Request) (*http.Response, error) {
 	payload := strings.NewReader(req.Body)
-	customReq, err := http.NewRequest(req.Method, req.URL, payload)
+	customReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, payload)
 	if err != nil {
 		return nil, err
 	}
 
 	for key, val := range req.Headers {
 		customReq.Header.Set(key, val)
-	}
-
-	if c.Timeout > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-		defer cancel()
-		customReq = customReq.WithContext(ctx)
 	}
 
 	res, err := c.Client.Do(customReq)
@@ -56,7 +50,14 @@ func (c *Client) Send(req *Request, result chan<- *Response) {
 		start = time.Now()
 	}
 
-	res, err := c.makeCustomRequest(req)
+	ctx := context.Background()
+	if c.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		defer cancel()
+	}
+
+	res, err := c.makeCustomRequest(ctx, req)
 	if err != nil {
 		failure := apperror.FromNetwork(err)
 		result <- &Response{Error: failure.Message, Failure: failure}
